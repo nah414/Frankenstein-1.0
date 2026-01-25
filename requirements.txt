@@ -15,7 +15,7 @@ customtkinter>=5.0.0       # Modern Tkinter UI framework
 # qiskit-aer>=0.13.0       # Phase 3: Quantum simulator backend
 
 # Development Dependencies (Optional)
-# pytest>=7.4.0            # Testing framework
-# pytest-cov>=4.1.0        # Test coverage
-# black>=23.0.0            # Code formatting
-# mypy>=1.5.0              # Type checking
+pytest>=7.4.0              # Testing framework
+pytest-cov>=4.1.0          # Test coverage
+black>=23.0.0              # Code formatting
+mypy>=1.5.0                # Type checking
