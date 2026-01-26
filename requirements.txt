@@ -1,14 +1,16 @@
-# FRANKENSTEIN 1.0 - Dependencies
+# FRANKENSTEIN 1.0 - Phase 2 Dependencies
 # Install with: pip install -r requirements.txt
 
-# Core dependencies
-psutil>=5.9.0              # System resource monitoring
-pyyaml>=6.0                # Configuration files
+# Core
+psutil>=5.9.0
+pyyaml>=6.0
 
-# Widget/GUI dependencies  
-customtkinter>=5.2.0       # Modern tkinter widgets (Git Bash style terminal)
-pillow>=10.0.0             # Image handling for icon
+# GUI
+customtkinter>=5.2.0
+pillow>=10.0.0
 
-# Optional: Development tools
-# pytest>=7.0.0            # Testing (uncomment for development)
-# black>=23.0.0            # Code formatting (uncomment for development)
+# Security (Phase 2)
+cryptography>=41.0.0
+
+# Data (Phase 2)
+jsonschema>=4.0.0
