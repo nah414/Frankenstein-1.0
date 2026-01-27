@@ -3,7 +3,7 @@
 **Phase 1: Core Engine**
 
 A quantum-classical hybrid AI system with a Git Bash-style terminal interface.
-Optimized for Dell Intel i3 8th Gen hardware (4 cores, 8GB RAM).
+Optimized for Dell Intel i3 8th Gen hardware (4 cores, 8GB RAM). Keep in mind that this is being built in phases thoughtfully. Right now this is like a jacked up Git Bash terminal in progress. You can run all the same Bash commands with this Monster terminal. Files will be cleaned and organized after phase 2 is complete. 
 
 ---
 
