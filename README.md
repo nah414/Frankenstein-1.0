@@ -184,9 +184,9 @@ python frankenstein.py --test       # Run system test
 - Physics-informed models
 
 ### Phase 3: Quantum Integration (Planned)
-- IBM Quantum, AWS Braket, Azure Quantum
+- IBM Quantum, AWS Braket, Azure Quantum, all other providers
 - Local quantum simulation
-- Hybrid workflows
+- Hybrid workflows, all classical hardware providers will be included
 
 ### Phase 4: Agent System (Planned)
 - MCP agent framework
@@ -202,9 +202,10 @@ FRANKENSTEIN protects your laptop with:
 2. **Auto-Throttling** - Reduces load automatically
 3. **Emergency Stop** - Instant halt capability
 4. **Continuous Monitoring** - 1-second polling
-5. **Web prompt injection security
-6. **Traces and Feedback reports
-7. **2FA at Phase 4
+5. **Web** prompt injection security
+6. **Traces** and Feedback reports
+7. **2FA** at Phase 4
+8. **Aditional layers of security depending on model and user needs**
 ---
 
 ## 📝 License
@@ -219,5 +220,7 @@ MIT License - See [LICENSE](LICENSE)
 - **Target Hardware**: Dell Intel i3 8th Gen (Tier 1)
 - **Build Date**: January 25, 2026
 - **Phase**: 1 (Core Engine)
+- **Higher** Tier models will be built in suuccession to accomidate ANY user needs from personal use up to commercial/enterprise grade models
+- **Higher** Tier models will aim to solve more challenges, stay tuned
 
 *Built with safety and efficiency in mind. Your hardware is protected.*
