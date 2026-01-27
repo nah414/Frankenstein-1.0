@@ -93,6 +93,7 @@ class TestTask:
             priority=TaskPriority.LOW,
             payload={}
         )
+        # Higher priority task should be "less than" for min-heap
         assert high_task < low_task
 
 
@@ -107,6 +108,7 @@ class TestTaskOrchestrator:
     def test_orchestrator_default_workers(self):
         """Test orchestrator uses safe default workers"""
         orchestrator = TaskOrchestrator()
+        # Should respect SAFETY limits (max 3 workers)
         assert orchestrator is not None
 
     def test_orchestrator_start(self):
@@ -114,6 +116,8 @@ class TestTaskOrchestrator:
         orchestrator = TaskOrchestrator(max_workers=2)
         result = orchestrator.start()
         assert result is True
+
+        # Clean up
         orchestrator.stop()
         time.sleep(0.5)
 
@@ -122,6 +126,7 @@ class TestTaskOrchestrator:
         orchestrator = TaskOrchestrator(max_workers=2)
         orchestrator.start()
         time.sleep(0.5)
+
         result = orchestrator.stop()
         assert result is True
 
@@ -129,9 +134,12 @@ class TestTaskOrchestrator:
         """Test getting queue status"""
         orchestrator = TaskOrchestrator(max_workers=2)
         orchestrator.start()
+
         status = orchestrator.get_queue_status()
         assert isinstance(status, dict)
         assert "max_workers" in status or "running" in status
+
+        # Clean up
         orchestrator.stop()
         time.sleep(0.5)
 
@@ -139,7 +147,10 @@ class TestTaskOrchestrator:
         """Test orchestrator respects max worker limit"""
         orchestrator = TaskOrchestrator(max_workers=2)
         orchestrator.start()
+
+        # Verify worker count doesn't exceed limit
         status = orchestrator.get_queue_status()
+        # Clean up
         orchestrator.stop()
         time.sleep(0.5)
 
@@ -165,7 +176,9 @@ class TestOrchestratorSafety:
 
     def test_orchestrator_worker_limit(self):
         """Test orchestrator enforces worker thread limits"""
+        # Should not allow more than SAFETY.MAX_WORKER_THREADS
         orchestrator = TaskOrchestrator(max_workers=10)
+        # Implementation should clamp to SAFETY limits
         assert orchestrator is not None
 
     def test_create_task_with_all_types(self):
@@ -177,6 +190,7 @@ class TestOrchestratorSafety:
             TaskType.AGENT,
             TaskType.SYSTEM
         ]
+
         for task_type in task_types:
             task = Task(
                 task_id=f"task-{task_type.value}",

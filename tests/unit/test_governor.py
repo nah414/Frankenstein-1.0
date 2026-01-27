@@ -84,6 +84,8 @@ class TestResourceGovernor:
         result = governor.start()
         assert result is True
         assert governor._running is True
+
+        # Clean up
         governor.stop()
         time.sleep(0.5)
 
@@ -92,6 +94,7 @@ class TestResourceGovernor:
         governor = ResourceGovernor()
         governor.start()
         time.sleep(0.5)
+
         result = governor.stop()
         assert result is True
         time.sleep(0.5)
@@ -102,8 +105,11 @@ class TestResourceGovernor:
         governor = ResourceGovernor()
         first_start = governor.start()
         second_start = governor.start()
+
         assert first_start is True
         assert second_start is False
+
+        # Clean up
         governor.stop()
         time.sleep(0.5)
 
@@ -111,11 +117,16 @@ class TestResourceGovernor:
         """Test that get_status returns expected structure"""
         governor = ResourceGovernor()
         governor.start()
-        time.sleep(1.5)
+        time.sleep(1.5)  # Wait for first snapshot
+
         status = governor.get_status()
+
+        # Check required keys
         assert "running" in status
         assert "poll_interval" in status
         assert "throttle_level" in status
+
+        # Clean up
         governor.stop()
         time.sleep(0.5)
 
@@ -123,11 +134,14 @@ class TestResourceGovernor:
         """Test that governor creates snapshots after starting"""
         governor = ResourceGovernor(poll_interval=1.0)
         governor.start()
-        time.sleep(2.0)
+        time.sleep(2.0)  # Wait for snapshots
+
         snapshot = governor.get_latest_snapshot()
-        if snapshot is not None:
+        if snapshot is not None:  # Only if psutil is available
             assert snapshot.cpu_percent >= 0
             assert snapshot.memory_percent >= 0
+
+        # Clean up
         governor.stop()
         time.sleep(0.5)
 
@@ -161,7 +175,10 @@ class TestGovernorSafety:
         governor = ResourceGovernor()
         governor.start()
         time.sleep(0.5)
+
         if governor._thread:
             assert "Frankenstein" in governor._thread.name or "Governor" in governor._thread.name
+
+        # Clean up
         governor.stop()
         time.sleep(0.5)

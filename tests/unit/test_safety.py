@@ -23,7 +23,7 @@ class TestSafetyConstraints:
 
     def test_safety_constraints_immutable(self):
         """Test that safety constraints cannot be modified"""
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # FrozenInstanceError
             SAFETY.MAX_CPU_PERCENT = 90
 
     def test_cpu_limits_appropriate(self):
@@ -68,7 +68,7 @@ class TestResourceViolationCheck:
     def test_cpu_violation_detected(self):
         """Test CPU violation is detected"""
         result = check_resource_violation(
-            cpu_percent=85.0,
+            cpu_percent=85.0,  # Exceeds 80%
             memory_percent=50.0
         )
         assert result["safe"] is False
@@ -80,7 +80,7 @@ class TestResourceViolationCheck:
         """Test memory violation is detected"""
         result = check_resource_violation(
             cpu_percent=50.0,
-            memory_percent=75.0
+            memory_percent=75.0  # Exceeds 70%
         )
         assert result["safe"] is False
         assert len(result["violations"]) == 1

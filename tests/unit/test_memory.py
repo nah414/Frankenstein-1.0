@@ -127,6 +127,7 @@ class TestMemorySystem:
         with tempfile.TemporaryDirectory() as tmpdir:
             memory = MemorySystem(base_path=Path(tmpdir))
             memory.initialize()
+
             assert Path(tmpdir).exists()
             assert memory.history_dir.exists()
             assert memory.learning_dir.exists()
@@ -137,15 +138,19 @@ class TestMemorySystem:
         with tempfile.TemporaryDirectory() as tmpdir:
             memory = MemorySystem(base_path=Path(tmpdir))
             memory.initialize()
+
             stats = memory.get_session_stats()
             assert isinstance(stats, dict)
             assert "session_id" in stats
+            assert "started_at" in stats
+            assert "task_count" in stats
 
     def test_new_session_creation(self):
         """Test creating a new session"""
         with tempfile.TemporaryDirectory() as tmpdir:
             memory = MemorySystem(base_path=Path(tmpdir))
             memory.initialize()
+
             session = memory._session
             assert session is not None
             assert session.task_count == 0
