@@ -2,7 +2,7 @@
 
 **Physics-Grounded AI Desktop Assistant**
 
-A quantum-classical hybrid AI system with an integrated terminal interface for scientific computing and engineering tasks.
+A quantum-classical hybrid AI system with an integrated terminal interface for scientific computing and engineering tasks. Currently finished Phase 1 of 4 phases in this Teir 1 model. Stay tuned. 
 
 ---
 
