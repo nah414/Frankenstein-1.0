@@ -202,7 +202,9 @@ FRANKENSTEIN protects your laptop with:
 2. **Auto-Throttling** - Reduces load automatically
 3. **Emergency Stop** - Instant halt capability
 4. **Continuous Monitoring** - 1-second polling
-
+5. **Web prompt injection security
+6. **Traces and Feedback reports
+7. **2FA at Phase 4
 ---
 
 ## 📝 License
