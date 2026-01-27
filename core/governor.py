@@ -228,6 +228,10 @@ class ResourceGovernor:
         """Add a callback function for violations"""
         self._violation_callbacks.append(callback)
 
+    def get_latest_snapshot(self) -> Optional[ResourceSnapshot]:
+        """Get the most recent resource snapshot"""
+        return self._latest_snapshot
+
     def get_status(self) -> Dict[str, Any]:
         """Get current governor status for display"""
         snapshot = self._latest_snapshot or self.take_snapshot()
@@ -235,6 +239,7 @@ class ResourceGovernor:
 
         return {
             "running": self._running,
+            "poll_interval": self.poll_interval,
             "uptime_seconds": uptime,
             "cpu_percent": round(snapshot.cpu_percent, 1),
             "memory_percent": round(snapshot.memory_percent, 1),

@@ -1,188 +1,171 @@
-# ⚡ FRANKENSTEIN 1.0
+# 👹 FRANKENSTEIN 1.0
 
 **Phase 1: Core Engine**
 
-A quantum-classical hybrid AI system optimized for Dell Intel i3 8th Gen hardware (4 cores, 8GB RAM, 117GB storage).
-
----
-
-## 🎯 Project Overview
-
-FRANKENSTEIN 1.0 is a resource-aware AI system that combines classical computation, quantum simulation capabilities, and predictive synthesis. Built with hardware safety as a top priority, it includes real-time resource monitoring and automatic throttling to protect your laptop.
-
-**Target Hardware:** Dell Intel i3 8th Gen
-**Date:** January 25, 2026
-**Phase:** 1 (Core Engine)
-
----
-
-## 🏗️ Architecture
-
-### Core Components
-
-- **Safety System** (`core/safety.py`) - Immutable safety constraints protecting hardware
-- **Resource Governor** (`core/governor.py`) - Real-time resource monitoring with auto-throttling
-- **Memory System** (`core/memory.py`) - Session state and persistent task history
-- **Task Orchestrator** (`core/orchestrator.py`) - Task routing and queue management
-- **Widget Overlay** (`widget/overlay.py`) - Always-on-top command window
-
-### Directory Structure
-
-```
-frankenstein-1.0/
-├── core/              # Core engine components
-├── synthesis/         # Predictive synthesis (Phase 2)
-├── quantum/           # Quantum simulation (Phase 3)
-├── agents/            # MCP agents (Phase 4)
-├── security/          # Security shield
-├── widget/            # UI overlay
-├── classical/         # Classical computation
-├── configs/           # Configuration files
-├── docker/            # Docker deployment
-├── tests/             # Unit tests
-└── docs/              # Documentation
-```
+A quantum-classical hybrid AI system with a Git Bash-style terminal interface.
+Optimized for Dell Intel i3 8th Gen hardware (4 cores, 8GB RAM). Keep in mind that this is being built in phases thoughtfully. Right now this is like a jacked up Git Bash terminal in progress. You can run all the same Bash commands with this Monster terminal. This is a Tier 1 model of what will scale to larger models after this model is fully built and tested in phase 4. Files will be cleaned up, compacted and organized after each Phase is completed. 
 
 ---
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
-- Python 3.9+
-- Windows 10/11 (for widget overlay)
-- 8GB RAM minimum
-- Intel i3 8th Gen or better
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/nah414/frankenstein-1.0.git
-cd frankenstein-1.0
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run FRANKENSTEIN
-python frankenstein.py
+### One-Click Install
+```batch
+install.bat
 ```
+This will:
+1. Install all dependencies
+2. Create the monster icon
+3. Add desktop shortcut
+4. Launch FRANKENSTEIN
+
+### Or Launch Directly
+```batch
+FRANKENSTEIN.bat
+```
+Or double-click the **FRANKENSTEIN 1.0** icon on your desktop.
 
 ---
 
-## 📦 Dependencies
+## 🎮 Features
 
-- **psutil** - System resource monitoring
-- **customtkinter** - Modern UI framework for widget overlay
-- **pyyaml** - Configuration file parsing
+### Terminal Interface
+- **Git Bash-style** dark terminal with green text
+- **Always-on-top** window
+- **Real-time** CPU/RAM monitoring in title bar
+- **Command history** (up/down arrows)
+- **Monster branding** 👹
 
-Optional (Phase 2+):
-- **qiskit** - Quantum simulation
-- **numpy** - Numerical computation
-- **scipy** - Scientific computing
+### System Monitoring
+- Real-time resource tracking
+- Automatic throttling when limits exceeded
+- Safety constraints (80% CPU, 70% RAM max)
+
+### Task Management
+- Priority-based task queue
+- Multi-threaded execution (3 workers)
+- Task status tracking
+
+---
+
+## 💻 Commands
+
+### Basic Commands
+| Command | Description |
+|---------|-------------|
+| `help` | Show available commands |
+| `status` | Show system status |
+| `clear` | Clear the terminal |
+| `quit` | Exit FRANKENSTEIN |
+
+### Task Commands
+| Command | Description |
+|---------|-------------|
+| `task <msg>` | Submit a task |
+| `queue` | Show queue status |
+
+### System Commands
+| Command | Description |
+|---------|-------------|
+| `cpu` | Show CPU usage |
+| `ram` | Show RAM usage |
+| `stop` | Emergency stop all tasks |
+
+---
+
+## 📁 Project Structure
+
+```
+frankenstein-1.0/
+├── frankenstein.py          # Main application
+├── FRANKENSTEIN.bat         # Windows launcher
+├── install.bat              # One-click installer
+├── requirements.txt         # Dependencies
+│
+├── core/                    # Core engine
+│   ├── safety.py           # Safety constraints
+│   ├── governor.py         # Resource monitoring
+│   ├── memory.py           # Persistence
+│   └── orchestrator.py     # Task management
+│
+├── widget/                  # GUI components
+│   ├── terminal.py         # Terminal widget (Git Bash style)
+│   └── overlay.py          # Simple overlay widget
+│
+├── assets/                  # Graphics
+│   └── frankenstein.ico    # Monster icon (18KB, multi-res)
+│
+├── scripts/                 # Utilities
+│   ├── create_icon.py      # Icon generator
+│   └── create_shortcut.ps1 # Shortcut creator
+│
+└── tests/                   # Test suite
+    └── unit/               # Unit tests
+```
 
 ---
 
 ## ⚙️ Configuration
 
-Configuration files are located in `configs/`:
+### Safety Limits (Tier 1 Hardware)
+| Limit | Value | Purpose |
+|-------|-------|---------|
+| Max CPU | 80% | Leave 20% for OS |
+| Max RAM | 70% | Leave 30% headroom |
+| Max Workers | 3 | Leave 1 core free |
+| Max Storage | 20GB | Conservative budget |
 
-- `tier1_laptop.yaml` - Dell i3 8th Gen configuration
-
-### Safety Limits (Tier 1)
-
-- **Max CPU:** 80% (leaves 20% for OS)
-- **Max Memory:** 70% (~5.6GB of 8GB)
-- **Worker Threads:** 3 (leaves 1 core for OS)
-- **Storage Budget:** 20GB max
+### Widget Settings
+- **Position**: Configurable (default: center)
+- **Always on Top**: Yes
+- **Theme**: Dark (monster green)
 
 ---
 
-## 🎮 Usage
+## 🔧 Installation
 
-### Command Line
+### Requirements
+- Python 3.9 or higher
+- Windows 10/11
+- 8GB RAM minimum
 
-```bash
-# Start with default config
-python frankenstein.py
-
-# Start with custom config
-python frankenstein.py --config configs/tier1_laptop.yaml
-
-# Enable widget overlay
-python frankenstein.py --widget
-
-# Check system status
-python frankenstein.py --status
+### Dependencies
+```
+psutil>=5.9.0          # System monitoring
+pyyaml>=6.0            # Configuration
+customtkinter>=5.0.0   # GUI framework
+pillow                 # Icon creation
 ```
 
-### Widget Overlay
-
-The widget provides:
-- Real-time CPU and RAM monitoring
-- Command input interface
-- Quick status checks
-- Emergency stop button
-
-**Widget Commands:**
-- `status` - Show detailed system status
-- `stop` - Emergency stop all operations
-
----
-
-## 🛡️ Safety Features
-
-### Resource Protection
-
-1. **Automatic Throttling** - Reduces load when limits are approached
-2. **Emergency Stop** - Immediate halt capability
-3. **Resource Monitoring** - 1-second polling interval
-4. **Violation Callbacks** - Notify on safety breaches
-
-### Throttle Levels
-
-- **NONE** - Normal operation
-- **LIGHT** - Slow down new tasks
-- **MODERATE** - Pause non-critical tasks
-- **HEAVY** - Only essential operations
-- **EMERGENCY** - Full stop
-
----
-
-## 📊 System Status
-
-Monitor system health:
-
-```python
-from core import get_governor, get_memory, get_orchestrator
-
-# Check resource status
-governor = get_governor()
-status = governor.get_status()
-print(f"CPU: {status['cpu_percent']}%")
-print(f"RAM: {status['memory_percent']}%")
-
-# Check session stats
-memory = get_memory()
-session = memory.get_session_stats()
-print(f"Tasks completed: {session['task_count']}")
-
-# Check queue status
-orchestrator = get_orchestrator()
-queue = orchestrator.get_queue_status()
-print(f"Active tasks: {queue['active_tasks']}")
+### Manual Install
+```bash
+pip install psutil pyyaml customtkinter pillow
+python frankenstein.py
 ```
 
 ---
 
 ## 🧪 Testing
 
+### Run System Test
 ```bash
-# Run unit tests
-python -m pytest tests/
+python frankenstein.py --test
+```
 
-# Run with coverage
-python -m pytest tests/ --cov=core --cov-report=html
+### Run Unit Tests
+```bash
+python -m pytest tests/
+```
+
+---
+
+## 📊 Command-Line Options
+
+```
+python frankenstein.py              # Launch GUI terminal (default)
+python frankenstein.py --console    # Console mode (no GUI)
+python frankenstein.py --status     # Show status and exit
+python frankenstein.py --test       # Run system test
 ```
 
 ---
@@ -191,83 +174,53 @@ python -m pytest tests/ --cov=core --cov-report=html
 
 ### Phase 1: Core Engine ✅ (Current)
 - Safety constraints
-- Resource governor
-- Memory system
-- Task orchestrator
-- Widget overlay
+- Resource monitoring
+- Task orchestration
+- Terminal GUI widget
 
 ### Phase 2: Predictive Synthesis (Planned)
+- Data input/output processing
 - Classical-quantum synthesis
 - Physics-informed models
-- Predictive task routing
 
 ### Phase 3: Quantum Integration (Planned)
-- Cloud quantum providers (IBM, AWS, Azure)
+- IBM Quantum, AWS Braket, Azure Quantum, all other providers
 - Local quantum simulation
-- Hybrid quantum-classical workflows
+- Hybrid workflows, all classical hardware providers will be included
 
 ### Phase 4: Agent System (Planned)
 - MCP agent framework
 - Multi-agent collaboration
-- Tool integration
 
+---
+
+## 🛡️ Safety
+
+FRANKENSTEIN protects your laptop with:
+
+1. **Immutable Constraints** - Cannot be changed at runtime
+2. **Auto-Throttling** - Reduces load automatically
+3. **Emergency Stop** - Instant halt capability
+4. **Continuous Monitoring** - 1-second polling
+5. **Web** prompt injection security
+6. **Traces** and Feedback reports
+7. **2FA** at Phase 4
+8. **Aditional layers of security depending on model and user needs**
 ---
 
 ## 📝 License
 
-MIT License - See [LICENSE](LICENSE) file for details.
+MIT License - See [LICENSE](LICENSE)
 
 ---
 
-## 🤝 Contributing
+## 👹 Credits
 
-Contributions welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
----
-
-## ⚠️ Important Notes
-
-### Hardware Limits
-
-This system is specifically tuned for **Tier 1** hardware (Dell i3 8th Gen). Running on higher-tier hardware will still respect conservative limits unless you create a custom configuration.
-
-### Resource Constraints
-
-- Max 3 worker threads
-- 70% RAM usage limit
-- 80% CPU usage limit
-- 20GB storage budget
-
-These limits ensure stable operation without overwhelming your laptop.
-
----
-
-## 📧 Support
-
-For issues, questions, or suggestions:
-- Open an issue on GitHub
-- Check the [docs/](docs/) folder for detailed documentation
-
----
-
-## 🎓 Credits
-
-**Project:** FRANKENSTEIN 1.0
-**Architecture:** Quantum-Classical Hybrid AI
-**Optimization Target:** Dell Intel i3 8th Gen (Tier 1)
-**Build Date:** January 25, 2026
-
----
-
-**Status:** Phase 1 Complete ✅
-**Next Phase:** Predictive Synthesis Engine
-
----
+**FRANKENSTEIN 1.0** - Quantum-Classical Hybrid AI System
+- **Target Hardware**: Dell Intel i3 8th Gen (Tier 1)
+- **Build Date**: January 25, 2026
+- **Phase**: 1 (Core Engine)
+- **Higher** Tier models will be built in suuccession to accomidate ANY user needs from personal use up to commercial/enterprise grade models
+- **Higher** Tier models will aim to solve more challenges, stay tuned
 
 *Built with safety and efficiency in mind. Your hardware is protected.*
