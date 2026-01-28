@@ -160,7 +160,13 @@ class FrankensteinTerminal:
             'source': self._cmd_source,
             'python': self._cmd_python,
             'node': self._cmd_node,
+            # Security (Phase 2)
+            'security': self._cmd_security,
         }
+        
+        # Security monitor integration (Phase 2)
+        self._security_monitor = None
+        self._security_dashboard = None
     
     def start(self) -> bool:
         """Start the terminal in a separate thread"""
@@ -253,6 +259,58 @@ class FrankensteinTerminal:
             state="normal"
         )
         self._output_text.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        
+        # ==================== LIVE MONITOR PANEL (Phase 2) ====================
+        self._monitor_frame = ctk.CTkFrame(
+            self._root,
+            width=160,
+            height=85,
+            fg_color="#1a1a2e",
+            border_width=1,
+            border_color="#30363d",
+            corner_radius=6
+        )
+        self._monitor_frame.place(relx=1.0, rely=0.0, x=-10, y=45, anchor="ne")
+        self._monitor_frame.grid_propagate(False)
+        
+        # Monitor title
+        monitor_title = ctk.CTkLabel(
+            self._monitor_frame,
+            text="🛡️ SECURITY",
+            font=("Consolas", 9, "bold"),
+            text_color="#58a6ff"
+        )
+        monitor_title.place(x=5, y=2)
+        
+        # Threat level indicator
+        self._threat_label = ctk.CTkLabel(
+            self._monitor_frame,
+            text="🟢 CLEAR",
+            font=("Consolas", 10, "bold"),
+            text_color="#00ff88"
+        )
+        self._threat_label.place(x=5, y=22)
+        
+        # Stats line 1: CPU/MEM
+        self._resource_label = ctk.CTkLabel(
+            self._monitor_frame,
+            text="CPU: --% | RAM: --%",
+            font=("Consolas", 8),
+            text_color="#8b949e"
+        )
+        self._resource_label.place(x=5, y=42)
+        
+        # Stats line 2: Blocked count
+        self._blocked_label = ctk.CTkLabel(
+            self._monitor_frame,
+            text="Blocked: 0 | Active: 0",
+            font=("Consolas", 8),
+            text_color="#8b949e"
+        )
+        self._blocked_label.place(x=5, y=58)
+        
+        # Start live monitor update loop
+        self._start_monitor_updates()
         
         # Make output area read-only but allow selection/copy
         self._output_text.bind("<Key>", lambda e: "break" if e.keysym not in ["c", "C"] or not (e.state & 0x4) else None)
@@ -511,6 +569,56 @@ class FrankensteinTerminal:
         """Update the prompt label"""
         self._prompt_label.configure(text=self._get_prompt())
     
+    def _start_monitor_updates(self):
+        """Start the live monitor update loop"""
+        self._update_monitor_panel()
+    
+    def _update_monitor_panel(self):
+        """Update the live security/resource monitor panel"""
+        if not self._running:
+            return
+        
+        try:
+            # Get security stats
+            try:
+                from security import get_monitor, ThreatSeverity
+                monitor = get_monitor()
+                if not monitor._running:
+                    monitor.start()
+                stats = monitor.get_stats()
+                severity = ThreatSeverity[stats['current_severity']]
+                
+                # Update threat level
+                self._threat_label.configure(
+                    text=f"{severity.icon} {severity.label}",
+                    text_color=severity.color
+                )
+                
+                # Update blocked count
+                self._blocked_label.configure(
+                    text=f"Blocked: {stats['threats_blocked']} | Active: {stats['active_threats']}"
+                )
+            except ImportError:
+                self._threat_label.configure(text="🟢 CLEAR", text_color="#00ff88")
+                self._blocked_label.configure(text="Blocked: 0 | Active: 0")
+            
+            # Get resource stats from governor
+            try:
+                from core import get_governor
+                governor = get_governor()
+                status = governor.get_status()
+                cpu = status.get('cpu_percent', 0)
+                mem = status.get('memory_percent', 0)
+                self._resource_label.configure(text=f"CPU: {cpu:.0f}% | RAM: {mem:.0f}%")
+            except ImportError:
+                self._resource_label.configure(text="CPU: --% | RAM: --%")
+        except Exception:
+            pass
+        
+        # Schedule next update (every 2 seconds)
+        if self._running and self._root:
+            self._root.after(2000, self._update_monitor_panel)
+
     def _show_welcome(self):
         """Display welcome message like Git Bash"""
         welcome = f"""
@@ -1122,6 +1230,55 @@ Working directory: {self._cwd}
         else:
             self._write_error(f"frank: unknown command '{subcmd}'")
 
+    # ==================== SECURITY COMMANDS (Phase 2) ====================
+    
+    def _cmd_security(self, args: List[str]):
+        """Security dashboard and threat monitoring commands"""
+        try:
+            from security import get_monitor, get_dashboard, handle_security_command, ThreatSeverity
+            
+            # Initialize monitor if needed
+            if self._security_monitor is None:
+                self._security_monitor = get_monitor()
+                if not self._security_monitor._running:
+                    self._security_monitor.start()
+                    # Add callback to update status label
+                    self._security_monitor.add_severity_callback(self._on_security_severity_change)
+            
+            if self._security_dashboard is None:
+                self._security_dashboard = get_dashboard()
+            
+            # Handle the command
+            handle_security_command(args, self._write_output)
+            
+        except ImportError as e:
+            self._write_error(f"Security module not available: {e}")
+            self._write_output("Make sure security/ directory exists with all required files.\n")
+    
+    def _on_security_severity_change(self, severity):
+        """Callback when security severity level changes"""
+        try:
+            if self._status_label and self._root:
+                # Update status label color based on severity
+                self._root.after(0, lambda: self._update_security_status(severity))
+        except Exception:
+            pass
+    
+    def _update_security_status(self, severity):
+        """Update the terminal status label based on security state"""
+        try:
+            from security import ThreatSeverity
+            if severity in (ThreatSeverity.CRITICAL, ThreatSeverity.HIGH):
+                self._status_label.configure(text=f"{severity.icon} THREAT", text_color=severity.color)
+            elif severity == ThreatSeverity.MEDIUM:
+                self._status_label.configure(text=f"{severity.icon} ALERT", text_color=severity.color)
+            elif severity == ThreatSeverity.LOW:
+                self._status_label.configure(text=f"{severity.icon} CAUTION", text_color=severity.color)
+            else:
+                self._status_label.configure(text="● READY", text_color="#00ff88")
+        except Exception:
+            pass
+
     # ==================== GIT COMMANDS ====================
     
     def _cmd_git(self, args: List[str], raw_line: str = None):
@@ -1442,6 +1599,8 @@ Working directory: {self._cwd}
                 'source': 'source FILE - Execute script file (.sh, .bat, .py)',
                 'python': 'python [script.py] - Run Python interpreter or script',
                 'node': 'node [script.js] - Run Node.js interpreter or script',
+                # Security (Phase 2)
+                'security': 'security [status|log|report|test] - Security dashboard and threat monitor',
             }
             if cmd in help_text:
                 self._write_output(f"\n{help_text[cmd]}\n\n")
@@ -1518,6 +1677,13 @@ SCRIPTING:
   source FILE     Run script (.sh/.bat/.py)
   python          Run Python
   node            Run Node.js
+
+SECURITY (Phase 2):
+  security        Show security dashboard
+  security status Full threat level display
+  security log    View security event feed
+  security report Detailed threat analysis
+  security test   Run security self-test
 
 TIPS:
   - Use Tab for path completion
