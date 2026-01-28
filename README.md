@@ -81,6 +81,45 @@ Hard-coded limits protect your system:
 
 ---
 
+## 🗺️ Development Roadmap
+
+FRANKENSTEIN is being built in 4 phases. Each phase adds new capabilities while maintaining stability and safety.
+
+### Phase 1: Core Engine ✅ COMPLETE
+*Foundation & Hardware Protection*
+- Safety system with immutable constraints
+- Resource governor with 5-level auto-throttle
+- Memory system with session persistence
+- Task orchestrator with priority queue
+- Monster Terminal (Git Bash-style interface)
+
+### Phase 2: Predictive Synthesis 🔄 IN PROGRESS
+*Intelligence Layer with Security Monitoring*
+
+| Step | Feature | Status |
+|------|---------|--------|
+| 1 | Security Dashboard + Live Threat Monitor | ✅ Complete |
+| 2 | Hardware Health + Auto-Switch Warning | ⏳ Next |
+| 3 | Classical-Quantum Synthesis Engine | 📋 Planned |
+| 4 | Data Pipeline + Telemetry | 📋 Planned |
+
+### Phase 3: Universal Integration 📋 PLANNED
+*The Ultimate Connection & Configuration Optimizer*
+- **All Quantum Providers**: IBM, AWS Braket, Azure, Google, IonQ, Rigetti, Xanadu, D-Wave
+- **All Classical Hardware**: Intel, AMD, NVIDIA, Apple Silicon, ARM, TPUs, FPGAs
+- Intelligent workload router (local vs cloud vs quantum)
+- Cost/performance optimization
+- Local quantum simulation (18+ qubits)
+
+### Phase 4: Autonomous Agents 📋 PLANNED
+*MCP Framework with Multi-Agent Collaboration*
+- Sandboxed agent execution environment
+- Built-in agent library (Compute, Research, Optimization, Security, Hardware)
+- Multi-agent orchestration and collaboration
+- User-defined agent creation
+
+---
+
 ## 📋 Requirements
 
 - Python 3.10+
