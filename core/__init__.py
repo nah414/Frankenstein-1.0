@@ -51,6 +51,15 @@ from .hardware_dashboard import (
     handle_hardware_command
 )
 
+from .system_diagnostics import (
+    get_system_stats,
+    get_top_processes,
+    generate_recommendations,
+    handle_diagnose_command,
+    SystemStats,
+    ProcessInfo
+)
+
 __all__ = [
     # Safety
     "SAFETY",
@@ -86,6 +95,13 @@ __all__ = [
     "HardwareDashboard",
     "get_hardware_dashboard",
     "handle_hardware_command",
+    # System Diagnostics (Phase 2)
+    "get_system_stats",
+    "get_top_processes",
+    "generate_recommendations",
+    "handle_diagnose_command",
+    "SystemStats",
+    "ProcessInfo",
 ]
 
 __version__ = "2.0.0-phase2"

@@ -15,7 +15,7 @@ class SafetyConstraints:
 
     # Resource Limits (tuned for i3 8th Gen with 8GB RAM)
     MAX_CPU_PERCENT: int = 80          # Leave 20% for OS
-    MAX_MEMORY_PERCENT: int = 70       # ~5.6GB max, leave headroom
+    MAX_MEMORY_PERCENT: int = 75       # ~6GB max, leave headroom
     MAX_GPU_PERCENT: int = 85          # If discrete GPU present
     MAX_DISK_IO_MBPS: int = 200        # Conservative for laptop SSD
     MAX_STORAGE_USE_GB: int = 20       # 117GB total, keep lean

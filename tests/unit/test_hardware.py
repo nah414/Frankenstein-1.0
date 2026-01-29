@@ -36,7 +36,7 @@ class TestHardwareTier:
         assert tier.name == "Tier 1: Edge"
         assert tier.description == "Dell i3 8th Gen"
         assert tier.max_cpu == 80
-        assert tier.max_memory == 70
+        assert tier.max_memory == 75  # Updated from 70 to 75
         assert tier.max_workers == 3
 
 

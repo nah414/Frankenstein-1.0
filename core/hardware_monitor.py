@@ -21,7 +21,7 @@ from .safety import SAFETY
 
 class HardwareTier(Enum):
     """Hardware tier definitions"""
-    TIER1_EDGE = ("Tier 1: Edge", "Dell i3 8th Gen", 80, 70, 3)
+    TIER1_EDGE = ("Tier 1: Edge", "Dell i3 8th Gen", 80, 75, 3)
     TIER2_WORKSTATION = ("Tier 2: Workstation", "Mid-range Desktop", 85, 80, 6)
     TIER3_HPC = ("Tier 3: HPC Local", "High-end Multi-GPU", 90, 85, 12)
     TIER4_CLOUD = ("Tier 4: Cloud Burst", "On-demand Cloud", 95, 90, 32)

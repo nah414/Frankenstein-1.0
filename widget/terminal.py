@@ -164,6 +164,8 @@ class FrankensteinTerminal:
             'security': self._cmd_security,
             # Hardware (Phase 2)
             'hardware': self._cmd_hardware,
+            # System Diagnostics (Phase 2)
+            'diagnose': self._cmd_diagnose,
         }
         
         # Security monitor integration (Phase 2)
@@ -1418,6 +1420,17 @@ Working directory: {self._cwd}
             self._write_error(f"Hardware monitor not available: {e}")
             self._write_output("Make sure core/hardware_monitor.py exists.\n")
 
+    # ==================== SYSTEM DIAGNOSTICS (Phase 2) ====================
+    
+    def _cmd_diagnose(self, args: List[str]):
+        """System diagnostics and optimization commands"""
+        try:
+            from core.system_diagnostics import handle_diagnose_command
+            handle_diagnose_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Diagnostics module not available: {e}")
+            self._write_output("Make sure core/system_diagnostics.py exists.\n")
+
     # ==================== GIT COMMANDS ====================
     
     def _cmd_git(self, args: List[str], raw_line: str = None):
@@ -1741,7 +1754,9 @@ Working directory: {self._cwd}
                 # Security (Phase 2)
                 'security': 'security [status|log|report|test] - Security dashboard and threat monitor',
                 # Hardware (Phase 2)
-                'hardware': 'hardware [status|trend|tiers|recommend|diagnose] - Hardware health monitor',
+                'hardware': 'hardware [status|trend|tiers|recommend] - Hardware health monitor',
+                # Diagnostics (Phase 2)
+                'diagnose': 'diagnose [refresh|fix|kill|quick] - System diagnostics and optimization',
             }
             if cmd in help_text:
                 self._write_output(f"\n{help_text[cmd]}\n\n")
@@ -1832,7 +1847,13 @@ HARDWARE (Phase 2):
   hardware trend  Resource trend analysis
   hardware tiers  Hardware tier reference
   hardware recommend  Switch recommendation
-  hardware diagnose   Real-time diagnosis
+
+DIAGNOSTICS (Phase 2):
+  diagnose        Run full system diagnosis
+  diagnose refresh    Refresh diagnosis report
+  diagnose fix <n>    Apply recommendation #n
+  diagnose kill <name>  Terminate a process
+  diagnose quick      Quick CPU/RAM stats
 
 TIPS:
   - Use Tab for path completion
