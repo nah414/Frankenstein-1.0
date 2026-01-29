@@ -99,8 +99,8 @@ FRANKENSTEIN is being built in 4 phases. Each phase adds new capabilities while 
 | Step | Feature | Status |
 |------|---------|--------|
 | 1 | Security Dashboard + Live Threat Monitor | ✅ Complete |
-| 2 | Hardware Health + Auto-Switch Warning | ⏳ Next |
-| 3 | Classical-Quantum Synthesis Engine | 📋 Planned |
+| 2 | Hardware Health + Auto-Switch Warning | ✅ Complete |
+| 3 | Classical-Quantum Synthesis Engine | ⏳ Next |
 | 4 | Data Pipeline + Telemetry | 📋 Planned |
 
 ### Phase 3: Universal Integration 📋 PLANNED

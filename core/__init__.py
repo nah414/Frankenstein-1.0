@@ -36,6 +36,21 @@ from .orchestrator import (
     get_orchestrator
 )
 
+from .hardware_monitor import (
+    HardwareHealthMonitor,
+    HardwareTier,
+    HealthStatus,
+    HealthTrend,
+    SwitchRecommendation,
+    get_hardware_monitor
+)
+
+from .hardware_dashboard import (
+    HardwareDashboard,
+    get_hardware_dashboard,
+    handle_hardware_command
+)
+
 __all__ = [
     # Safety
     "SAFETY",
@@ -60,6 +75,17 @@ __all__ = [
     "TaskStatus",
     "TaskPriority",
     "get_orchestrator",
+    # Hardware Monitor (Phase 2)
+    "HardwareHealthMonitor",
+    "HardwareTier",
+    "HealthStatus",
+    "HealthTrend",
+    "SwitchRecommendation",
+    "get_hardware_monitor",
+    # Hardware Dashboard (Phase 2)
+    "HardwareDashboard",
+    "get_hardware_dashboard",
+    "handle_hardware_command",
 ]
 
-__version__ = "1.0.0-phase1"
+__version__ = "2.0.0-phase2"

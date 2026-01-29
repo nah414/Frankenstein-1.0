@@ -162,11 +162,16 @@ class FrankensteinTerminal:
             'node': self._cmd_node,
             # Security (Phase 2)
             'security': self._cmd_security,
+            # Hardware (Phase 2)
+            'hardware': self._cmd_hardware,
         }
         
         # Security monitor integration (Phase 2)
         self._security_monitor = None
         self._security_dashboard = None
+        
+        # Hardware monitor integration (Phase 2)
+        self._hardware_monitor = None
     
     def start(self) -> bool:
         """Start the terminal in a separate thread"""
@@ -263,8 +268,8 @@ class FrankensteinTerminal:
         # ==================== LIVE MONITOR PANEL (Phase 2) ====================
         self._monitor_frame = ctk.CTkFrame(
             self._root,
-            width=160,
-            height=85,
+            width=185,
+            height=135,
             fg_color="#1a1a2e",
             border_width=1,
             border_color="#30363d",
@@ -273,41 +278,87 @@ class FrankensteinTerminal:
         self._monitor_frame.place(relx=1.0, rely=0.0, x=-10, y=45, anchor="ne")
         self._monitor_frame.grid_propagate(False)
         
-        # Monitor title
-        monitor_title = ctk.CTkLabel(
+        # Security section title
+        security_title = ctk.CTkLabel(
             self._monitor_frame,
             text="🛡️ SECURITY",
             font=("Consolas", 9, "bold"),
             text_color="#58a6ff"
         )
-        monitor_title.place(x=5, y=2)
+        security_title.place(x=5, y=2)
         
         # Threat level indicator
         self._threat_label = ctk.CTkLabel(
             self._monitor_frame,
             text="🟢 CLEAR",
-            font=("Consolas", 10, "bold"),
+            font=("Consolas", 9, "bold"),
             text_color="#00ff88"
         )
-        self._threat_label.place(x=5, y=22)
+        self._threat_label.place(x=5, y=18)
         
-        # Stats line 1: CPU/MEM
-        self._resource_label = ctk.CTkLabel(
-            self._monitor_frame,
-            text="CPU: --% | RAM: --%",
-            font=("Consolas", 8),
-            text_color="#8b949e"
-        )
-        self._resource_label.place(x=5, y=42)
-        
-        # Stats line 2: Blocked count
+        # Blocked/Active stats
         self._blocked_label = ctk.CTkLabel(
             self._monitor_frame,
-            text="Blocked: 0 | Active: 0",
+            text="Blk: 0 | Act: 0",
             font=("Consolas", 8),
             text_color="#8b949e"
         )
-        self._blocked_label.place(x=5, y=58)
+        self._blocked_label.place(x=5, y=34)
+        
+        # Divider
+        divider1 = ctk.CTkLabel(
+            self._monitor_frame,
+            text="─" * 24,
+            font=("Consolas", 6),
+            text_color="#30363d"
+        )
+        divider1.place(x=3, y=48)
+        
+        # Hardware section title
+        hw_title = ctk.CTkLabel(
+            self._monitor_frame,
+            text="🖥️ HARDWARE",
+            font=("Consolas", 9, "bold"),
+            text_color="#58a6ff"
+        )
+        hw_title.place(x=5, y=58)
+        
+        # Hardware health indicator
+        self._health_label = ctk.CTkLabel(
+            self._monitor_frame,
+            text="🟢 NORMAL",
+            font=("Consolas", 9, "bold"),
+            text_color="#00ff88"
+        )
+        self._health_label.place(x=5, y=74)
+        
+        # CPU usage
+        self._cpu_label = ctk.CTkLabel(
+            self._monitor_frame,
+            text="CPU: --%",
+            font=("Consolas", 8),
+            text_color="#8b949e"
+        )
+        self._cpu_label.place(x=5, y=92)
+        
+        # RAM usage
+        self._ram_label = ctk.CTkLabel(
+            self._monitor_frame,
+            text="RAM: --%",
+            font=("Consolas", 8),
+            text_color="#8b949e"
+        )
+        self._ram_label.place(x=95, y=92)
+        
+        # Diagnosis line (shows cause when in warning/critical/overload)
+        self._diagnosis_label = ctk.CTkLabel(
+            self._monitor_frame,
+            text="",
+            font=("Consolas", 7),
+            text_color="#ffcc00",
+            wraplength=175
+        )
+        self._diagnosis_label.place(x=5, y=110)
         
         # Start live monitor update loop
         self._start_monitor_updates()
@@ -594,24 +645,81 @@ class FrankensteinTerminal:
                     text_color=severity.color
                 )
                 
-                # Update blocked count
+                # Update blocked count (shortened)
                 self._blocked_label.configure(
-                    text=f"Blocked: {stats['threats_blocked']} | Active: {stats['active_threats']}"
+                    text=f"Blk: {stats['threats_blocked']} | Act: {stats['active_threats']}"
                 )
             except ImportError:
                 self._threat_label.configure(text="🟢 CLEAR", text_color="#00ff88")
-                self._blocked_label.configure(text="Blocked: 0 | Active: 0")
+                self._blocked_label.configure(text="Blk: 0 | Act: 0")
             
-            # Get resource stats from governor
+            # Get hardware health status and resources
             try:
-                from core import get_governor
+                from core import get_governor, get_hardware_monitor, HealthStatus
                 governor = get_governor()
-                status = governor.get_status()
-                cpu = status.get('cpu_percent', 0)
-                mem = status.get('memory_percent', 0)
-                self._resource_label.configure(text=f"CPU: {cpu:.0f}% | RAM: {mem:.0f}%")
+                gov_status = governor.get_status()
+                cpu = gov_status.get('cpu_percent', 0)
+                mem = gov_status.get('memory_percent', 0)
+                
+                # Get hardware monitor
+                hw_monitor = get_hardware_monitor()
+                if not hw_monitor._running:
+                    hw_monitor.start()
+                
+                hw_stats = hw_monitor.get_stats()
+                health = hw_monitor.get_health_status()
+                max_cpu = hw_stats.get('tier_max_cpu', 80)
+                max_mem = hw_stats.get('tier_max_memory', 70)
+                
+                # Update health label
+                self._health_label.configure(
+                    text=f"{health.icon} {health.label}",
+                    text_color=health.color
+                )
+                
+                # Color code CPU based on limits
+                if cpu > max_cpu:
+                    cpu_color = "#ff4444"  # Red - over limit
+                elif cpu > max_cpu * 0.85:
+                    cpu_color = "#ff9900"  # Orange - warning
+                elif cpu > max_cpu * 0.70:
+                    cpu_color = "#ffcc00"  # Yellow - elevated
+                else:
+                    cpu_color = "#8b949e"  # Gray - normal
+                
+                # Color code RAM based on limits
+                if mem > max_mem:
+                    mem_color = "#ff4444"  # Red - over limit
+                elif mem > max_mem * 0.85:
+                    mem_color = "#ff9900"  # Orange - warning
+                elif mem > max_mem * 0.70:
+                    mem_color = "#ffcc00"  # Yellow - elevated
+                else:
+                    mem_color = "#8b949e"  # Gray - normal
+                
+                self._cpu_label.configure(text=f"CPU: {cpu:.0f}%", text_color=cpu_color)
+                self._ram_label.configure(text=f"RAM: {mem:.0f}%", text_color=mem_color)
+                
+                # Show diagnosis if warning or worse
+                diagnosis = hw_stats.get('diagnosis', {})
+                if health in (HealthStatus.WARNING, HealthStatus.CRITICAL, HealthStatus.OVERLOAD):
+                    cause = diagnosis.get('primary_cause', '')
+                    if cause:
+                        # Truncate for display
+                        if len(cause) > 28:
+                            cause = cause[:25] + "..."
+                        self._diagnosis_label.configure(
+                            text=f"⚠ {cause}",
+                            text_color=health.color
+                        )
+                else:
+                    self._diagnosis_label.configure(text="")
+                    
             except ImportError:
-                self._resource_label.configure(text="CPU: --% | RAM: --%")
+                self._cpu_label.configure(text="CPU: --%", text_color="#8b949e")
+                self._ram_label.configure(text="RAM: --%", text_color="#8b949e")
+                self._health_label.configure(text="🟢 NORMAL", text_color="#00ff88")
+                self._diagnosis_label.configure(text="")
         except Exception:
             pass
         
@@ -1279,6 +1387,26 @@ Working directory: {self._cwd}
         except Exception:
             pass
 
+    # ==================== HARDWARE COMMANDS (Phase 2) ====================
+    
+    def _cmd_hardware(self, args: List[str]):
+        """Hardware health monitor and auto-switch commands"""
+        try:
+            from core import get_hardware_monitor, handle_hardware_command
+            
+            # Initialize monitor if needed
+            if self._hardware_monitor is None:
+                self._hardware_monitor = get_hardware_monitor()
+                if not self._hardware_monitor._running:
+                    self._hardware_monitor.start()
+            
+            # Handle the command
+            handle_hardware_command(args, self._write_output)
+            
+        except ImportError as e:
+            self._write_error(f"Hardware monitor not available: {e}")
+            self._write_output("Make sure core/hardware_monitor.py exists.\n")
+
     # ==================== GIT COMMANDS ====================
     
     def _cmd_git(self, args: List[str], raw_line: str = None):
@@ -1601,6 +1729,8 @@ Working directory: {self._cwd}
                 'node': 'node [script.js] - Run Node.js interpreter or script',
                 # Security (Phase 2)
                 'security': 'security [status|log|report|test] - Security dashboard and threat monitor',
+                # Hardware (Phase 2)
+                'hardware': 'hardware [status|trend|tiers|recommend|diagnose] - Hardware health monitor',
             }
             if cmd in help_text:
                 self._write_output(f"\n{help_text[cmd]}\n\n")
@@ -1684,6 +1814,14 @@ SECURITY (Phase 2):
   security log    View security event feed
   security report Detailed threat analysis
   security test   Run security self-test
+
+HARDWARE (Phase 2):
+  hardware        Show hardware health dashboard
+  hardware status Full health display with diagnosis
+  hardware trend  Resource trend analysis
+  hardware tiers  Hardware tier reference
+  hardware recommend  Switch recommendation
+  hardware diagnose   Real-time diagnosis
 
 TIPS:
   - Use Tab for path completion
