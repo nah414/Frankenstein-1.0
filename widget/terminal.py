@@ -266,10 +266,12 @@ class FrankensteinTerminal:
         self._output_text.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
         
         # ==================== LIVE MONITOR PANEL (Phase 2) ====================
+        # ==================== LIVE MONITOR PANEL ====================
+        # Positioned in top-right corner, shows security + hardware status
         self._monitor_frame = ctk.CTkFrame(
             self._root,
-            width=185,
-            height=135,
+            width=220,
+            height=160,
             fg_color="#1a1a2e",
             border_width=1,
             border_color="#30363d",
@@ -278,87 +280,96 @@ class FrankensteinTerminal:
         self._monitor_frame.place(relx=1.0, rely=0.0, x=-10, y=45, anchor="ne")
         self._monitor_frame.grid_propagate(False)
         
-        # Security section title
+        # ===== SECURITY SECTION =====
         security_title = ctk.CTkLabel(
             self._monitor_frame,
             text="🛡️ SECURITY",
-            font=("Consolas", 9, "bold"),
-            text_color="#58a6ff"
+            font=("Consolas", 10, "bold"),
+            text_color="#58a6ff",
+            anchor="w"
         )
-        security_title.place(x=5, y=2)
+        security_title.place(x=8, y=6)
         
         # Threat level indicator
         self._threat_label = ctk.CTkLabel(
             self._monitor_frame,
             text="🟢 CLEAR",
-            font=("Consolas", 9, "bold"),
-            text_color="#00ff88"
+            font=("Consolas", 10, "bold"),
+            text_color="#00ff88",
+            anchor="w"
         )
-        self._threat_label.place(x=5, y=18)
+        self._threat_label.place(x=8, y=26)
         
         # Blocked/Active stats
         self._blocked_label = ctk.CTkLabel(
             self._monitor_frame,
-            text="Blk: 0 | Act: 0",
-            font=("Consolas", 8),
-            text_color="#8b949e"
+            text="Blocked: 0 | Active: 0",
+            font=("Consolas", 9),
+            text_color="#8b949e",
+            anchor="w"
         )
-        self._blocked_label.place(x=5, y=34)
+        self._blocked_label.place(x=8, y=46)
         
-        # Divider
+        # Divider line
         divider1 = ctk.CTkLabel(
             self._monitor_frame,
-            text="─" * 24,
+            text="─" * 28,
             font=("Consolas", 6),
             text_color="#30363d"
         )
-        divider1.place(x=3, y=48)
+        divider1.place(x=6, y=64)
         
-        # Hardware section title
+        # ===== HARDWARE SECTION =====
         hw_title = ctk.CTkLabel(
             self._monitor_frame,
             text="🖥️ HARDWARE",
-            font=("Consolas", 9, "bold"),
-            text_color="#58a6ff"
+            font=("Consolas", 10, "bold"),
+            text_color="#58a6ff",
+            anchor="w"
         )
-        hw_title.place(x=5, y=58)
+        hw_title.place(x=8, y=74)
         
         # Hardware health indicator
         self._health_label = ctk.CTkLabel(
             self._monitor_frame,
             text="🟢 NORMAL",
-            font=("Consolas", 9, "bold"),
-            text_color="#00ff88"
+            font=("Consolas", 10, "bold"),
+            text_color="#00ff88",
+            anchor="w"
         )
-        self._health_label.place(x=5, y=74)
+        self._health_label.place(x=8, y=94)
         
-        # CPU usage
+        # CPU usage label
         self._cpu_label = ctk.CTkLabel(
             self._monitor_frame,
             text="CPU: --%",
-            font=("Consolas", 8),
-            text_color="#8b949e"
+            font=("Consolas", 9),
+            text_color="#8b949e",
+            anchor="w"
         )
-        self._cpu_label.place(x=5, y=92)
+        self._cpu_label.place(x=8, y=114)
         
-        # RAM usage
+        # RAM usage label
         self._ram_label = ctk.CTkLabel(
             self._monitor_frame,
             text="RAM: --%",
-            font=("Consolas", 8),
-            text_color="#8b949e"
+            font=("Consolas", 9),
+            text_color="#8b949e",
+            anchor="w"
         )
-        self._ram_label.place(x=95, y=92)
+        self._ram_label.place(x=110, y=114)
         
         # Diagnosis line (shows cause when in warning/critical/overload)
         self._diagnosis_label = ctk.CTkLabel(
             self._monitor_frame,
             text="",
-            font=("Consolas", 7),
+            font=("Consolas", 8),
             text_color="#ffcc00",
-            wraplength=175
+            anchor="w",
+            wraplength=200,
+            justify="left"
         )
-        self._diagnosis_label.place(x=5, y=110)
+        self._diagnosis_label.place(x=8, y=136)
         
         # Start live monitor update loop
         self._start_monitor_updates()
@@ -645,13 +656,13 @@ class FrankensteinTerminal:
                     text_color=severity.color
                 )
                 
-                # Update blocked count (shortened)
+                # Update blocked count (full words now with wider panel)
                 self._blocked_label.configure(
-                    text=f"Blk: {stats['threats_blocked']} | Act: {stats['active_threats']}"
+                    text=f"Blocked: {stats['threats_blocked']} | Active: {stats['active_threats']}"
                 )
             except ImportError:
                 self._threat_label.configure(text="🟢 CLEAR", text_color="#00ff88")
-                self._blocked_label.configure(text="Blk: 0 | Act: 0")
+                self._blocked_label.configure(text="Blocked: 0 | Active: 0")
             
             # Get hardware health status and resources
             try:
@@ -705,9 +716,9 @@ class FrankensteinTerminal:
                 if health in (HealthStatus.WARNING, HealthStatus.CRITICAL, HealthStatus.OVERLOAD):
                     cause = diagnosis.get('primary_cause', '')
                     if cause:
-                        # Truncate for display
-                        if len(cause) > 28:
-                            cause = cause[:25] + "..."
+                        # Truncate for display (wider panel allows more text)
+                        if len(cause) > 35:
+                            cause = cause[:32] + "..."
                         self._diagnosis_label.configure(
                             text=f"⚠ {cause}",
                             text_color=health.color
