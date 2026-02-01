@@ -843,7 +843,7 @@ class FrankensteinTerminal:
         welcome = f"""
 ╔══════════════════════════════════════════════════════════════════╗
 ║                                                                  ║
-║   ⚡ FRANKENSTEIN 1.0 - Phase 2: Synthesis Engine               ║
+║   ⚡ FRANKENSTEIN 1.0                                            ║
 ║                                                                  ║
 ║   "Frankenstein, here to serve science."                        ║
 ║                                                                  ║
