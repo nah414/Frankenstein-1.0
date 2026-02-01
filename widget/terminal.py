@@ -1,8 +1,8 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 FRANKENSTEIN 1.0 - Terminal Widget
 
-Purpose: Terminal emulator with local command execution
+Purpose: Git Bash-style terminal emulator with local command execution
 Platform: Windows 10+ (uses customtkinter)
 Author: Frankenstein Project
 
@@ -34,7 +34,7 @@ try:
     CTK_AVAILABLE = True
 except ImportError:
     CTK_AVAILABLE = False
-    print("âš ï¸ customtkinter not installed. Run: pip install customtkinter")
+    print("⚠️ customtkinter not installed. Run: pip install customtkinter")
 
 
 class CommandHistory:
@@ -133,10 +133,6 @@ class FrankensteinTerminal:
             'find': self._cmd_find,
             'status': self._cmd_status,
             'frank': self._cmd_frank,
-            # Telemetry commands
-            'telemetry': self._cmd_telemetry,
-            'metrics': self._cmd_metrics,
-            'events': self._cmd_events,
             # Git commands
             'git': self._cmd_git,
             # SSH commands
@@ -193,7 +189,7 @@ class FrankensteinTerminal:
     def start(self) -> bool:
         """Start the terminal in a separate thread"""
         if not CTK_AVAILABLE:
-            print("âŒ customtkinter not available")
+            print("❌ customtkinter not available")
             return False
         
         if self._running:
@@ -219,7 +215,7 @@ class FrankensteinTerminal:
         ctk.set_default_color_theme("blue")
         
         self._root = ctk.CTk()
-        self._root.title("ðŸ§Ÿ FRANKENSTEIN Terminal")
+        self._root.title("🧟 FRANKENSTEIN Terminal")
         self._root.geometry("700x900+100+50")
         self._root.minsize(600, 500)
         self._root.attributes("-topmost", True)
@@ -256,7 +252,7 @@ class FrankensteinTerminal:
         
         title = ctk.CTkLabel(
             header,
-            text="ðŸ§Ÿ FRANKENSTEIN 1.0 Terminal",
+            text="🧟 FRANKENSTEIN 1.0 Terminal",
             font=("Consolas", 14, "bold"),
             text_color="#00ff88"
         )
@@ -265,7 +261,7 @@ class FrankensteinTerminal:
         # Status indicator
         self._status_label = ctk.CTkLabel(
             header,
-            text="â— READY",
+            text="● READY",
             font=("Consolas", 11),
             text_color="#00ff88"
         )
@@ -299,7 +295,7 @@ class FrankensteinTerminal:
         # ===== SECURITY SECTION =====
         security_title = ctk.CTkLabel(
             self._monitor_frame,
-            text="ðŸ›¡ï¸ SECURITY",
+            text="🛡️ SECURITY",
             font=("Consolas", 10, "bold"),
             text_color="#58a6ff",
             anchor="w"
@@ -309,7 +305,7 @@ class FrankensteinTerminal:
         # Threat level indicator
         self._threat_label = ctk.CTkLabel(
             self._monitor_frame,
-            text="ðŸŸ¢ CLEAR",
+            text="🟢 CLEAR",
             font=("Consolas", 10, "bold"),
             text_color="#00ff88",
             anchor="w"
@@ -329,7 +325,7 @@ class FrankensteinTerminal:
         # Divider line
         divider1 = ctk.CTkLabel(
             self._monitor_frame,
-            text="â”€" * 28,
+            text="─" * 28,
             font=("Consolas", 6),
             text_color="#30363d"
         )
@@ -338,7 +334,7 @@ class FrankensteinTerminal:
         # ===== HARDWARE SECTION =====
         hw_title = ctk.CTkLabel(
             self._monitor_frame,
-            text="ðŸ–¥ï¸ HARDWARE",
+            text="🖥️ HARDWARE",
             font=("Consolas", 10, "bold"),
             text_color="#58a6ff",
             anchor="w"
@@ -348,7 +344,7 @@ class FrankensteinTerminal:
         # Hardware health indicator
         self._health_label = ctk.CTkLabel(
             self._monitor_frame,
-            text="ðŸŸ¢ NORMAL",
+            text="🟢 NORMAL",
             font=("Consolas", 10, "bold"),
             text_color="#00ff88",
             anchor="w"
@@ -473,21 +469,21 @@ class FrankensteinTerminal:
         # Output context menu (copy only)
         self._output_menu = tk.Menu(self._root, tearoff=0, bg="#21262d", fg="#c9d1d9",
                                      activebackground="#30363d", activeforeground="#ffffff")
-        self._output_menu.add_command(label="ðŸ“‹ Copy", command=self._copy_selection)
-        self._output_menu.add_command(label="ðŸ“‘ Select All", command=self._select_all_output)
+        self._output_menu.add_command(label="📋 Copy", command=self._copy_selection)
+        self._output_menu.add_command(label="📑 Select All", command=self._select_all_output)
         self._output_menu.add_separator()
-        self._output_menu.add_command(label="ðŸ—‘ï¸ Clear Terminal", command=self._cmd_clear)
+        self._output_menu.add_command(label="🗑️ Clear Terminal", command=self._cmd_clear)
         
         # Note: Button-3 binding for output is done in _build_ui with selection support
         
         # Input context menu (copy, cut, paste)
         self._input_menu = tk.Menu(self._root, tearoff=0, bg="#21262d", fg="#c9d1d9",
                                     activebackground="#30363d", activeforeground="#ffffff")
-        self._input_menu.add_command(label="âœ‚ï¸ Cut", command=self._cut_input)
-        self._input_menu.add_command(label="ðŸ“‹ Copy", command=self._copy_input)
-        self._input_menu.add_command(label="ðŸ“¥ Paste", command=self._paste_input)
+        self._input_menu.add_command(label="✂️ Cut", command=self._cut_input)
+        self._input_menu.add_command(label="📋 Copy", command=self._copy_input)
+        self._input_menu.add_command(label="📥 Paste", command=self._paste_input)
         self._input_menu.add_separator()
-        self._input_menu.add_command(label="ðŸ—‘ï¸ Clear", command=self._clear_input)
+        self._input_menu.add_command(label="🗑️ Clear", command=self._clear_input)
     
     def _show_output_context_menu(self, event):
         """Show context menu for output text area"""
@@ -763,7 +759,7 @@ class FrankensteinTerminal:
                     text=f"Blocked: {stats['threats_blocked']} | Active: {stats['active_threats']}"
                 )
             except ImportError:
-                self._threat_label.configure(text="ðŸŸ¢ CLEAR", text_color="#00ff88")
+                self._threat_label.configure(text="🟢 CLEAR", text_color="#00ff88")
                 self._blocked_label.configure(text="Blocked: 0 | Active: 0")
             
             # Get hardware health status and resources
@@ -822,7 +818,7 @@ class FrankensteinTerminal:
                         if len(cause) > 35:
                             cause = cause[:32] + "..."
                         self._diagnosis_label.configure(
-                            text=f"âš  {cause}",
+                            text=f"⚠ {cause}",
                             text_color=health.color
                         )
                 else:
@@ -831,7 +827,7 @@ class FrankensteinTerminal:
             except ImportError:
                 self._cpu_label.configure(text="CPU: --%", text_color="#8b949e")
                 self._ram_label.configure(text="RAM: --%", text_color="#8b949e")
-                self._health_label.configure(text="ðŸŸ¢ NORMAL", text_color="#00ff88")
+                self._health_label.configure(text="🟢 NORMAL", text_color="#00ff88")
                 self._diagnosis_label.configure(text="")
         except Exception:
             pass
@@ -843,23 +839,23 @@ class FrankensteinTerminal:
     def _show_welcome(self):
         """Display welcome message"""
         welcome = f"""
-â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-â•‘                                                                  â•‘
-â•‘   âš¡ FRANKENSTEIN 1.0                                            â•‘
-â•‘                                                                  â•‘
-â•‘   "Frankenstein, here to serve science."                        â•‘
-â•‘                                                                  â•‘
-â•‘   Commands: help, status, security, hardware, diagnose          â•‘
-â•‘                                                                  â•‘
-â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£
-â•‘                                                                  â•‘
-â•‘   ðŸ†• QUANTUM MODE: Type 'quantum' or 'q' to enter!              â•‘
-â•‘                                                                  â•‘
-â•‘   Quick quantum example:                                         â•‘
-â•‘     q â†’ qubit 2 â†’ h 0 â†’ cx 0 1 â†’ measure                        â•‘
-â•‘     (Creates Bell state, auto-opens 3D Bloch sphere!)           â•‘
-â•‘                                                                  â•‘
-â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+╔══════════════════════════════════════════════════════════════════╗
+║                                                                  ║
+║   ⚡ FRANKENSTEIN 1.0                                            ║
+║                                                                  ║
+║   "Frankenstein, here to serve science."                        ║
+║                                                                  ║
+║   Commands: help, status, security, hardware, diagnose          ║
+║                                                                  ║
+╠══════════════════════════════════════════════════════════════════╣
+║                                                                  ║
+║   🆕 QUANTUM MODE: Type 'quantum' or 'q' to enter!              ║
+║                                                                  ║
+║   Quick quantum example:                                         ║
+║     q → qubit 2 → h 0 → cx 0 1 → measure                        ║
+║     (Creates Bell state, auto-opens 3D Bloch sphere!)           ║
+║                                                                  ║
+╚══════════════════════════════════════════════════════════════════╝
 
 Session started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 Working directory: {self._cwd}
@@ -875,11 +871,11 @@ Working directory: {self._cwd}
     
     def _write_error(self, text: str):
         """Write error message to output"""
-        self._write_output(f"âŒ Error: {text}\n")
+        self._write_output(f"❌ Error: {text}\n")
     
     def _write_success(self, text: str):
         """Write success message to output"""
-        self._write_output(f"âœ… {text}\n")
+        self._write_output(f"✅ {text}\n")
     
     def _execute_command(self, command_line: str):
         """Parse and execute a command"""
@@ -973,7 +969,7 @@ Working directory: {self._cwd}
     def _execute_system_command(self, command: str):
         """Execute a system command via subprocess"""
         try:
-            self._status_label.configure(text="â— RUNNING", text_color="#ffcc00")
+            self._status_label.configure(text="● RUNNING", text_color="#ffcc00")
             self._root.update()
             
             # Run command
@@ -994,14 +990,14 @@ Working directory: {self._cwd}
             if result.returncode != 0 and not result.stdout and not result.stderr:
                 self._write_error(f"Command '{command}' returned exit code {result.returncode}")
             
-            self._status_label.configure(text="â— READY", text_color="#00ff88")
+            self._status_label.configure(text="● READY", text_color="#00ff88")
             
         except subprocess.TimeoutExpired:
             self._write_error("Command timed out after 30 seconds")
-            self._status_label.configure(text="â— READY", text_color="#00ff88")
+            self._status_label.configure(text="● READY", text_color="#00ff88")
         except Exception as e:
             self._write_error(f"Failed to execute: {e}")
-            self._status_label.configure(text="â— READY", text_color="#00ff88")
+            self._status_label.configure(text="● READY", text_color="#00ff88")
 
     # ==================== BUILT-IN COMMANDS ====================
     
@@ -1433,11 +1429,11 @@ Working directory: {self._cwd}
             status = governor.get_status()
             session = memory.get_session_stats()
             
-            self._write_output("\nâš¡ FRANKENSTEIN 1.0 STATUS\n")
+            self._write_output("\n⚡ FRANKENSTEIN 1.0 STATUS\n")
             self._write_output("=" * 40 + "\n")
             self._write_output(f"CPU:        {status.get('cpu_percent', 'N/A')}%\n")
             self._write_output(f"Memory:     {status.get('memory_percent', 'N/A')}%\n")
-            self._write_output(f"Safe:       {'âœ“' if status.get('safe', False) else 'âœ—'}\n")
+            self._write_output(f"Safe:       {'✓' if status.get('safe', False) else '✗'}\n")
             self._write_output(f"Uptime:     {session.get('uptime_human', 'N/A')}\n")
             self._write_output("=" * 40 + "\n\n")
         except ImportError:
@@ -1455,7 +1451,7 @@ Working directory: {self._cwd}
         if subcmd == "status":
             self._cmd_status([])
         elif subcmd == "version":
-            self._write_output("âš¡ FRANKENSTEIN 1.0\n")
+            self._write_output("⚡ FRANKENSTEIN 1.0\n")
             self._write_output("Target: Dell i3 8th Gen (Tier 1)\n")
         elif subcmd == "quote":
             quotes = [
@@ -1466,144 +1462,9 @@ Working directory: {self._cwd}
                 '"Life, although it may only be an accumulation of anguish, is dear to me."',
             ]
             import random
-            self._write_output(f"\nðŸ§Ÿ {random.choice(quotes)}\n\n")
+            self._write_output(f"\n🧟 {random.choice(quotes)}\n\n")
         else:
             self._write_error(f"frank: unknown command '{subcmd}'")
-
-    # ==================== TELEMETRY COMMANDS ====================
-    
-    def _cmd_telemetry(self, args: List[str]):
-        """Telemetry and data pipeline commands"""
-        try:
-            from data import TelemetryCollector, MetricsAggregator, TelemetryStorage
-            
-            telemetry = TelemetryCollector()
-            aggregator = MetricsAggregator(telemetry)
-            storage = TelemetryStorage()
-            
-            if not args:
-                # Show summary
-                summary = aggregator.get_summary()
-                health = summary.get('health', {})
-                
-                self._write_output("\nðŸ“Š TELEMETRY DASHBOARD\n")
-                self._write_output("=" * 50 + "\n")
-                self._write_output(f"Health Score: {health.get('score', 0):.1f}/100 ({health.get('status', 'unknown')})\n")
-                self._write_output(f"Session Duration: {summary['system'].get('session_duration_sec', 0):.0f}s\n")
-                self._write_output(f"Anomalies Detected: {summary.get('anomaly_count', 0)}\n")
-                self._write_output("-" * 50 + "\n")
-                self._write_output("Commands: telemetry [status|export|storage|start|stop]\n")
-                self._write_output("=" * 50 + "\n\n")
-                return
-            
-            subcmd = args[0].lower()
-            
-            if subcmd == "status":
-                summary = aggregator.get_summary()
-                self._write_output("\nðŸ“Š SYSTEM METRICS\n")
-                self._write_output("-" * 40 + "\n")
-                for cat in ['system', 'synthesis', 'quantum', 'security', 'agents', 'pipeline']:
-                    data = summary.get(cat, {})
-                    if any(v != 0 for v in data.values()):
-                        self._write_output(f"\n{cat.upper()}:\n")
-                        for k, v in data.items():
-                            if v != 0:
-                                self._write_output(f"  {k}: {v:.2f}\n")
-                self._write_output("\n")
-            
-            elif subcmd == "export":
-                days = int(args[1]) if len(args) > 1 else 7
-                filepath = storage.export_all(days_back=days)
-                self._write_output(f"âœ“ Exported to: {filepath}\n")
-            
-            elif subcmd == "storage":
-                stats = storage.get_storage_stats()
-                self._write_output("\nðŸ’¾ STORAGE STATS\n")
-                self._write_output(f"Location: {stats['base_dir']}\n")
-                total_mb = stats['total_size_bytes'] / (1024 * 1024)
-                self._write_output(f"Total Size: {total_mb:.2f} MB\n")
-                for cat in ['events', 'metrics', 'snapshots']:
-                    self._write_output(f"  {cat}: {stats[cat]['files']} files\n")
-                self._write_output("\n")
-            
-            elif subcmd == "start":
-                telemetry.start()
-                self._write_output("âœ“ Telemetry collection started\n")
-            
-            elif subcmd == "stop":
-                telemetry.stop()
-                self._write_output("âœ“ Telemetry collection stopped\n")
-            
-            else:
-                self._write_error(f"telemetry: unknown subcommand '{subcmd}'\n")
-                
-        except ImportError as e:
-            self._write_error(f"Telemetry module not available: {e}\n")
-        except Exception as e:
-            self._write_error(f"telemetry error: {e}\n")
-    
-    def _cmd_metrics(self, args: List[str]):
-        """Show current metrics snapshot"""
-        try:
-            from data import TelemetryCollector, MetricsAggregator
-            
-            telemetry = TelemetryCollector()
-            aggregator = MetricsAggregator(telemetry)
-            snapshot = aggregator.take_snapshot()
-            
-            self._write_output("\nðŸ“ˆ METRICS SNAPSHOT\n")
-            self._write_output(f"Timestamp: {snapshot.timestamp.strftime('%Y-%m-%d %H:%M:%S')}\n")
-            self._write_output("=" * 50 + "\n")
-            
-            # System metrics
-            self._write_output("\nðŸ–¥ï¸  SYSTEM\n")
-            for k, v in snapshot.system.items():
-                self._write_output(f"  {k}: {v:.2f}\n")
-            
-            # Counters
-            if snapshot.counters:
-                self._write_output("\nðŸ“Š COUNTERS\n")
-                for k, v in snapshot.counters.items():
-                    self._write_output(f"  {k}: {v}\n")
-            
-            self._write_output("\n")
-            
-        except ImportError as e:
-            self._write_error(f"Metrics module not available: {e}\n")
-        except Exception as e:
-            self._write_error(f"metrics error: {e}\n")
-    
-    def _cmd_events(self, args: List[str]):
-        """Show recent events from event bus"""
-        try:
-            from data import EventBus
-            
-            bus = EventBus()
-            limit = int(args[0]) if args else 10
-            
-            events = bus.get_history(limit=limit)
-            
-            self._write_output(f"\nðŸ“‹ RECENT EVENTS (last {len(events)})\n")
-            self._write_output("=" * 50 + "\n")
-            
-            if not events:
-                self._write_output("No events recorded yet.\n")
-            else:
-                for event in events[-limit:]:
-                    ts = event.timestamp.strftime('%H:%M:%S')
-                    self._write_output(f"[{ts}] {event.event_type.name} ({event.source})\n")
-            
-            self._write_output("\n")
-            
-            # Show stats
-            stats = bus.get_stats()
-            self._write_output(f"Total events: {stats['total_events']}\n")
-            self._write_output(f"Subscribers: {stats['subscriber_count']}\n\n")
-            
-        except ImportError as e:
-            self._write_error(f"Events module not available: {e}\n")
-        except Exception as e:
-            self._write_error(f"events error: {e}\n")
 
     # ==================== SECURITY COMMANDS ====================
     
@@ -1650,7 +1511,7 @@ Working directory: {self._cwd}
             elif severity == ThreatSeverity.LOW:
                 self._status_label.configure(text=f"{severity.icon} CAUTION", text_color=severity.color)
             else:
-                self._status_label.configure(text="â— READY", text_color="#00ff88")
+                self._status_label.configure(text="● READY", text_color="#00ff88")
         except Exception:
             pass
 
@@ -1755,37 +1616,37 @@ Working directory: {self._cwd}
     def _show_synthesis_help(self):
         """Show synthesis engine help"""
         help_text = """
-â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-â•‘            FRANKENSTEIN SYNTHESIS ENGINE - REAL COMPUTATIONS      â•‘
-â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£
-â•‘  COMPUTATION COMMANDS (performs actual calculations):             â•‘
-â•‘                                                                   â•‘
-â•‘  synthesis compute <expr>     Evaluate expression                 â•‘
-â•‘    Example: synthesis compute sin(pi/4) + cos(pi/4)               â•‘
-â•‘                                                                   â•‘
-â•‘  synthesis diff <expr>        Differentiate symbolically          â•‘
-â•‘    Example: synthesis diff x**3 + sin(x)                          â•‘
-â•‘                                                                   â•‘
-â•‘  synthesis integrate <expr> [a b]  Integrate (definite or indef)  â•‘
-â•‘    Example: synthesis integrate x**2 0 1                          â•‘
-â•‘                                                                   â•‘
-â•‘  synthesis solve <equation>   Solve equation for x                â•‘
-â•‘    Example: synthesis solve x**2 - 4 = 0                          â•‘
-â•‘                                                                   â•‘
-â•‘  synthesis lorentz <velocity> Apply Lorentz transformation        â•‘
-â•‘    Example: synthesis lorentz 0.5                                 â•‘
-â•‘                                                                   â•‘
-â•‘  synthesis schrodinger        Solve SchrÃ¶dinger equation          â•‘
-â•‘    Example: synthesis schrodinger                                 â•‘
-â•‘                                                                   â•‘
-â•‘  synthesis quantum <cmd>      Quantum mechanics operations        â•‘
-â•‘    Example: synthesis quantum bell                                â•‘
-â•‘                                                                   â•‘
-â•‘  synthesis physics <calc>     Physics calculations                â•‘
-â•‘    Example: synthesis physics gamma 0.8c                          â•‘
-â•‘                                                                   â•‘
-â•‘  synthesis status             Show engine status                  â•‘
-â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+╔═══════════════════════════════════════════════════════════════════╗
+║            FRANKENSTEIN SYNTHESIS ENGINE - REAL COMPUTATIONS      ║
+╠═══════════════════════════════════════════════════════════════════╣
+║  COMPUTATION COMMANDS (performs actual calculations):             ║
+║                                                                   ║
+║  synthesis compute <expr>     Evaluate expression                 ║
+║    Example: synthesis compute sin(pi/4) + cos(pi/4)               ║
+║                                                                   ║
+║  synthesis diff <expr>        Differentiate symbolically          ║
+║    Example: synthesis diff x**3 + sin(x)                          ║
+║                                                                   ║
+║  synthesis integrate <expr> [a b]  Integrate (definite or indef)  ║
+║    Example: synthesis integrate x**2 0 1                          ║
+║                                                                   ║
+║  synthesis solve <equation>   Solve equation for x                ║
+║    Example: synthesis solve x**2 - 4 = 0                          ║
+║                                                                   ║
+║  synthesis lorentz <velocity> Apply Lorentz transformation        ║
+║    Example: synthesis lorentz 0.5                                 ║
+║                                                                   ║
+║  synthesis schrodinger        Solve Schrödinger equation          ║
+║    Example: synthesis schrodinger                                 ║
+║                                                                   ║
+║  synthesis quantum <cmd>      Quantum mechanics operations        ║
+║    Example: synthesis quantum bell                                ║
+║                                                                   ║
+║  synthesis physics <calc>     Physics calculations                ║
+║    Example: synthesis physics gamma 0.8c                          ║
+║                                                                   ║
+║  synthesis status             Show engine status                  ║
+╚═══════════════════════════════════════════════════════════════════╝
 """
         self._write_output(help_text)
     
@@ -1909,7 +1770,7 @@ Working directory: {self._cwd}
             self._write_error(f"Error: {e}\n")
     
     def _synthesis_schrodinger(self, args: List[str]):
-        """Solve SchrÃ¶dinger equation using TRUE engine"""
+        """Solve Schrödinger equation using TRUE engine"""
         try:
             from synthesis.core import get_true_engine
             import numpy as np
@@ -1935,16 +1796,16 @@ Working directory: {self._cwd}
             
             result = engine.solve_schrodinger(H, t_max, n_steps, store_trajectory=False)
             
-            self._write_output("\n  â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n")
-            self._write_output("  â•‘      SCHRÃ–DINGER EVOLUTION COMPLETE       â•‘\n")
-            self._write_output("  â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£\n")
-            self._write_output(f"  â•‘  Qubits: {info['n_qubits']:<33} â•‘\n")
-            self._write_output(f"  â•‘  Dimension: {dim:<30} â•‘\n")
-            self._write_output(f"  â•‘  Time: {t_max:.4f}{' '*29} â•‘\n")
-            self._write_output(f"  â•‘  Steps: {n_steps:<32} â•‘\n")
-            self._write_output(f"  â•‘  Computation: {result.computation_time*1000:.2f} ms{' '*21} â•‘\n")
-            self._write_output(f"  â•‘  Final Energy: {result.expectation_values.get('energy', 0):.4f}{' '*20} â•‘\n")
-            self._write_output("  â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n")
+            self._write_output("\n  ╔═══════════════════════════════════════════╗\n")
+            self._write_output("  ║      SCHRÖDINGER EVOLUTION COMPLETE       ║\n")
+            self._write_output("  ╠═══════════════════════════════════════════╣\n")
+            self._write_output(f"  ║  Qubits: {info['n_qubits']:<33} ║\n")
+            self._write_output(f"  ║  Dimension: {dim:<30} ║\n")
+            self._write_output(f"  ║  Time: {t_max:.4f}{' '*29} ║\n")
+            self._write_output(f"  ║  Steps: {n_steps:<32} ║\n")
+            self._write_output(f"  ║  Computation: {result.computation_time*1000:.2f} ms{' '*21} ║\n")
+            self._write_output(f"  ║  Final Energy: {result.expectation_values.get('energy', 0):.4f}{' '*20} ║\n")
+            self._write_output("  ╚═══════════════════════════════════════════╝\n\n")
             
         except Exception as e:
             self._write_error(f"Error: {e}\n")
@@ -1973,12 +1834,12 @@ Working directory: {self._cwd}
             if cmd == "init":
                 n = int(args[1]) if len(args) > 1 else 2
                 engine.initialize_qubits(n, 'zero')
-                self._write_output(f"\n  Initialized {n} qubits in |{'0'*n}âŸ©\n\n")
+                self._write_output(f"\n  Initialized {n} qubits in |{'0'*n}⟩\n\n")
             
             elif cmd == "bell":
                 engine.create_bell_state()
                 result = engine.measure(1024, collapse=False)
-                self._write_output("\n  Bell State Created: (|00âŸ© + |11âŸ©)/âˆš2\n")
+                self._write_output("\n  Bell State Created: (|00⟩ + |11⟩)/√2\n")
                 self._write_output(f"  Measurement (1024 shots): {result['counts']}\n\n")
             
             elif cmd == "ghz":
@@ -2022,8 +1883,8 @@ Working directory: {self._cwd}
                 self._write_output(f"\n  Measurement ({shots} shots):\n")
                 for state, count in list(result['counts'].items())[:8]:
                     pct = 100 * count / shots
-                    bar = 'â–ˆ' * int(pct / 5)
-                    self._write_output(f"    |{state}âŸ©: {count:5d} ({pct:5.1f}%) {bar}\n")
+                    bar = '█' * int(pct / 5)
+                    self._write_output(f"    |{state}⟩: {count:5d} ({pct:5.1f}%) {bar}\n")
                 self._write_output("\n")
             
             elif cmd == "evolve":
@@ -2035,7 +1896,7 @@ Working directory: {self._cwd}
                 H = np.zeros((dim, dim), dtype=np.complex128)
                 np.fill_diagonal(H, [1 if i % 2 == 0 else -1 for i in range(dim)])
                 result = engine.solve_schrodinger(H, t_max, n_steps=100)
-                self._write_output(f"\n  SchrÃ¶dinger evolution complete\n")
+                self._write_output(f"\n  Schrödinger evolution complete\n")
                 self._write_output(f"  Time: {t_max:.4f}, Steps: 100\n")
                 self._write_output(f"  Computation: {result.computation_time*1000:.2f} ms\n\n")
             
@@ -2048,7 +1909,7 @@ Working directory: {self._cwd}
                     self._write_output(f"  Non-zero states: {info['nonzero_states']}\n")
                     self._write_output("  Top states:\n")
                     for s in info['top_states'][:5]:
-                        self._write_output(f"    |{s['state']}âŸ©: P={s['probability']:.4f}\n")
+                        self._write_output(f"    |{s['state']}⟩: P={s['probability']:.4f}\n")
                     self._write_output("\n")
                 else:
                     self._write_output("\n  No quantum state initialized\n\n")
@@ -2100,26 +1961,26 @@ Working directory: {self._cwd}
             storage = status['storage']
             
             self._write_output("\n")
-            self._write_output("  â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n")
-            self._write_output("  â•‘          TRUE SYNTHESIS ENGINE STATUS                    â•‘\n")
-            self._write_output("  â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£\n")
-            self._write_output(f"  â•‘  Engine:     {status['engine']:40} â•‘\n")
-            self._write_output(f"  â•‘  Max Qubits: {hw['max_qubits']:<40} â•‘\n")
-            self._write_output(f"  â•‘  Max Memory: {hw['max_memory_GB']:.1f} GB{' '*33} â•‘\n")
-            self._write_output(f"  â•‘  Storage:    {hw['max_storage_GB']:.1f} GB allocated{' '*24} â•‘\n")
-            self._write_output(f"  â•‘  Used:       {storage['used_bytes']/1e6:.2f} MB ({storage['used_percent']:.1f}%){' '*22} â•‘\n")
-            self._write_output(f"  â•‘  Files:      {storage['file_count']:<40} â•‘\n")
-            self._write_output("  â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£\n")
+            self._write_output("  ╔══════════════════════════════════════════════════════════╗\n")
+            self._write_output("  ║          TRUE SYNTHESIS ENGINE STATUS                    ║\n")
+            self._write_output("  ╠══════════════════════════════════════════════════════════╣\n")
+            self._write_output(f"  ║  Engine:     {status['engine']:40} ║\n")
+            self._write_output(f"  ║  Max Qubits: {hw['max_qubits']:<40} ║\n")
+            self._write_output(f"  ║  Max Memory: {hw['max_memory_GB']:.1f} GB{' '*33} ║\n")
+            self._write_output(f"  ║  Storage:    {hw['max_storage_GB']:.1f} GB allocated{' '*24} ║\n")
+            self._write_output(f"  ║  Used:       {storage['used_bytes']/1e6:.2f} MB ({storage['used_percent']:.1f}%){' '*22} ║\n")
+            self._write_output(f"  ║  Files:      {storage['file_count']:<40} ║\n")
+            self._write_output("  ╠══════════════════════════════════════════════════════════╣\n")
             
             if status['initialized']:
                 info = engine.get_state_info()
-                self._write_output(f"  â•‘  QUANTUM STATE:                                          â•‘\n")
-                self._write_output(f"  â•‘    Qubits: {info['n_qubits']}, Dimension: {info['dimension']:<29} â•‘\n")
-                self._write_output(f"  â•‘    Gates Applied: {info['gates_applied']:<35} â•‘\n")
+                self._write_output(f"  ║  QUANTUM STATE:                                          ║\n")
+                self._write_output(f"  ║    Qubits: {info['n_qubits']}, Dimension: {info['dimension']:<29} ║\n")
+                self._write_output(f"  ║    Gates Applied: {info['gates_applied']:<35} ║\n")
             else:
-                self._write_output(f"  â•‘  QUANTUM STATE: Not initialized                          â•‘\n")
+                self._write_output(f"  ║  QUANTUM STATE: Not initialized                          ║\n")
             
-            self._write_output("  â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n")
+            self._write_output("  ╚══════════════════════════════════════════════════════════╝\n\n")
         except Exception as e:
             self._write_error(f"Error: {e}\n")
 
@@ -2152,8 +2013,8 @@ Working directory: {self._cwd}
             
             if not args:
                 self._write_output("Usage: qubit <n> or qubit |state>\n")
-                self._write_output("  qubit 2      - Initialize 2 qubits in |00âŸ©\n")
-                self._write_output("  qubit |+âŸ©    - Initialize in |+âŸ© state\n")
+                self._write_output("  qubit 2      - Initialize 2 qubits in |00⟩\n")
+                self._write_output("  qubit |+⟩    - Initialize in |+⟩ state\n")
                 self._write_output("\nTip: Use 'quantum' or 'q' for full quantum mode.\n")
                 return
             
@@ -2496,11 +2357,11 @@ ENTERING QUANTUM MODE:
   Just type 'quantum' or 'q' to enter the quantum computing sub-shell.
   
 QUANTUM MODE COMMANDS (once inside):
-  qubit <n>       Initialize n qubits in |0âŸ© state
-  qubit |state>   Initialize specific state (|+âŸ©, |0âŸ©, |01âŸ©)
+  qubit <n>       Initialize n qubits in |0⟩ state
+  qubit |state>   Initialize specific state (|+⟩, |0⟩, |01⟩)
   h <q>           Hadamard gate on qubit q
   x/y/z <q>       Pauli gates
-  rx/ry/rz <q> Î¸  Rotation gates (use 'pi' for Ï€)
+  rx/ry/rz <q> θ  Rotation gates (use 'pi' for π)
   cx <c> <t>      CNOT gate (control c, target t)
   measure         Measure + auto-launch 3D Bloch sphere
   bloch           Launch Bloch sphere visualization
@@ -2525,13 +2386,13 @@ EXAMPLE SESSION:
 ''',
                 'q': 'q - Shortcut to enter quantum mode (same as quantum)',
                 # Synthesis Engine
-                'synthesis': '''synthesis - SchrÃ¶dinger-Lorentz quantum simulation engine
+                'synthesis': '''synthesis - Schrödinger-Lorentz quantum simulation engine
 
 SYNTHESIS COMMANDS:
   synthesis run <preset>     Run simulation (gaussian, tunneling, harmonic, relativistic)
-  synthesis gaussian [Ïƒ] [k] Gaussian wave packet evolution
-  synthesis tunneling [Vâ‚€]   Quantum tunneling simulation
-  synthesis harmonic [Ï‰]     Harmonic oscillator
+  synthesis gaussian [σ] [k] Gaussian wave packet evolution
+  synthesis tunneling [V₀]   Quantum tunneling simulation
+  synthesis harmonic [ω]     Harmonic oscillator
   synthesis lorentz <v>      Set Lorentz boost velocity (v/c)
   synthesis compare <v>      Compare lab vs boosted frame
   synthesis visualize        Show ASCII visualization
@@ -2575,9 +2436,9 @@ EXAMPLES:
             return
         
         help_msg = """
-â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-â•‘                    FRANKENSTEIN TERMINAL HELP                    â•‘
-â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+╔══════════════════════════════════════════════════════════════════╗
+║                    FRANKENSTEIN TERMINAL HELP                    ║
+╚══════════════════════════════════════════════════════════════════╝
 
 NAVIGATION:
   cd [DIR]        Change directory (~ for home, .. for parent)
@@ -2669,35 +2530,35 @@ QUANTUM MODE:
   quantum         Enter quantum computing mode (or 'q')
   qubit <n>       Quick qubit initialization
   
-  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-  â”‚  QUANTUM MODE QUICK START:                        â”‚
-  â”‚                                                    â”‚
-  â”‚  1. Type 'quantum' or 'q' to enter quantum mode   â”‚
-  â”‚  2. Initialize: qubit 2  (creates 2 qubits)       â”‚
-  â”‚  3. Apply gates: h 0, cx 0 1  (Bell state)        â”‚
-  â”‚  4. Measure: measure  (auto-shows 3D Bloch!)      â”‚
-  â”‚  5. Type 'back' to return to main terminal        â”‚
-  â”‚                                                    â”‚
-  â”‚  Shortcuts: bell, ghz, qft for common circuits    â”‚
-  â”‚  Toggle viz: viz off (disable auto-visualization) â”‚
-  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+  ┌────────────────────────────────────────────────────┐
+  │  QUANTUM MODE QUICK START:                        │
+  │                                                    │
+  │  1. Type 'quantum' or 'q' to enter quantum mode   │
+  │  2. Initialize: qubit 2  (creates 2 qubits)       │
+  │  3. Apply gates: h 0, cx 0 1  (Bell state)        │
+  │  4. Measure: measure  (auto-shows 3D Bloch!)      │
+  │  5. Type 'back' to return to main terminal        │
+  │                                                    │
+  │  Shortcuts: bell, ghz, qft for common circuits    │
+  │  Toggle viz: viz off (disable auto-visualization) │
+  └────────────────────────────────────────────────────┘
 
 SYNTHESIS ENGINE:
-  synthesis       SchrÃ¶dinger-Lorentz quantum simulations
+  synthesis       Schrödinger-Lorentz quantum simulations
   synth           Alias for synthesis
   bloch [type]    Launch 3D Bloch sphere (rabi, spiral, precession)
   
-  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-  â”‚  SYNTHESIS QUICK COMMANDS:                        â”‚
-  â”‚                                                    â”‚
-  â”‚  synthesis run gaussian    - Wave packet evolutionâ”‚
-  â”‚  synthesis run tunneling   - Quantum tunneling    â”‚
-  â”‚  synthesis run harmonic    - Harmonic oscillator  â”‚
-  â”‚  synthesis lorentz 0.5     - Apply Lorentz boost  â”‚
-  â”‚  synthesis compare 0.3     - Lab vs boosted frame â”‚
-  â”‚  bloch rabi                - 3D Rabi oscillation  â”‚
-  â”‚  bloch spiral --gamma 1.2  - Relativistic spiral  â”‚
-  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+  ┌────────────────────────────────────────────────────┐
+  │  SYNTHESIS QUICK COMMANDS:                        │
+  │                                                    │
+  │  synthesis run gaussian    - Wave packet evolution│
+  │  synthesis run tunneling   - Quantum tunneling    │
+  │  synthesis run harmonic    - Harmonic oscillator  │
+  │  synthesis lorentz 0.5     - Apply Lorentz boost  │
+  │  synthesis compare 0.3     - Lab vs boosted frame │
+  │  bloch rabi                - 3D Rabi oscillation  │
+  │  bloch spiral --gamma 1.2  - Relativistic spiral  │
+  └────────────────────────────────────────────────────┘
 
 TIPS:
   - Use Tab for path completion
@@ -2732,7 +2593,7 @@ def launch_terminal():
 
 # Allow running directly
 if __name__ == "__main__":
-    print("ðŸ§Ÿ Launching Frankenstein Terminal...")
+    print("🧟 Launching Frankenstein Terminal...")
     terminal = launch_terminal()
     
     # Keep main thread alive
@@ -2740,5 +2601,4 @@ if __name__ == "__main__":
         while terminal._running:
             time.sleep(0.5)
     except KeyboardInterrupt:
-        print("\nðŸ‘‹ Terminal closed.")
-
+        print("\n👋 Terminal closed.")
