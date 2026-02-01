@@ -217,8 +217,8 @@ class FrankensteinTerminal:
         
         self._root = ctk.CTk()
         self._root.title("🧟 FRANKENSTEIN Terminal")
-        self._root.geometry("700x500+100+100")
-        self._root.minsize(500, 300)
+        self._root.geometry("700x900+100+50")
+        self._root.minsize(600, 500)
         self._root.attributes("-topmost", True)
         
         # Allow resizing
@@ -392,44 +392,57 @@ class FrankensteinTerminal:
         self._output_text.bind("<Key>", lambda e: "break" if e.keysym not in ["c", "C"] or not (e.state & 0x4) else None)
         self._output_text.bind("<Button-1>", lambda e: self._output_text.focus_set())
         
+        # Enable right-click text selection for output (standard behavior)
+        self._output_text.bind("<Button-3>", self._on_output_right_click_start)
+        self._output_text.bind("<B3-Motion>", self._on_output_right_click_drag)
+        self._output_text.bind("<ButtonRelease-3>", self._on_output_right_click_release)
+        
         # Right-click context menu for output
         self._setup_context_menu()
         
-        # Input frame
-        input_frame = ctk.CTkFrame(self._root, height=40, fg_color="#161b22")
+        # Input frame - taller for multi-line input
+        input_frame = ctk.CTkFrame(self._root, height=120, fg_color="#161b22")
         input_frame.grid(row=2, column=0, sticky="ew", padx=5, pady=5)
-        input_frame.grid_columnconfigure(1, weight=1)
+        input_frame.grid_columnconfigure(0, weight=1)
+        input_frame.grid_rowconfigure(1, weight=1)
+        input_frame.grid_propagate(False)
         
-        # Prompt label
+        # Prompt label - now above the input area
         self._prompt_label = ctk.CTkLabel(
             input_frame,
             text=self._get_prompt(),
             font=("Consolas", 11, "bold"),
             text_color="#58a6ff"
         )
-        self._prompt_label.grid(row=0, column=0, padx=(10, 5), pady=8, sticky="w")
+        self._prompt_label.grid(row=0, column=0, padx=10, pady=(8, 2), sticky="w")
         
-        # Command input entry
-        self._input_entry = ctk.CTkEntry(
+        # Multi-line command input textbox (replaces single-line entry)
+        self._input_entry = ctk.CTkTextbox(
             input_frame,
             font=("Consolas", 11),
             fg_color="#0d1117",
             text_color="#c9d1d9",
             border_color="#30363d",
-            placeholder_text="Enter command...",
-            height=30
+            border_width=1,
+            height=80,
+            wrap="word"
         )
-        self._input_entry.grid(row=0, column=1, padx=(0, 10), pady=8, sticky="ew")
+        self._input_entry.grid(row=1, column=0, padx=10, pady=(2, 8), sticky="nsew")
         
-        # Bind events for input
+        # Bind events for input - adjusted for CTkTextbox
         self._input_entry.bind("<Return>", self._on_enter)
+        self._input_entry.bind("<Shift-Return>", self._on_shift_enter)  # New line
         self._input_entry.bind("<Up>", self._on_up_arrow)
         self._input_entry.bind("<Down>", self._on_down_arrow)
         self._input_entry.bind("<Tab>", self._on_tab_complete)
-        self._input_entry.bind("<Escape>", lambda e: self._input_entry.delete(0, "end"))
+        self._input_entry.bind("<Escape>", lambda e: self._clear_input())
         
-        # Right-click for input entry
-        self._input_entry.bind("<Button-3>", self._show_input_context_menu)
+        # Enable standard text selection with BOTH mouse buttons
+        # Left button: click and drag to select (default behavior)
+        # Right button: click and drag to select, then show context menu on release
+        self._input_entry.bind("<Button-3>", self._on_right_click_start)
+        self._input_entry.bind("<B3-Motion>", self._on_right_click_drag)
+        self._input_entry.bind("<ButtonRelease-3>", self._on_right_click_release)
         
         # Robust focus handling to prevent "disappearing" input issue
         self._input_entry.bind("<FocusOut>", self._refocus_input)
@@ -439,9 +452,9 @@ class FrankensteinTerminal:
         
         # NOTE: Removed self._root.bind("<Key>", self._on_any_key)
         # This binding caused DOUBLE CHARACTER INPUT because:
-        # 1. User types a key -> CTkEntry's internal widget processes it (first char)
+        # 1. User types a key -> CTkTextbox's internal widget processes it (first char)
         # 2. Event bubbles to root -> _on_any_key fires
-        # 3. Focus check fails (focus_get returns internal tk.Entry, not CTkEntry wrapper)
+        # 3. Focus check fails (focus_get returns internal tk.Text, not CTkTextbox wrapper)
         # 4. Handler inserts the character again (second char)
         
         # Handle window activation
@@ -463,7 +476,7 @@ class FrankensteinTerminal:
         self._output_menu.add_separator()
         self._output_menu.add_command(label="🗑️ Clear Terminal", command=self._cmd_clear)
         
-        self._output_text.bind("<Button-3>", self._show_output_context_menu)
+        # Note: Button-3 binding for output is done in _build_ui with selection support
         
         # Input context menu (copy, cut, paste)
         self._input_menu = tk.Menu(self._root, tearoff=0, bg="#21262d", fg="#c9d1d9",
@@ -472,7 +485,7 @@ class FrankensteinTerminal:
         self._input_menu.add_command(label="📋 Copy", command=self._copy_input)
         self._input_menu.add_command(label="📥 Paste", command=self._paste_input)
         self._input_menu.add_separator()
-        self._input_menu.add_command(label="🗑️ Clear", command=lambda: self._input_entry.delete(0, "end"))
+        self._input_menu.add_command(label="🗑️ Clear", command=self._clear_input)
     
     def _show_output_context_menu(self, event):
         """Show context menu for output text area"""
@@ -505,8 +518,8 @@ class FrankensteinTerminal:
     def _cut_input(self):
         """Cut selected text from input"""
         try:
-            if self._input_entry.selection_present():
-                selected = self._input_entry.selection_get()
+            selected = self._input_entry.get("sel.first", "sel.last")
+            if selected:
                 self._root.clipboard_clear()
                 self._root.clipboard_append(selected)
                 self._input_entry.delete("sel.first", "sel.last")
@@ -516,22 +529,24 @@ class FrankensteinTerminal:
     def _copy_input(self):
         """Copy selected text from input"""
         try:
-            if self._input_entry.selection_present():
-                selected = self._input_entry.selection_get()
+            selected = self._input_entry.get("sel.first", "sel.last")
+            if selected:
                 self._root.clipboard_clear()
                 self._root.clipboard_append(selected)
         except Exception:
             pass
     
     def _paste_input(self):
-        """Paste text into input"""
+        """Paste text into input - preserves newlines for multi-line input"""
         try:
             text = self._root.clipboard_get()
-            # Remove newlines for single-line input
-            text = text.replace('\n', ' ').replace('\r', '')
             self._input_entry.insert("insert", text)
         except Exception:
             pass
+    
+    def _clear_input(self):
+        """Clear all text from input textbox"""
+        self._input_entry.delete("1.0", "end")
     
     def _refocus_input(self, event=None):
         """Re-focus input after losing focus (prevents disappearing issue)"""
@@ -545,6 +560,65 @@ class FrankensteinTerminal:
             if event and event.widget == self._output_text._textbox:
                 return
             self._input_entry.focus_set()
+    
+    # ==================== RIGHT-CLICK SELECTION SUPPORT ====================
+    def _on_right_click_start(self, event):
+        """Start text selection with right mouse button"""
+        self._right_click_selecting = True
+        # Set the starting position for selection
+        self._input_entry.mark_set("insert", f"@{event.x},{event.y}")
+        self._input_entry.mark_set("anchor", "insert")
+        return "break"
+    
+    def _on_right_click_drag(self, event):
+        """Continue text selection while right button is held"""
+        if hasattr(self, '_right_click_selecting') and self._right_click_selecting:
+            # Update selection as mouse moves
+            current_pos = f"@{event.x},{event.y}"
+            self._input_entry.tag_remove("sel", "1.0", "end")
+            self._input_entry.tag_add("sel", "anchor", current_pos)
+            self._input_entry.mark_set("insert", current_pos)
+        return "break"
+    
+    def _on_right_click_release(self, event):
+        """End selection and show context menu"""
+        self._right_click_selecting = False
+        # Show context menu after selection is complete
+        self._show_input_context_menu(event)
+        return "break"
+    
+    def _on_shift_enter(self, event=None):
+        """Handle Shift+Enter - insert newline without executing"""
+        self._input_entry.insert("insert", "\n")
+        return "break"
+    
+    # ==================== OUTPUT RIGHT-CLICK SELECTION ====================
+    def _on_output_right_click_start(self, event):
+        """Start text selection in output with right mouse button"""
+        self._output_right_click_selecting = True
+        self._output_text.focus_set()
+        # Set the starting position for selection
+        self._output_text.mark_set("insert", f"@{event.x},{event.y}")
+        self._output_text.mark_set("anchor", "insert")
+        return "break"
+    
+    def _on_output_right_click_drag(self, event):
+        """Continue text selection in output while right button is held"""
+        if hasattr(self, '_output_right_click_selecting') and self._output_right_click_selecting:
+            # Update selection as mouse moves
+            current_pos = f"@{event.x},{event.y}"
+            self._output_text.tag_remove("sel", "1.0", "end")
+            self._output_text.tag_add("sel", "anchor", current_pos)
+            self._output_text.mark_set("insert", current_pos)
+        return "break"
+    
+    def _on_output_right_click_release(self, event):
+        """End selection in output and show context menu"""
+        self._output_right_click_selecting = False
+        # Show context menu after selection is complete
+        self._show_output_context_menu(event)
+        return "break"
+    # ==================== END OUTPUT RIGHT-CLICK SELECTION ====================
     
     def _on_any_key(self, event=None):
         """Handle any key press in window - redirect to input if needed"""
@@ -561,9 +635,10 @@ class FrankensteinTerminal:
                     return "break"
 
     def _on_enter(self, event=None):
-        """Handle Enter key - execute command"""
-        command = self._input_entry.get().strip()
-        self._input_entry.delete(0, "end")
+        """Handle Enter key - execute command (multi-line supported)"""
+        # Get all text from the textbox
+        command = self._input_entry.get("1.0", "end-1c").strip()
+        self._input_entry.delete("1.0", "end")
         
         if command:
             self._history.add(command)
@@ -573,24 +648,35 @@ class FrankensteinTerminal:
         return "break"
     
     def _on_up_arrow(self, event=None):
-        """Handle Up arrow - previous command"""
-        prev_cmd = self._history.get_previous()
-        if prev_cmd is not None:
-            self._input_entry.delete(0, "end")
-            self._input_entry.insert(0, prev_cmd)
-        return "break"
+        """Handle Up arrow - previous command (only if at first line)"""
+        # Check if cursor is on the first line
+        cursor_pos = self._input_entry.index("insert")
+        if cursor_pos.startswith("1."):
+            prev_cmd = self._history.get_previous()
+            if prev_cmd is not None:
+                self._input_entry.delete("1.0", "end")
+                self._input_entry.insert("1.0", prev_cmd)
+            return "break"
+        # Allow normal up arrow navigation in multi-line text
+        return None
     
     def _on_down_arrow(self, event=None):
-        """Handle Down arrow - next command"""
-        next_cmd = self._history.get_next()
-        if next_cmd is not None:
-            self._input_entry.delete(0, "end")
-            self._input_entry.insert(0, next_cmd)
-        return "break"
+        """Handle Down arrow - next command (only if at last line)"""
+        # Check if cursor is on the last line
+        cursor_line = int(self._input_entry.index("insert").split(".")[0])
+        last_line = int(self._input_entry.index("end-1c").split(".")[0])
+        if cursor_line >= last_line:
+            next_cmd = self._history.get_next()
+            if next_cmd is not None:
+                self._input_entry.delete("1.0", "end")
+                self._input_entry.insert("1.0", next_cmd)
+            return "break"
+        # Allow normal down arrow navigation in multi-line text
+        return None
     
     def _on_tab_complete(self, event=None):
         """Handle Tab - basic path completion"""
-        current = self._input_entry.get()
+        current = self._input_entry.get("1.0", "end-1c")
         parts = current.split()
         
         if not parts:
@@ -611,8 +697,8 @@ class FrankensteinTerminal:
                     if (parent / completion).is_dir():
                         completion += "/"
                     parts[-1] = str(parent / completion).replace(str(self._cwd) + os.sep, "")
-                    self._input_entry.delete(0, "end")
-                    self._input_entry.insert(0, " ".join(parts))
+                    self._input_entry.delete("1.0", "end")
+                    self._input_entry.insert("1.0", " ".join(parts))
                 elif len(matches) > 1:
                     # Multiple matches - show them
                     self._write_output("\n" + "  ".join(sorted(matches)) + "\n")
