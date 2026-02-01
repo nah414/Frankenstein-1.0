@@ -38,3 +38,6 @@ logs/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Generated visualizations
+visualizations/

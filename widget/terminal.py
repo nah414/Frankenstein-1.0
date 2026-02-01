@@ -166,6 +166,14 @@ class FrankensteinTerminal:
             'hardware': self._cmd_hardware,
             # System Diagnostics (Phase 2)
             'diagnose': self._cmd_diagnose,
+            # Quantum Mode (Phase 2, Step 3)
+            'quantum': self._cmd_quantum,
+            'q': self._cmd_quantum,  # Shortcut
+            # Synthesis Engine (Phase 2, Step 3)
+            'synthesis': self._cmd_synthesis,
+            'synth': self._cmd_synthesis,  # Alias
+            'bloch': self._cmd_bloch,      # Quick Bloch sphere
+            'qubit': self._cmd_qubit,      # Quick qubit operations
         }
         
         # Security monitor integration (Phase 2)
@@ -174,6 +182,10 @@ class FrankensteinTerminal:
         
         # Hardware monitor integration (Phase 2)
         self._hardware_monitor = None
+        
+        # Quantum mode integration (Phase 2, Step 3)
+        self._quantum_mode = None
+        self._in_quantum_mode = False
     
     def start(self) -> bool:
         """Start the terminal in a separate thread"""
@@ -745,12 +757,23 @@ class FrankensteinTerminal:
         welcome = f"""
 ╔══════════════════════════════════════════════════════════════════╗
 ║                                                                  ║
-║   ⚡ FRANKENSTEIN 1.0 - Phase 1: Core Engine                    ║
+║   ⚡ FRANKENSTEIN 1.0 - Phase 2: Synthesis Engine               ║
 ║                                                                  ║
 ║   "Frankenstein, here to serve science."                        ║
 ║                                                                  ║
-║   Git Bash-style Terminal Emulator for Windows 10+              ║
-║   Type 'help' for available commands                            ║
+║   Git Bash-style Terminal with Quantum Computing Mode           ║
+║                                                                  ║
+╠══════════════════════════════════════════════════════════════════╣
+║                                                                  ║
+║   🆕 QUANTUM MODE: Type 'quantum' or 'q' to enter!              ║
+║                                                                  ║
+║   Quick quantum example:                                         ║
+║     q → qubit 2 → h 0 → cx 0 1 → measure                        ║
+║     (Creates Bell state, auto-opens 3D Bloch sphere!)           ║
+║                                                                  ║
+╠══════════════════════════════════════════════════════════════════╣
+║                                                                  ║
+║   OTHER COMMANDS: help, status, security, hardware, diagnose    ║
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
 
@@ -776,6 +799,19 @@ Working directory: {self._cwd}
     
     def _execute_command(self, command_line: str):
         """Parse and execute a command"""
+        # Check if in quantum mode - route to quantum handler
+        if self._in_quantum_mode and self._quantum_mode:
+            # Show prompt with command
+            self._write_output(f"{self._quantum_mode.get_prompt()} {command_line}\n")
+            
+            # Handle in quantum mode
+            stay_in_mode = self._quantum_mode.handle_command(command_line)
+            
+            if not stay_in_mode:
+                self._in_quantum_mode = False
+                self._update_prompt()
+            return
+        
         # Show the command with prompt
         self._write_output(f"{self._get_prompt()} {command_line}\n")
         
@@ -1431,6 +1467,484 @@ Working directory: {self._cwd}
             self._write_error(f"Diagnostics module not available: {e}")
             self._write_output("Make sure core/system_diagnostics.py exists.\n")
 
+    # ==================== QUANTUM MODE (Phase 2, Step 3) ====================
+    
+    def _cmd_quantum(self, args: List[str]):
+        """Enter quantum computing mode - hybrid REPL for quantum simulations"""
+        try:
+            from widget.quantum_mode import get_quantum_mode
+            
+            # Initialize quantum mode handler
+            if self._quantum_mode is None:
+                self._quantum_mode = get_quantum_mode()
+                self._quantum_mode.set_output_callback(self._write_output)
+            
+            # Enter quantum mode
+            if self._quantum_mode.enter_mode():
+                self._in_quantum_mode = True
+                # Note: Prompt will be updated via quantum_mode.get_prompt()
+            else:
+                self._write_error("Failed to enter quantum mode")
+                
+        except ImportError as e:
+            self._write_error(f"Quantum mode not available: {e}")
+            self._write_output("Make sure synthesis/ and widget/quantum_mode.py exist.\n")
+            self._write_output("\nTo install dependencies:\n")
+            self._write_output("  pip install numpy scipy\n\n")
+
+    def _cmd_synthesis(self, args: List[str]):
+        """Synthesis engine commands - REAL computational backend"""
+        if not args:
+            self._show_synthesis_help()
+            return
+        
+        cmd = args[0].lower()
+        cmd_args = args[1:] if len(args) > 1 else []
+        
+        # Direct computation commands
+        if cmd == "compute" or cmd == "calc":
+            self._synthesis_compute(cmd_args)
+        elif cmd == "quantum":
+            self._synthesis_quantum(cmd_args)
+        elif cmd == "physics":
+            self._synthesis_physics(cmd_args)
+        elif cmd == "math":
+            self._synthesis_math(cmd_args)
+        elif cmd == "diff" or cmd == "differentiate":
+            self._synthesis_differentiate(cmd_args)
+        elif cmd == "integrate":
+            self._synthesis_integrate(cmd_args)
+        elif cmd == "solve":
+            self._synthesis_solve(cmd_args)
+        elif cmd == "lorentz":
+            self._synthesis_lorentz(cmd_args)
+        elif cmd == "schrodinger":
+            self._synthesis_schrodinger(cmd_args)
+        elif cmd == "status":
+            self._synthesis_status()
+        elif cmd == "help":
+            self._show_synthesis_help()
+        else:
+            # Fall back to visualization commands
+            try:
+                from synthesis.terminal_commands import get_synthesis_commands
+                synth_cmds = get_synthesis_commands()
+                result = synth_cmds.execute(cmd, cmd_args)
+                self._write_output(result.message + "\n")
+            except ImportError as e:
+                self._write_error(f"Command not found: {cmd}\n")
+    
+    def _show_synthesis_help(self):
+        """Show synthesis engine help"""
+        help_text = """
+╔═══════════════════════════════════════════════════════════════════╗
+║            FRANKENSTEIN SYNTHESIS ENGINE - REAL COMPUTATIONS      ║
+╠═══════════════════════════════════════════════════════════════════╣
+║  COMPUTATION COMMANDS (performs actual calculations):             ║
+║                                                                   ║
+║  synthesis compute <expr>     Evaluate expression                 ║
+║    Example: synthesis compute sin(pi/4) + cos(pi/4)               ║
+║                                                                   ║
+║  synthesis diff <expr>        Differentiate symbolically          ║
+║    Example: synthesis diff x**3 + sin(x)                          ║
+║                                                                   ║
+║  synthesis integrate <expr> [a b]  Integrate (definite or indef)  ║
+║    Example: synthesis integrate x**2 0 1                          ║
+║                                                                   ║
+║  synthesis solve <equation>   Solve equation for x                ║
+║    Example: synthesis solve x**2 - 4 = 0                          ║
+║                                                                   ║
+║  synthesis lorentz <velocity> Apply Lorentz transformation        ║
+║    Example: synthesis lorentz 0.5                                 ║
+║                                                                   ║
+║  synthesis schrodinger        Solve Schrödinger equation          ║
+║    Example: synthesis schrodinger                                 ║
+║                                                                   ║
+║  synthesis quantum <cmd>      Quantum mechanics operations        ║
+║    Example: synthesis quantum bell                                ║
+║                                                                   ║
+║  synthesis physics <calc>     Physics calculations                ║
+║    Example: synthesis physics gamma 0.8c                          ║
+║                                                                   ║
+║  synthesis status             Show engine status                  ║
+╚═══════════════════════════════════════════════════════════════════╝
+"""
+        self._write_output(help_text)
+    
+    def _synthesis_compute(self, args: List[str]):
+        """Direct computation"""
+        if not args:
+            self._write_output("Usage: synthesis compute <expression>\n")
+            return
+        
+        try:
+            from synthesis.compute.engine import get_compute_engine
+            engine = get_compute_engine()
+            expression = " ".join(args)
+            result = engine.compute(expression)
+            
+            if result.success:
+                self._write_output(f"\n  Expression: {expression}\n")
+                if result.numeric_value is not None:
+                    self._write_output(f"  Result: {result.numeric_value}\n")
+                if result.symbolic_value:
+                    self._write_output(f"  Symbolic: {result.symbolic_value}\n")
+                self._write_output(f"  Time: {result.computation_time*1000:.2f}ms\n\n")
+            else:
+                self._write_error(f"Computation failed: {result.error}\n")
+        except Exception as e:
+            self._write_error(f"Error: {e}\n")
+    
+    def _synthesis_differentiate(self, args: List[str]):
+        """Symbolic differentiation"""
+        if not args:
+            self._write_output("Usage: synthesis diff <expression> [variable]\n")
+            return
+        
+        try:
+            from synthesis.compute.engine import get_compute_engine
+            engine = get_compute_engine()
+            expression = args[0]
+            variable = args[1] if len(args) > 1 else "x"
+            result = engine.differentiate(expression, variable)
+            
+            if result.success:
+                self._write_output(f"\n  d/d{variable}({expression}) = {result.symbolic_value}\n\n")
+            else:
+                self._write_error(f"Differentiation failed: {result.error}\n")
+        except Exception as e:
+            self._write_error(f"Error: {e}\n")
+    
+    def _synthesis_integrate(self, args: List[str]):
+        """Symbolic/numeric integration"""
+        if not args:
+            self._write_output("Usage: synthesis integrate <expression> [a b]\n")
+            return
+        
+        try:
+            from synthesis.compute.engine import get_compute_engine
+            engine = get_compute_engine()
+            expression = args[0]
+            limits = None
+            if len(args) >= 3:
+                limits = (float(args[1]), float(args[2]))
+            
+            result = engine.integrate(expression, limits=limits)
+            
+            if result.success:
+                if limits:
+                    self._write_output(f"\n  Integral[{limits[0]},{limits[1]}]({expression}) = {result.symbolic_value}\n")
+                    if result.numeric_value:
+                        self._write_output(f"  Numeric value: {result.numeric_value}\n")
+                else:
+                    self._write_output(f"\n  Integral({expression}) = {result.symbolic_value} + C\n")
+                self._write_output("\n")
+            else:
+                self._write_error(f"Integration failed: {result.error}\n")
+        except Exception as e:
+            self._write_error(f"Error: {e}\n")
+    
+    def _synthesis_solve(self, args: List[str]):
+        """Solve equation"""
+        if not args:
+            self._write_output("Usage: synthesis solve <equation> [variable]\n")
+            return
+        
+        try:
+            from synthesis.compute.engine import get_compute_engine
+            engine = get_compute_engine()
+            equation = " ".join(args[:-1]) if len(args) > 1 and args[-1].isalpha() else " ".join(args)
+            variable = args[-1] if len(args) > 1 and args[-1].isalpha() and len(args[-1]) == 1 else "x"
+            
+            result = engine.solve_equation(equation, variable)
+            
+            if result.success:
+                self._write_output(f"\n  Solving: {equation}\n")
+                self._write_output(f"  Solutions for {variable}: {result.data.get('solutions', [])}\n\n")
+            else:
+                self._write_error(f"Solve failed: {result.error}\n")
+        except Exception as e:
+            self._write_error(f"Error: {e}\n")
+    
+    def _synthesis_lorentz(self, args: List[str]):
+        """Lorentz transformation"""
+        if not args:
+            self._write_output("Usage: synthesis lorentz <velocity>\n")
+            self._write_output("  velocity as fraction of c (0 < v < 1)\n")
+            return
+        
+        try:
+            from synthesis.compute.physics_compute import get_physics_compute
+            physics = get_physics_compute()
+            
+            v_str = args[0].replace('c', '')
+            v_frac = float(v_str)
+            v = v_frac * physics.constants["c"]
+            
+            gamma = physics.lorentz_factor(v)
+            
+            self._write_output(f"\n  Velocity: {v_frac}c\n")
+            self._write_output(f"  Lorentz factor (gamma): {gamma:.6f}\n")
+            self._write_output(f"  Time dilation: t' = {gamma:.4f} * t\n")
+            self._write_output(f"  Length contraction: L' = L / {gamma:.4f}\n\n")
+        except Exception as e:
+            self._write_error(f"Error: {e}\n")
+    
+    def _synthesis_schrodinger(self, args: List[str]):
+        """Solve Schrödinger equation using TRUE engine"""
+        try:
+            from synthesis.core import get_true_engine
+            import numpy as np
+            
+            engine = get_true_engine()
+            
+            # Parse arguments
+            n_qubits = int(args[0]) if args else 2
+            t_max = float(args[1]) if len(args) > 1 else np.pi
+            n_steps = int(args[2]) if len(args) > 2 else 100
+            
+            # Initialize state if needed
+            if not engine.status()['initialized']:
+                engine.initialize_qubits(n_qubits, 'zero')
+                engine.hadamard(0)  # Start in superposition
+            
+            info = engine.get_state_info()
+            dim = info['dimension']
+            
+            # Hamiltonian: Pauli-Z on first qubit (energy splitting)
+            H = np.zeros((dim, dim), dtype=np.complex128)
+            np.fill_diagonal(H, [1 if i % 2 == 0 else -1 for i in range(dim)])
+            
+            result = engine.solve_schrodinger(H, t_max, n_steps, store_trajectory=False)
+            
+            self._write_output("\n  ╔═══════════════════════════════════════════╗\n")
+            self._write_output("  ║      SCHRÖDINGER EVOLUTION COMPLETE       ║\n")
+            self._write_output("  ╠═══════════════════════════════════════════╣\n")
+            self._write_output(f"  ║  Qubits: {info['n_qubits']:<33} ║\n")
+            self._write_output(f"  ║  Dimension: {dim:<30} ║\n")
+            self._write_output(f"  ║  Time: {t_max:.4f}{' '*29} ║\n")
+            self._write_output(f"  ║  Steps: {n_steps:<32} ║\n")
+            self._write_output(f"  ║  Computation: {result.computation_time*1000:.2f} ms{' '*21} ║\n")
+            self._write_output(f"  ║  Final Energy: {result.expectation_values.get('energy', 0):.4f}{' '*20} ║\n")
+            self._write_output("  ╚═══════════════════════════════════════════╝\n\n")
+            
+        except Exception as e:
+            self._write_error(f"Error: {e}\n")
+    
+    def _synthesis_quantum(self, args: List[str]):
+        """Quantum mechanics operations using TRUE Synthesis Engine"""
+        if not args:
+            self._write_output("Usage: synthesis quantum <command>\n")
+            self._write_output("  init [n]    - Initialize n qubits (default: 2)\n")
+            self._write_output("  bell        - Create Bell state\n")
+            self._write_output("  ghz [n]     - Create GHZ state\n")
+            self._write_output("  w [n]       - Create W state\n")
+            self._write_output("  h <q>       - Apply Hadamard gate\n")
+            self._write_output("  x/y/z <q>   - Apply Pauli gate\n")
+            self._write_output("  cnot <c> <t>- Apply CNOT gate\n")
+            self._write_output("  measure     - Measure current state\n")
+            self._write_output("  evolve      - Time evolution\n")
+            self._write_output("  info        - Show state info\n")
+            return
+        
+        try:
+            from synthesis.core import get_true_engine
+            engine = get_true_engine()
+            cmd = args[0].lower()
+            
+            if cmd == "init":
+                n = int(args[1]) if len(args) > 1 else 2
+                engine.initialize_qubits(n, 'zero')
+                self._write_output(f"\n  Initialized {n} qubits in |{'0'*n}⟩\n\n")
+            
+            elif cmd == "bell":
+                engine.create_bell_state()
+                result = engine.measure(1024, collapse=False)
+                self._write_output("\n  Bell State Created: (|00⟩ + |11⟩)/√2\n")
+                self._write_output(f"  Measurement (1024 shots): {result['counts']}\n\n")
+            
+            elif cmd == "ghz":
+                n = int(args[1]) if len(args) > 1 else 3
+                engine.create_ghz_state(n)
+                result = engine.measure(1024, collapse=False)
+                self._write_output(f"\n  GHZ State Created ({n} qubits)\n")
+                self._write_output(f"  Measurement: {result['counts']}\n\n")
+            
+            elif cmd == "w":
+                n = int(args[1]) if len(args) > 1 else 3
+                engine.create_w_state(n)
+                result = engine.measure(1024, collapse=False)
+                self._write_output(f"\n  W State Created ({n} qubits)\n")
+                self._write_output(f"  Measurement: {result['counts']}\n\n")
+            
+            elif cmd == "h":
+                target = int(args[1]) if len(args) > 1 else 0
+                engine.hadamard(target)
+                self._write_output(f"\n  Applied Hadamard to qubit {target}\n\n")
+            
+            elif cmd in ["x", "y", "z"]:
+                target = int(args[1]) if len(args) > 1 else 0
+                if cmd == "x":
+                    engine.pauli_x(target)
+                elif cmd == "y":
+                    engine.pauli_y(target)
+                else:
+                    engine.pauli_z(target)
+                self._write_output(f"\n  Applied Pauli-{cmd.upper()} to qubit {target}\n\n")
+            
+            elif cmd == "cnot":
+                ctrl = int(args[1]) if len(args) > 1 else 0
+                tgt = int(args[2]) if len(args) > 2 else 1
+                engine.cnot(ctrl, tgt)
+                self._write_output(f"\n  Applied CNOT: control={ctrl}, target={tgt}\n\n")
+            
+            elif cmd == "measure":
+                shots = int(args[1]) if len(args) > 1 else 1024
+                result = engine.measure(shots, collapse=False)
+                self._write_output(f"\n  Measurement ({shots} shots):\n")
+                for state, count in list(result['counts'].items())[:8]:
+                    pct = 100 * count / shots
+                    bar = '█' * int(pct / 5)
+                    self._write_output(f"    |{state}⟩: {count:5d} ({pct:5.1f}%) {bar}\n")
+                self._write_output("\n")
+            
+            elif cmd == "evolve":
+                import numpy as np
+                t_max = float(args[1]) if len(args) > 1 else np.pi
+                # Default Hamiltonian: Pauli-Z on first qubit
+                info = engine.get_state_info()
+                dim = info['dimension']
+                H = np.zeros((dim, dim), dtype=np.complex128)
+                np.fill_diagonal(H, [1 if i % 2 == 0 else -1 for i in range(dim)])
+                result = engine.solve_schrodinger(H, t_max, n_steps=100)
+                self._write_output(f"\n  Schrödinger evolution complete\n")
+                self._write_output(f"  Time: {t_max:.4f}, Steps: 100\n")
+                self._write_output(f"  Computation: {result.computation_time*1000:.2f} ms\n\n")
+            
+            elif cmd == "info":
+                info = engine.get_state_info()
+                if info['initialized']:
+                    self._write_output(f"\n  Qubits: {info['n_qubits']}\n")
+                    self._write_output(f"  Dimension: {info['dimension']}\n")
+                    self._write_output(f"  Gates applied: {info['gates_applied']}\n")
+                    self._write_output(f"  Non-zero states: {info['nonzero_states']}\n")
+                    self._write_output("  Top states:\n")
+                    for s in info['top_states'][:5]:
+                        self._write_output(f"    |{s['state']}⟩: P={s['probability']:.4f}\n")
+                    self._write_output("\n")
+                else:
+                    self._write_output("\n  No quantum state initialized\n\n")
+            
+            else:
+                self._write_error(f"Unknown quantum command: {cmd}\n")
+        except Exception as e:
+            self._write_error(f"Error: {e}\n")
+    
+    def _synthesis_physics(self, args: List[str]):
+        """Physics calculations"""
+        if not args:
+            self._write_output("Usage: synthesis physics <calculation>\n")
+            self._write_output("  gamma <v>       - Lorentz factor\n")
+            self._write_output("  energy <m> <v>  - Relativistic energy\n")
+            self._write_output("  constant <name> - Physical constant\n")
+            return
+        
+        try:
+            from synthesis.compute.physics_compute import get_physics_compute
+            physics = get_physics_compute()
+            cmd = args[0].lower()
+            
+            if cmd == "gamma":
+                v = float(args[1].replace('c', '')) * physics.constants["c"]
+                gamma = physics.lorentz_factor(v)
+                self._write_output(f"\n  Lorentz gamma = {gamma:.6f}\n\n")
+            elif cmd == "constant":
+                name = args[1] if len(args) > 1 else "c"
+                val = physics.get_constant(name)
+                self._write_output(f"\n  {name} = {val:.6e}\n\n")
+            else:
+                self._write_error(f"Unknown physics command: {cmd}\n")
+        except Exception as e:
+            self._write_error(f"Error: {e}\n")
+    
+    def _synthesis_math(self, args: List[str]):
+        """Math operations"""
+        self._synthesis_compute(args)
+    
+    def _synthesis_status(self):
+        """Show TRUE synthesis engine status"""
+        try:
+            from synthesis.core import get_true_engine
+            
+            engine = get_true_engine()
+            status = engine.status()
+            hw = status['hardware']
+            storage = status['storage']
+            
+            self._write_output("\n")
+            self._write_output("  ╔══════════════════════════════════════════════════════════╗\n")
+            self._write_output("  ║          TRUE SYNTHESIS ENGINE STATUS                    ║\n")
+            self._write_output("  ╠══════════════════════════════════════════════════════════╣\n")
+            self._write_output(f"  ║  Engine:     {status['engine']:40} ║\n")
+            self._write_output(f"  ║  Max Qubits: {hw['max_qubits']:<40} ║\n")
+            self._write_output(f"  ║  Max Memory: {hw['max_memory_GB']:.1f} GB{' '*33} ║\n")
+            self._write_output(f"  ║  Storage:    {hw['max_storage_GB']:.1f} GB allocated{' '*24} ║\n")
+            self._write_output(f"  ║  Used:       {storage['used_bytes']/1e6:.2f} MB ({storage['used_percent']:.1f}%){' '*22} ║\n")
+            self._write_output(f"  ║  Files:      {storage['file_count']:<40} ║\n")
+            self._write_output("  ╠══════════════════════════════════════════════════════════╣\n")
+            
+            if status['initialized']:
+                info = engine.get_state_info()
+                self._write_output(f"  ║  QUANTUM STATE:                                          ║\n")
+                self._write_output(f"  ║    Qubits: {info['n_qubits']}, Dimension: {info['dimension']:<29} ║\n")
+                self._write_output(f"  ║    Gates Applied: {info['gates_applied']:<35} ║\n")
+            else:
+                self._write_output(f"  ║  QUANTUM STATE: Not initialized                          ║\n")
+            
+            self._write_output("  ╚══════════════════════════════════════════════════════════╝\n\n")
+        except Exception as e:
+            self._write_error(f"Error: {e}\n")
+
+    def _cmd_bloch(self, args: List[str]):
+        """Launch 3D Bloch sphere visualization"""
+        try:
+            from synthesis.terminal_commands import get_synthesis_commands
+            
+            synth_cmds = get_synthesis_commands()
+            
+            # Default to 'rabi' simulation type if no args
+            sim_type = args[0] if args else "rabi"
+            cmd_args = [sim_type] + (args[1:] if len(args) > 1 else [])
+            
+            result = synth_cmds.execute("bloch", cmd_args)
+            self._write_output(result.message + "\n")
+            
+        except ImportError as e:
+            self._write_error(f"Bloch sphere not available: {e}")
+            self._write_output("Make sure synthesis/ module exists.\n")
+
+    def _cmd_qubit(self, args: List[str]):
+        """Quick qubit operations (shortcut to quantum mode commands)"""
+        try:
+            from widget.quantum_mode import get_quantum_mode
+            
+            if self._quantum_mode is None:
+                self._quantum_mode = get_quantum_mode()
+                self._quantum_mode.set_output_callback(self._write_output)
+            
+            if not args:
+                self._write_output("Usage: qubit <n> or qubit |state>\n")
+                self._write_output("  qubit 2      - Initialize 2 qubits in |00⟩\n")
+                self._write_output("  qubit |+⟩    - Initialize in |+⟩ state\n")
+                self._write_output("\nTip: Use 'quantum' or 'q' for full quantum mode.\n")
+                return
+            
+            # Execute via quantum mode
+            result = self._quantum_mode.execute_command("qubit " + " ".join(args))
+            
+        except ImportError as e:
+            self._write_error(f"Quantum mode not available: {e}")
+
     # ==================== GIT COMMANDS ====================
     
     def _cmd_git(self, args: List[str], raw_line: str = None):
@@ -1757,6 +2271,84 @@ Working directory: {self._cwd}
                 'hardware': 'hardware [status|trend|tiers|recommend] - Hardware health monitor',
                 # Diagnostics (Phase 2)
                 'diagnose': 'diagnose [refresh|fix|kill|quick] - System diagnostics and optimization',
+                # Quantum Mode (Phase 2, Step 3)
+                'quantum': '''quantum - Enter quantum computing REPL mode
+
+ENTERING QUANTUM MODE:
+  Just type 'quantum' or 'q' to enter the quantum computing sub-shell.
+  
+QUANTUM MODE COMMANDS (once inside):
+  qubit <n>       Initialize n qubits in |0⟩ state
+  qubit |state>   Initialize specific state (|+⟩, |0⟩, |01⟩)
+  h <q>           Hadamard gate on qubit q
+  x/y/z <q>       Pauli gates
+  rx/ry/rz <q> θ  Rotation gates (use 'pi' for π)
+  cx <c> <t>      CNOT gate (control c, target t)
+  measure         Measure + auto-launch 3D Bloch sphere
+  bloch           Launch Bloch sphere visualization
+  bell            Quick Bell state creation
+  ghz [n]         Quick GHZ state (n qubits)
+  evolve H t      Time evolution under Hamiltonian
+  back            Return to main terminal
+
+AUTO-VISUALIZATION:
+  After each 'measure' command, the 3D Bloch sphere opens in browser.
+  Use 'viz off' to disable, 'viz on' to enable.
+
+EXAMPLE SESSION:
+  frankenstein> quantum
+  quantum[1q|0g]> qubit 2
+  quantum[2q|0g]> h 0
+  quantum[2q|1g]> cx 0 1
+  quantum[2q|2g]> measure
+  [3D Bloch sphere opens in browser]
+  quantum[2q|2g]> back
+  frankenstein>
+''',
+                'q': 'q - Shortcut to enter quantum mode (same as quantum)',
+                # Synthesis Engine (Phase 2, Step 3)
+                'synthesis': '''synthesis - Schrödinger-Lorentz quantum simulation engine
+
+SYNTHESIS COMMANDS:
+  synthesis run <preset>     Run simulation (gaussian, tunneling, harmonic, relativistic)
+  synthesis gaussian [σ] [k] Gaussian wave packet evolution
+  synthesis tunneling [V₀]   Quantum tunneling simulation
+  synthesis harmonic [ω]     Harmonic oscillator
+  synthesis lorentz <v>      Set Lorentz boost velocity (v/c)
+  synthesis compare <v>      Compare lab vs boosted frame
+  synthesis visualize        Show ASCII visualization
+  synthesis status           Engine status
+  synthesis help             Full command list
+
+OPTIONS:
+  --velocity V    Set velocity for relativistic simulations
+  --points N      Grid points (default: 256, max: 512)
+  --time T        Simulation time (default: 10.0)
+
+EXAMPLES:
+  synthesis run gaussian --velocity 0.3
+  synthesis tunneling 5.0
+  synthesis compare 0.5
+''',
+                'synth': 'synth - Alias for synthesis command',
+                'bloch': '''bloch [type] - Launch 3D Bloch sphere visualization
+
+TYPES:
+  bloch rabi         Rabi oscillation (default)
+  bloch precession   Free precession
+  bloch spiral       Spiral trajectory
+  bloch hadamard     Hadamard gate evolution
+
+OPTIONS:
+  --omega W      Rabi frequency (default: 1.0)
+  --gamma G      Lorentz gamma factor
+
+EXAMPLES:
+  bloch              (launches rabi by default)
+  bloch spiral --gamma 1.25
+  bloch precession --omega 2.0
+''',
+                'qubit': 'qubit <n> or qubit |state> - Quick qubit initialization (shortcut)',
             }
             if cmd in help_text:
                 self._write_output(f"\n{help_text[cmd]}\n\n")
@@ -1854,6 +2446,40 @@ DIAGNOSTICS (Phase 2):
   diagnose fix <n>    Apply recommendation #n
   diagnose kill <name>  Terminate a process
   diagnose quick      Quick CPU/RAM stats
+
+QUANTUM MODE (Phase 2, Step 3):
+  quantum         Enter quantum computing mode (or 'q')
+  qubit <n>       Quick qubit initialization
+  
+  ┌────────────────────────────────────────────────────┐
+  │  QUANTUM MODE QUICK START:                        │
+  │                                                    │
+  │  1. Type 'quantum' or 'q' to enter quantum mode   │
+  │  2. Initialize: qubit 2  (creates 2 qubits)       │
+  │  3. Apply gates: h 0, cx 0 1  (Bell state)        │
+  │  4. Measure: measure  (auto-shows 3D Bloch!)      │
+  │  5. Type 'back' to return to main terminal        │
+  │                                                    │
+  │  Shortcuts: bell, ghz, qft for common circuits    │
+  │  Toggle viz: viz off (disable auto-visualization) │
+  └────────────────────────────────────────────────────┘
+
+SYNTHESIS ENGINE (Phase 2, Step 3):
+  synthesis       Schrödinger-Lorentz quantum simulations
+  synth           Alias for synthesis
+  bloch [type]    Launch 3D Bloch sphere (rabi, spiral, precession)
+  
+  ┌────────────────────────────────────────────────────┐
+  │  SYNTHESIS QUICK COMMANDS:                        │
+  │                                                    │
+  │  synthesis run gaussian    - Wave packet evolution│
+  │  synthesis run tunneling   - Quantum tunneling    │
+  │  synthesis run harmonic    - Harmonic oscillator  │
+  │  synthesis lorentz 0.5     - Apply Lorentz boost  │
+  │  synthesis compare 0.3     - Lab vs boosted frame │
+  │  bloch rabi                - 3D Rabi oscillation  │
+  │  bloch spiral --gamma 1.2  - Relativistic spiral  │
+  └────────────────────────────────────────────────────┘
 
 TIPS:
   - Use Tab for path completion
