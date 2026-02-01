@@ -134,6 +134,10 @@ class FrankensteinTerminal:
             'find': self._cmd_find,
             'status': self._cmd_status,
             'frank': self._cmd_frank,
+            # Telemetry commands
+            'telemetry': self._cmd_telemetry,
+            'metrics': self._cmd_metrics,
+            'events': self._cmd_events,
             # Git commands
             'git': self._cmd_git,
             # SSH commands
@@ -1472,6 +1476,141 @@ Working directory: {self._cwd}
             self._write_output(f"\n🧟 {random.choice(quotes)}\n\n")
         else:
             self._write_error(f"frank: unknown command '{subcmd}'")
+
+    # ==================== TELEMETRY COMMANDS (Phase 2 Step 7) ====================
+    
+    def _cmd_telemetry(self, args: List[str]):
+        """Telemetry and data pipeline commands"""
+        try:
+            from data import TelemetryCollector, MetricsAggregator, TelemetryStorage
+            
+            telemetry = TelemetryCollector()
+            aggregator = MetricsAggregator(telemetry)
+            storage = TelemetryStorage()
+            
+            if not args:
+                # Show summary
+                summary = aggregator.get_summary()
+                health = summary.get('health', {})
+                
+                self._write_output("\n📊 TELEMETRY DASHBOARD\n")
+                self._write_output("=" * 50 + "\n")
+                self._write_output(f"Health Score: {health.get('score', 0):.1f}/100 ({health.get('status', 'unknown')})\n")
+                self._write_output(f"Session Duration: {summary['system'].get('session_duration_sec', 0):.0f}s\n")
+                self._write_output(f"Anomalies Detected: {summary.get('anomaly_count', 0)}\n")
+                self._write_output("-" * 50 + "\n")
+                self._write_output("Commands: telemetry [status|export|storage|start|stop]\n")
+                self._write_output("=" * 50 + "\n\n")
+                return
+            
+            subcmd = args[0].lower()
+            
+            if subcmd == "status":
+                summary = aggregator.get_summary()
+                self._write_output("\n📊 SYSTEM METRICS\n")
+                self._write_output("-" * 40 + "\n")
+                for cat in ['system', 'synthesis', 'quantum', 'security', 'agents', 'pipeline']:
+                    data = summary.get(cat, {})
+                    if any(v != 0 for v in data.values()):
+                        self._write_output(f"\n{cat.upper()}:\n")
+                        for k, v in data.items():
+                            if v != 0:
+                                self._write_output(f"  {k}: {v:.2f}\n")
+                self._write_output("\n")
+            
+            elif subcmd == "export":
+                days = int(args[1]) if len(args) > 1 else 7
+                filepath = storage.export_all(days_back=days)
+                self._write_output(f"✓ Exported to: {filepath}\n")
+            
+            elif subcmd == "storage":
+                stats = storage.get_storage_stats()
+                self._write_output("\n💾 STORAGE STATS\n")
+                self._write_output(f"Location: {stats['base_dir']}\n")
+                total_mb = stats['total_size_bytes'] / (1024 * 1024)
+                self._write_output(f"Total Size: {total_mb:.2f} MB\n")
+                for cat in ['events', 'metrics', 'snapshots']:
+                    self._write_output(f"  {cat}: {stats[cat]['files']} files\n")
+                self._write_output("\n")
+            
+            elif subcmd == "start":
+                telemetry.start()
+                self._write_output("✓ Telemetry collection started\n")
+            
+            elif subcmd == "stop":
+                telemetry.stop()
+                self._write_output("✓ Telemetry collection stopped\n")
+            
+            else:
+                self._write_error(f"telemetry: unknown subcommand '{subcmd}'\n")
+                
+        except ImportError as e:
+            self._write_error(f"Telemetry module not available: {e}\n")
+        except Exception as e:
+            self._write_error(f"telemetry error: {e}\n")
+    
+    def _cmd_metrics(self, args: List[str]):
+        """Show current metrics snapshot"""
+        try:
+            from data import TelemetryCollector, MetricsAggregator
+            
+            telemetry = TelemetryCollector()
+            aggregator = MetricsAggregator(telemetry)
+            snapshot = aggregator.take_snapshot()
+            
+            self._write_output("\n📈 METRICS SNAPSHOT\n")
+            self._write_output(f"Timestamp: {snapshot.timestamp.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            self._write_output("=" * 50 + "\n")
+            
+            # System metrics
+            self._write_output("\n🖥️  SYSTEM\n")
+            for k, v in snapshot.system.items():
+                self._write_output(f"  {k}: {v:.2f}\n")
+            
+            # Counters
+            if snapshot.counters:
+                self._write_output("\n📊 COUNTERS\n")
+                for k, v in snapshot.counters.items():
+                    self._write_output(f"  {k}: {v}\n")
+            
+            self._write_output("\n")
+            
+        except ImportError as e:
+            self._write_error(f"Metrics module not available: {e}\n")
+        except Exception as e:
+            self._write_error(f"metrics error: {e}\n")
+    
+    def _cmd_events(self, args: List[str]):
+        """Show recent events from event bus"""
+        try:
+            from data import EventBus
+            
+            bus = EventBus()
+            limit = int(args[0]) if args else 10
+            
+            events = bus.get_history(limit=limit)
+            
+            self._write_output(f"\n📋 RECENT EVENTS (last {len(events)})\n")
+            self._write_output("=" * 50 + "\n")
+            
+            if not events:
+                self._write_output("No events recorded yet.\n")
+            else:
+                for event in events[-limit:]:
+                    ts = event.timestamp.strftime('%H:%M:%S')
+                    self._write_output(f"[{ts}] {event.event_type.name} ({event.source})\n")
+            
+            self._write_output("\n")
+            
+            # Show stats
+            stats = bus.get_stats()
+            self._write_output(f"Total events: {stats['total_events']}\n")
+            self._write_output(f"Subscribers: {stats['subscriber_count']}\n\n")
+            
+        except ImportError as e:
+            self._write_error(f"Events module not available: {e}\n")
+        except Exception as e:
+            self._write_error(f"events error: {e}\n")
 
     # ==================== SECURITY COMMANDS (Phase 2) ====================
     
