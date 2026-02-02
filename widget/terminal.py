@@ -215,10 +215,29 @@ class FrankensteinTerminal:
         ctk.set_default_color_theme("blue")
         
         self._root = ctk.CTk()
-        self._root.title("🧟 FRANKENSTEIN Terminal")
-        self._root.geometry("700x900+100+50")
-        self._root.minsize(600, 500)
+        self._root.title("⚡ FRANKENSTEIN 1.0 ⚡")
+        self._root.geometry("750x950+100+50")
+        self._root.minsize(650, 600)
         self._root.attributes("-topmost", True)
+        
+        # Monster Lab color scheme - refined, professional
+        self._colors = {
+            'bg_dark': "#0a0a0f",           # Deep dark background
+            'bg_medium': "#12121a",          # Medium dark panels
+            'bg_light': "#1a1a2e",           # Lighter panels
+            'electric_green': "#3ddc84",     # Primary accent (softer green)
+            'electric_purple': "#7c3aed",    # Secondary accent (deeper purple)
+            'electric_blue': "#64b5f6",      # Tertiary accent (softer blue)
+            'warning_amber': "#ffb74d",      # Warning state (softer amber)
+            'danger_red': "#ef5350",         # Danger state (softer red)
+            'text_primary': "#d4d4d4",       # Main text
+            'text_secondary': "#888899",     # Muted text
+            'border_glow': "#2a3a35",        # Subtle green border
+            'bolt_yellow': "#ffd54f",        # Lightning bolt (softer yellow)
+        }
+        
+        # Configure root background
+        self._root.configure(fg_color=self._colors['bg_dark'])
         
         # Allow resizing
         self._root.resizable(True, True)
@@ -238,150 +257,211 @@ class FrankensteinTerminal:
         self._root.mainloop()
     
     def _build_ui(self):
-        """Build the terminal UI"""
+        """Build the terminal UI - Monster Lab Theme"""
         # Configure grid
         self._root.grid_columnconfigure(0, weight=1)
         self._root.grid_rowconfigure(0, weight=0)  # Header
         self._root.grid_rowconfigure(1, weight=1)  # Output
         self._root.grid_rowconfigure(2, weight=0)  # Input
         
-        # Header frame
-        header = ctk.CTkFrame(self._root, height=35, fg_color="#1a1a2e")
-        header.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
+        # ==================== HEADER - THE LAB BANNER ====================
+        header = ctk.CTkFrame(
+            self._root, 
+            height=50, 
+            fg_color=self._colors['bg_light'],
+            border_width=2,
+            border_color=self._colors['border_glow'],
+            corner_radius=8
+        )
+        header.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 4))
         header.grid_columnconfigure(1, weight=1)
         
+        # Lightning bolt left
+        bolt_left = ctk.CTkLabel(
+            header,
+            text="⚡",
+            font=("Segoe UI Emoji", 20),
+            text_color=self._colors['bolt_yellow']
+        )
+        bolt_left.grid(row=0, column=0, padx=(12, 4), pady=8)
+        
+        # Main title with monster styling
         title = ctk.CTkLabel(
             header,
-            text="🧟 FRANKENSTEIN 1.0 Terminal",
-            font=("Consolas", 14, "bold"),
-            text_color="#00ff88"
+            text="FRANKENSTEIN 1.0",
+            font=("Consolas", 18, "bold"),
+            text_color=self._colors['electric_green']
         )
-        title.grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        title.grid(row=0, column=1, padx=5, pady=8, sticky="w")
         
-        # Status indicator
-        self._status_label = ctk.CTkLabel(
+        # Subtitle
+        subtitle = ctk.CTkLabel(
             header,
-            text="● READY",
-            font=("Consolas", 11),
-            text_color="#00ff88"
+            text="Monster Terminal",
+            font=("Consolas", 10),
+            text_color=self._colors['electric_purple']
         )
-        self._status_label.grid(row=0, column=2, padx=10, pady=5, sticky="e")
+        subtitle.grid(row=0, column=2, padx=5, pady=8)
         
-        # Output text area (scrollable)
-        self._output_text = ctk.CTkTextbox(
+        # Status indicator with pulsing feel
+        self._status_frame = ctk.CTkFrame(
+            header,
+            fg_color=self._colors['bg_medium'],
+            corner_radius=12,
+            border_width=1,
+            border_color=self._colors['electric_green']
+        )
+        self._status_frame.grid(row=0, column=3, padx=(5, 12), pady=8)
+        
+        self._status_label = ctk.CTkLabel(
+            self._status_frame,
+            text="  ● ALIVE  ",
+            font=("Consolas", 11, "bold"),
+            text_color=self._colors['electric_green']
+        )
+        self._status_label.pack(padx=8, pady=4)
+        
+        # Lightning bolt right
+        bolt_right = ctk.CTkLabel(
+            header,
+            text="⚡",
+            font=("Segoe UI Emoji", 20),
+            text_color=self._colors['bolt_yellow']
+        )
+        bolt_right.grid(row=0, column=4, padx=(4, 12), pady=8)
+        
+        # ==================== OUTPUT AREA - THE LAB CONSOLE ====================
+        output_frame = ctk.CTkFrame(
             self._root,
-            font=("Consolas", 11),
-            fg_color="#0d1117",
-            text_color="#c9d1d9",
-            wrap="word",
-            state="normal"
+            fg_color=self._colors['bg_medium'],
+            border_width=2,
+            border_color=self._colors['border_glow'],
+            corner_radius=8
         )
-        self._output_text.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        output_frame.grid(row=1, column=0, sticky="nsew", padx=8, pady=4)
+        output_frame.grid_columnconfigure(0, weight=1)
+        output_frame.grid_rowconfigure(0, weight=1)
         
-        # ==================== LIVE MONITOR PANEL ====================
-        # Positioned in top-right corner, shows security + hardware status
+        self._output_text = ctk.CTkTextbox(
+            output_frame,
+            font=("Consolas", 11),
+            fg_color=self._colors['bg_dark'],
+            text_color=self._colors['text_primary'],
+            wrap="word",
+            state="normal",
+            corner_radius=6,
+            border_width=0
+        )
+        self._output_text.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
+        
+        # ==================== LIVE MONITOR PANEL - LAB INSTRUMENTS ====================
         self._monitor_frame = ctk.CTkFrame(
             self._root,
-            width=220,
-            height=160,
-            fg_color="#1a1a2e",
-            border_width=1,
-            border_color="#30363d",
-            corner_radius=6
+            width=300,
+            height=180,
+            fg_color=self._colors['bg_light'],
+            border_width=2,
+            border_color=self._colors['electric_purple'],
+            corner_radius=10
         )
-        self._monitor_frame.place(relx=1.0, rely=0.0, x=-10, y=45, anchor="ne")
+        self._monitor_frame.place(relx=1.0, rely=0.0, x=-16, y=65, anchor="ne")
         self._monitor_frame.grid_propagate(False)
+        self._monitor_frame.pack_propagate(False)
+        
+        # Monitor title bar
+        monitor_title = ctk.CTkLabel(
+            self._monitor_frame,
+            text="🔬 LAB MONITORS",
+            font=("Consolas", 10, "bold"),
+            text_color=self._colors['electric_blue']
+        )
+        monitor_title.place(x=8, y=4)
+        
+        # Divider under title
+        ctk.CTkLabel(
+            self._monitor_frame,
+            text="━" * 30,
+            font=("Consolas", 6),
+            text_color=self._colors['electric_purple']
+        ).place(x=4, y=22)
         
         # ===== SECURITY SECTION =====
         security_title = ctk.CTkLabel(
             self._monitor_frame,
-            text="🛡️ SECURITY",
+            text="🛡️ SHIELD",
             font=("Consolas", 10, "bold"),
-            text_color="#58a6ff",
+            text_color=self._colors['electric_blue'],
             anchor="w"
         )
-        security_title.place(x=8, y=6)
+        security_title.place(x=8, y=32)
         
-        # Threat level indicator
         self._threat_label = ctk.CTkLabel(
             self._monitor_frame,
-            text="🟢 CLEAR",
+            text="● SECURE",
             font=("Consolas", 10, "bold"),
-            text_color="#00ff88",
+            text_color=self._colors['electric_green'],
             anchor="w"
         )
-        self._threat_label.place(x=8, y=26)
+        self._threat_label.place(x=8, y=52)
         
-        # Blocked/Active stats
         self._blocked_label = ctk.CTkLabel(
             self._monitor_frame,
-            text="Blocked: 0 | Active: 0",
+            text="Blocked: 0   Active: 0",
             font=("Consolas", 9),
-            text_color="#8b949e",
+            text_color=self._colors['text_secondary'],
             anchor="w"
         )
-        self._blocked_label.place(x=8, y=46)
+        self._blocked_label.place(x=8, y=68)
         
-        # Divider line
-        divider1 = ctk.CTkLabel(
+        # Divider
+        ctk.CTkLabel(
             self._monitor_frame,
-            text="─" * 28,
+            text="─" * 30,
             font=("Consolas", 6),
-            text_color="#30363d"
-        )
-        divider1.place(x=6, y=64)
+            text_color=self._colors['border_glow']
+        ).place(x=4, y=88)
         
         # ===== HARDWARE SECTION =====
-        hw_title = ctk.CTkLabel(
-            self._monitor_frame,
-            text="🖥️ HARDWARE",
-            font=("Consolas", 10, "bold"),
-            text_color="#58a6ff",
-            anchor="w"
-        )
-        hw_title.place(x=8, y=74)
-        
-        # Hardware health indicator
         self._health_label = ctk.CTkLabel(
             self._monitor_frame,
-            text="🟢 NORMAL",
+            text="● STABLE",
             font=("Consolas", 10, "bold"),
-            text_color="#00ff88",
+            text_color=self._colors['electric_green'],
             anchor="w"
         )
-        self._health_label.place(x=8, y=94)
+        self._health_label.place(x=8, y=96)
         
-        # CPU usage label
+        # CPU with mini bar
         self._cpu_label = ctk.CTkLabel(
             self._monitor_frame,
-            text="CPU: --%",
+            text="⚡ CPU: --%",
             font=("Consolas", 9),
-            text_color="#8b949e",
+            text_color=self._colors['text_secondary'],
             anchor="w"
         )
-        self._cpu_label.place(x=8, y=114)
+        self._cpu_label.place(x=8, y=116)
         
-        # RAM usage label
+        # RAM with mini bar
         self._ram_label = ctk.CTkLabel(
             self._monitor_frame,
-            text="RAM: --%",
+            text="🧠 RAM: --%",
             font=("Consolas", 9),
-            text_color="#8b949e",
+            text_color=self._colors['text_secondary'],
             anchor="w"
         )
-        self._ram_label.place(x=110, y=114)
+        self._ram_label.place(x=115, y=116)
         
-        # Diagnosis line (shows cause when in warning/critical/overload)
+        # Diagnosis line
         self._diagnosis_label = ctk.CTkLabel(
             self._monitor_frame,
             text="",
             font=("Consolas", 8),
-            text_color="#ffcc00",
+            text_color=self._colors['warning_amber'],
             anchor="w",
-            wraplength=200,
+            wraplength=220,
             justify="left"
         )
-        self._diagnosis_label.place(x=8, y=136)
+        self._diagnosis_label.place(x=8, y=140)
         
         # Start live monitor update loop
         self._start_monitor_updates()
@@ -398,32 +478,40 @@ class FrankensteinTerminal:
         # Right-click context menu for output
         self._setup_context_menu()
         
-        # Input frame - taller for multi-line input
-        input_frame = ctk.CTkFrame(self._root, height=120, fg_color="#161b22")
-        input_frame.grid(row=2, column=0, sticky="ew", padx=5, pady=5)
+        # ==================== INPUT AREA - COMMAND INTERFACE ====================
+        input_frame = ctk.CTkFrame(
+            self._root, 
+            height=130, 
+            fg_color=self._colors['bg_light'],
+            border_width=2,
+            border_color=self._colors['border_glow'],
+            corner_radius=8
+        )
+        input_frame.grid(row=2, column=0, sticky="ew", padx=8, pady=(4, 8))
         input_frame.grid_columnconfigure(0, weight=1)
         input_frame.grid_rowconfigure(1, weight=1)
         input_frame.grid_propagate(False)
         
-        # Prompt label - now above the input area
+        # Prompt label with monster styling
         self._prompt_label = ctk.CTkLabel(
             input_frame,
             text=self._get_prompt(),
             font=("Consolas", 11, "bold"),
-            text_color="#58a6ff"
+            text_color=self._colors['electric_purple']
         )
-        self._prompt_label.grid(row=0, column=0, padx=10, pady=(8, 2), sticky="w")
+        self._prompt_label.grid(row=0, column=0, padx=12, pady=(10, 2), sticky="w")
         
-        # Multi-line command input textbox (replaces single-line entry)
+        # Multi-line command input textbox
         self._input_entry = ctk.CTkTextbox(
             input_frame,
             font=("Consolas", 11),
-            fg_color="#0d1117",
-            text_color="#c9d1d9",
-            border_color="#30363d",
+            fg_color=self._colors['bg_dark'],
+            text_color=self._colors['electric_green'],
+            border_color=self._colors['electric_green'],
             border_width=1,
             height=80,
-            wrap="word"
+            wrap="word",
+            corner_radius=6
         )
         self._input_entry.grid(row=1, column=0, padx=10, pady=(2, 8), sticky="nsew")
         
@@ -754,13 +842,13 @@ class FrankensteinTerminal:
                     text_color=severity.color
                 )
                 
-                # Update blocked count (full words now with wider panel)
+                # Update blocked count
                 self._blocked_label.configure(
-                    text=f"Blocked: {stats['threats_blocked']} | Active: {stats['active_threats']}"
+                    text=f"Blocked: {stats['threats_blocked']}   Active: {stats['active_threats']}"
                 )
             except ImportError:
-                self._threat_label.configure(text="🟢 CLEAR", text_color="#00ff88")
-                self._blocked_label.configure(text="Blocked: 0 | Active: 0")
+                self._threat_label.configure(text="● SECURE", text_color=self._colors['electric_green'])
+                self._blocked_label.configure(text="Blocked: 0   Active: 0")
             
             # Get hardware health status and resources
             try:
@@ -806,8 +894,8 @@ class FrankensteinTerminal:
                 else:
                     mem_color = "#8b949e"  # Gray - normal
                 
-                self._cpu_label.configure(text=f"CPU: {cpu:.0f}%", text_color=cpu_color)
-                self._ram_label.configure(text=f"RAM: {mem:.0f}%", text_color=mem_color)
+                self._cpu_label.configure(text=f"⚡ CPU: {cpu:.0f}%", text_color=cpu_color)
+                self._ram_label.configure(text=f"🧠 RAM: {mem:.0f}%", text_color=mem_color)
                 
                 # Show diagnosis if warning or worse
                 diagnosis = hw_stats.get('diagnosis', {})
@@ -825,9 +913,9 @@ class FrankensteinTerminal:
                     self._diagnosis_label.configure(text="")
                     
             except ImportError:
-                self._cpu_label.configure(text="CPU: --%", text_color="#8b949e")
-                self._ram_label.configure(text="RAM: --%", text_color="#8b949e")
-                self._health_label.configure(text="🟢 NORMAL", text_color="#00ff88")
+                self._cpu_label.configure(text="⚡ CPU: --%", text_color=self._colors['text_secondary'])
+                self._ram_label.configure(text="🧠 RAM: --%", text_color=self._colors['text_secondary'])
+                self._health_label.configure(text="● STABLE", text_color=self._colors['electric_green'])
                 self._diagnosis_label.configure(text="")
         except Exception:
             pass
@@ -837,28 +925,30 @@ class FrankensteinTerminal:
             self._root.after(2000, self._update_monitor_panel)
 
     def _show_welcome(self):
-        """Display welcome message"""
+        """Display welcome message - Monster Lab Theme"""
         welcome = f"""
-╔══════════════════════════════════════════════════════════════════╗
-║                                                                  ║
-║   ⚡ FRANKENSTEIN 1.0                                            ║
-║                                                                  ║
-║   "Frankenstein, here to serve science."                        ║
-║                                                                  ║
-║   Commands: help, status, security, hardware, diagnose          ║
-║                                                                  ║
-╠══════════════════════════════════════════════════════════════════╣
-║                                                                  ║
-║   🆕 QUANTUM MODE: Type 'quantum' or 'q' to enter!              ║
-║                                                                  ║
-║   Quick quantum example:                                         ║
-║     q → qubit 2 → h 0 → cx 0 1 → measure                        ║
-║     (Creates Bell state, auto-opens 3D Bloch sphere!)           ║
-║                                                                  ║
-╚══════════════════════════════════════════════════════════════════╝
 
-Session started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-Working directory: {self._cwd}
+        ███████╗██████╗  █████╗ ███╗   ██╗██╗  ██╗
+        ██╔════╝██╔══██╗██╔══██╗████╗  ██║██║ ██╔╝
+        █████╗  ██████╔╝███████║██╔██╗ ██║█████╔╝ 
+        ██╔══╝  ██╔══██╗██╔══██║██║╚██╗██║██╔═██╗ 
+        ██║     ██║  ██║██║  ██║██║ ╚████║██║  ██╗
+        ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝ ENSTEIN 1.0
+
+                 🧟 "Frankenstein, here to serve science." 🧟
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  🔬 COMMANDS     help · status · security · hardware · diagnose │
+    │  ⚛️  QUANTUM      Type 'q' or 'quantum' to enter quantum mode   │
+    │  🧪 SYNTHESIS    Type 'synthesis' for physics simulations       │
+    └─────────────────────────────────────────────────────────────────┘
+
+    ⚡ Session: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+    📂 Working: {self._cwd}
+
+    ═══════════════════════════════════════════════════════════════════
+    IT'S ALIVE! Type 'help' to begin your experiment...
+    ═══════════════════════════════════════════════════════════════════
 
 """
         self._write_output(welcome, color="#00ff88")
@@ -969,7 +1059,7 @@ Working directory: {self._cwd}
     def _execute_system_command(self, command: str):
         """Execute a system command via subprocess"""
         try:
-            self._status_label.configure(text="● RUNNING", text_color="#ffcc00")
+            self._status_label.configure(text="  ⚡ WORKING  ", text_color=self._colors['warning_amber'])
             self._root.update()
             
             # Run command
@@ -990,14 +1080,14 @@ Working directory: {self._cwd}
             if result.returncode != 0 and not result.stdout and not result.stderr:
                 self._write_error(f"Command '{command}' returned exit code {result.returncode}")
             
-            self._status_label.configure(text="● READY", text_color="#00ff88")
+            self._status_label.configure(text="  ● ALIVE  ", text_color=self._colors['electric_green'])
             
         except subprocess.TimeoutExpired:
             self._write_error("Command timed out after 30 seconds")
-            self._status_label.configure(text="● READY", text_color="#00ff88")
+            self._status_label.configure(text="  ● ALIVE  ", text_color=self._colors['electric_green'])
         except Exception as e:
             self._write_error(f"Failed to execute: {e}")
-            self._status_label.configure(text="● READY", text_color="#00ff88")
+            self._status_label.configure(text="  ● ALIVE  ", text_color=self._colors['electric_green'])
 
     # ==================== BUILT-IN COMMANDS ====================
     
@@ -1505,13 +1595,13 @@ Working directory: {self._cwd}
         try:
             from security import ThreatSeverity
             if severity in (ThreatSeverity.CRITICAL, ThreatSeverity.HIGH):
-                self._status_label.configure(text=f"{severity.icon} THREAT", text_color=severity.color)
+                self._status_label.configure(text=f"  {severity.icon} THREAT  ", text_color=severity.color)
             elif severity == ThreatSeverity.MEDIUM:
-                self._status_label.configure(text=f"{severity.icon} ALERT", text_color=severity.color)
+                self._status_label.configure(text=f"  {severity.icon} ALERT  ", text_color=severity.color)
             elif severity == ThreatSeverity.LOW:
-                self._status_label.configure(text=f"{severity.icon} CAUTION", text_color=severity.color)
+                self._status_label.configure(text=f"  {severity.icon} CAUTION  ", text_color=severity.color)
             else:
-                self._status_label.configure(text="● READY", text_color="#00ff88")
+                self._status_label.configure(text="  ● ALIVE  ", text_color=self._colors['electric_green'])
         except Exception:
             pass
 
