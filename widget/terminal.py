@@ -393,7 +393,7 @@ class FrankensteinTerminal:
             text_color=self._colors['electric_blue'],
             anchor="w"
         )
-        security_title.place(x=8, y=32)
+        security_title.place(x=8, y=28)
         
         self._threat_label = ctk.CTkLabel(
             self._monitor_frame,
@@ -402,7 +402,7 @@ class FrankensteinTerminal:
             text_color=self._colors['electric_green'],
             anchor="w"
         )
-        self._threat_label.place(x=8, y=52)
+        self._threat_label.place(x=8, y=46)
         
         self._blocked_label = ctk.CTkLabel(
             self._monitor_frame,
@@ -411,7 +411,7 @@ class FrankensteinTerminal:
             text_color=self._colors['text_secondary'],
             anchor="w"
         )
-        self._blocked_label.place(x=8, y=68)
+        self._blocked_label.place(x=8, y=64)
         
         # Divider
         ctk.CTkLabel(
@@ -419,7 +419,7 @@ class FrankensteinTerminal:
             text="─" * 30,
             font=("Consolas", 6),
             text_color=self._colors['border_glow']
-        ).place(x=4, y=88)
+        ).place(x=4, y=84)
         
         # ===== HARDWARE SECTION =====
         self._health_label = ctk.CTkLabel(
@@ -429,7 +429,7 @@ class FrankensteinTerminal:
             text_color=self._colors['electric_green'],
             anchor="w"
         )
-        self._health_label.place(x=8, y=96)
+        self._health_label.place(x=8, y=92)
         
         # CPU with mini bar
         self._cpu_label = ctk.CTkLabel(
@@ -439,7 +439,7 @@ class FrankensteinTerminal:
             text_color=self._colors['text_secondary'],
             anchor="w"
         )
-        self._cpu_label.place(x=8, y=116)
+        self._cpu_label.place(x=8, y=112)
         
         # RAM with mini bar
         self._ram_label = ctk.CTkLabel(
@@ -449,7 +449,7 @@ class FrankensteinTerminal:
             text_color=self._colors['text_secondary'],
             anchor="w"
         )
-        self._ram_label.place(x=115, y=116)
+        self._ram_label.place(x=115, y=112)
         
         # Diagnosis line
         self._diagnosis_label = ctk.CTkLabel(
@@ -461,7 +461,7 @@ class FrankensteinTerminal:
             wraplength=220,
             justify="left"
         )
-        self._diagnosis_label.place(x=8, y=140)
+        self._diagnosis_label.place(x=8, y=132)
         
         # Start live monitor update loop
         self._start_monitor_updates()
