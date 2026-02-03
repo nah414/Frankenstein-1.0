@@ -1,0 +1,101 @@
+# FRANKENSTEIN 1.0 - Tier 1 Configuration
+# Target: Dell Intel i3 8th Gen, 4 cores, 8GB RAM, 117GB Storage
+# Created: January 25, 2026
+
+tier: 1
+name: "Personal - Dell i3"
+description: "Optimized for Dell Intel i3-8xxx with resource constraints"
+
+# Exact Hardware Specs
+hardware:
+  cpu_model: "Intel Core i3-8xxx"
+  cpu_cores: 4
+  cpu_threads: 4
+  ram_gb: 8
+  storage_gb: 117
+  gpu_discrete: false
+  gpu_integrated: "Intel UHD 620"
+
+# Resource Limits (MUST match safety.py)
+resources:
+  max_cpu_percent: 80
+  max_memory_percent: 70
+  max_memory_gb: 5.6        # 70% of 8GB
+  max_storage_use_gb: 20
+  max_worker_threads: 2     # OPTIMIZED: Reduced from 3 to 2 (1 thread saved)
+  max_disk_io_mbps: 200
+
+# Capabilities
+capabilities:
+  local_simulation: true
+  max_qubits_local: 18      # Conservative for 8GB RAM
+  cloud_quantum: true
+  synthesis_engine: "classical_only"  # Phase 2 adds quantum
+  widget_mode: "full"
+
+# Quantum Cloud Providers (API access only)
+quantum_providers:
+  enabled:
+    - ibm_quantum
+    - aws_braket
+    - azure_quantum
+  disabled:
+    - ionq_direct  # Use via Braket instead
+
+# Features
+features:
+  security_shield: true
+  resource_governor: true
+  auto_throttle: true
+  emergency_stop: true
+  local_memory: true
+  cloud_memory: false       # Tier 2+
+
+# Performance Targets
+targets:
+  quantum_simulation_max_sec: 30
+  task_response_max_sec: 5
+  widget_refresh_ms: 1000
+  startup_max_sec: 10
+
+# Widget Settings
+widget:
+  default_mode: "command"   # 200px
+  position: "top_right"
+  transparency: 0.95
+  always_on_top: true
+
+# Performance Optimizations (Applied: 2026)
+# These settings dramatically reduce CPU and RAM usage at startup
+optimization:
+  enabled: true
+  description: "Staggered startup + adaptive polling + lazy loading"
+
+  # Monitor polling intervals (seconds)
+  governor_poll_interval: 3.0       # OPTIMIZED: Reduced from 1.0s (66% less CPU)
+  hardware_poll_interval: 5.0       # OPTIMIZED: Reduced from 2.0s (60% less CPU)
+
+  # Staggered monitor startup (prevents thread contention)
+  staggered_startup: true
+  hardware_monitor_delay_sec: 2.0   # Start 2s after widget launch
+  security_monitor_delay_sec: 4.0   # Start 4s after widget launch
+
+  # Lazy agent loading (on-demand instantiation)
+  lazy_compute_agents: true         # Physics/Math/Quantum load on first use
+
+  # CPU measurement optimization
+  non_blocking_cpu_sampling: true   # Use psutil interval=0 (no blocking)
+
+  # Expected performance improvements:
+  # - Launch CPU spike: 80-100% → 40-60% (50% reduction)
+  # - Idle CPU: 20-40% → 5-10% (75% reduction)
+  # - RAM at idle: 2.0-2.5GB → 1.0-1.2GB (50-60% reduction)
+  # - Launch time: 3-5s → 1.5-2.5s (40% faster)
+  # - Thread count: 12-15 → 8-10 (25-40% reduction)
+
+# Logging
+logging:
+  level: "INFO"
+  file: "~/.frankenstein/logs/frankenstein.log"
+  max_size_mb: 50
+  backup_count: 3
