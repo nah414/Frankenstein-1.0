@@ -74,9 +74,9 @@ class ResourceGovernor:
         self._violation_count = 0
         self._start_time: Optional[float] = None
 
-        # History for trend analysis (last 60 samples)
+        # History for trend analysis (optimized for tier1)
         self._history: List[ResourceSnapshot] = []
-        self._max_history = 60
+        self._max_history = 30  # OPTIMIZED: 30 samples = ~90 seconds at 3s interval
 
     def start(self) -> bool:
         """
