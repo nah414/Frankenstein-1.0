@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(git add:*)",
+      "Bash(cmd /c \"dir /B C:\\\\Temp\\\\frankenstein-1.0\\\\security\")",
+      "Bash(cmd /c \"dir /B C:\\\\Temp\\\\frankenstein-1.0\\\\agents\")",
+      "Bash(cmd /c \"robocopy \"\"c:\\\\Users\\\\adamn\\\\Frankenstein-1.0\\\\security\"\" \"\"C:\\\\Temp\\\\frankenstein-1.0\\\\security\"\" *.py /NFL /NDL /NJH /NJS\")"
+    ]
+  }
+}
