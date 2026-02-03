@@ -1,64 +1,107 @@
 """
-FRANKENSTEIN 1.0 - Core Module
-Optimized for Tier 1 hardware (Dell i3 8th Gen, 8GB RAM)
+FRANKENSTEIN 1.0 - Core Engine
+Phase 1: Foundation Components
 
-Hard Limits (non-negotiable):
-- CPU: 80% max
-- Memory: 70% max
-
-Features:
-- Adaptive resource monitoring
-- Agent scheduling with throttling
-- Low memory mode for constrained systems
+Exports the core building blocks.
 """
 
-from .resource_manager import (
-    get_resource_manager,
-    ensure_resource_manager_running,
-    AdaptiveResourceManager,
-    MonitorState,
-    ResourceSample
+from .safety import (
+    SAFETY,
+    SafetyConstraints,
+    check_resource_violation,
+    get_constraints_dict,
+    is_within_tier1_limits
 )
 
-from .agent_scheduler import (
-    get_scheduler,
-    ensure_scheduler_running,
-    AgentScheduler,
-    AgentPriority,
-    AgentState,
-    AgentTask
+from .governor import (
+    ResourceGovernor,
+    ResourceSnapshot,
+    ThrottleLevel,
+    get_governor
 )
 
-from .low_memory_mode import (
-    get_low_memory_manager,
-    ensure_low_memory_manager_running,
-    check_startup_memory,
-    LowMemoryManager,
-    MemoryMode,
-    ModeSettings,
-    MODE_CONFIGS
+from .memory import (
+    MemorySystem,
+    SessionState,
+    TaskRecord,
+    get_memory
+)
+
+from .orchestrator import (
+    TaskOrchestrator,
+    Task,
+    TaskType,
+    TaskStatus,
+    TaskPriority,
+    get_orchestrator
+)
+
+from .hardware_monitor import (
+    HardwareHealthMonitor,
+    HardwareTier,
+    HealthStatus,
+    HealthTrend,
+    SwitchRecommendation,
+    get_hardware_monitor
+)
+
+from .hardware_dashboard import (
+    HardwareDashboard,
+    get_hardware_dashboard,
+    handle_hardware_command
+)
+
+from .system_diagnostics import (
+    get_system_stats,
+    get_top_processes,
+    generate_recommendations,
+    handle_diagnose_command,
+    SystemStats,
+    ProcessInfo
 )
 
 __all__ = [
-    # Resource Manager
-    'get_resource_manager',
-    'ensure_resource_manager_running',
-    'AdaptiveResourceManager',
-    'MonitorState',
-    'ResourceSample',
-    # Agent Scheduler
-    'get_scheduler',
-    'ensure_scheduler_running',
-    'AgentScheduler',
-    'AgentPriority',
-    'AgentState',
-    'AgentTask',
-    # Low Memory Mode
-    'get_low_memory_manager',
-    'ensure_low_memory_manager_running',
-    'check_startup_memory',
-    'LowMemoryManager',
-    'MemoryMode',
-    'ModeSettings',
-    'MODE_CONFIGS',
+    # Safety
+    "SAFETY",
+    "SafetyConstraints",
+    "check_resource_violation",
+    "get_constraints_dict",
+    "is_within_tier1_limits",
+    # Governor
+    "ResourceGovernor",
+    "ResourceSnapshot",
+    "ThrottleLevel",
+    "get_governor",
+    # Memory
+    "MemorySystem",
+    "SessionState",
+    "TaskRecord",
+    "get_memory",
+    # Orchestrator
+    "TaskOrchestrator",
+    "Task",
+    "TaskType",
+    "TaskStatus",
+    "TaskPriority",
+    "get_orchestrator",
+    # Hardware Monitor (Phase 2)
+    "HardwareHealthMonitor",
+    "HardwareTier",
+    "HealthStatus",
+    "HealthTrend",
+    "SwitchRecommendation",
+    "get_hardware_monitor",
+    # Hardware Dashboard (Phase 2)
+    "HardwareDashboard",
+    "get_hardware_dashboard",
+    "handle_hardware_command",
+    # System Diagnostics (Phase 2)
+    "get_system_stats",
+    "get_top_processes",
+    "generate_recommendations",
+    "handle_diagnose_command",
+    "SystemStats",
+    "ProcessInfo",
 ]
+
+__version__ = "2.0.0-phase2"

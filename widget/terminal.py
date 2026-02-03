@@ -173,12 +173,6 @@ class FrankensteinTerminal:
             'synth': self._cmd_synthesis,  # Alias
             'bloch': self._cmd_bloch,      # Quick Bloch sphere
             'qubit': self._cmd_qubit,      # Quick qubit operations
-            # Resource Management (OPTIMIZED)
-            'resources': self._cmd_resources,
-            'res': self._cmd_resources,    # Alias
-            # Low Memory Mode
-            'lowmem': self._cmd_lowmem,
-            'memory': self._cmd_lowmem,    # Alias
         }
         
         # Security monitor integration
@@ -191,10 +185,6 @@ class FrankensteinTerminal:
         # Quantum mode integration
         self._quantum_mode = None
         self._in_quantum_mode = False
-        
-        # Low memory mode integration
-        self._low_memory_manager = None
-        self._memory_mode = None  # Will be set on start
     
     def start(self) -> bool:
         """Start the terminal in a separate thread"""
@@ -403,7 +393,7 @@ class FrankensteinTerminal:
             text_color=self._colors['electric_blue'],
             anchor="w"
         )
-        security_title.place(x=8, y=32)
+        security_title.place(x=8, y=28)
         
         self._threat_label = ctk.CTkLabel(
             self._monitor_frame,
@@ -412,7 +402,7 @@ class FrankensteinTerminal:
             text_color=self._colors['electric_green'],
             anchor="w"
         )
-        self._threat_label.place(x=8, y=52)
+        self._threat_label.place(x=8, y=46)
         
         self._blocked_label = ctk.CTkLabel(
             self._monitor_frame,
@@ -421,7 +411,7 @@ class FrankensteinTerminal:
             text_color=self._colors['text_secondary'],
             anchor="w"
         )
-        self._blocked_label.place(x=8, y=72)
+        self._blocked_label.place(x=8, y=64)
         
         # Divider
         ctk.CTkLabel(
@@ -429,7 +419,7 @@ class FrankensteinTerminal:
             text="─" * 30,
             font=("Consolas", 6),
             text_color=self._colors['border_glow']
-        ).place(x=4, y=88)
+        ).place(x=4, y=84)
         
         # ===== HARDWARE SECTION =====
         self._health_label = ctk.CTkLabel(
@@ -439,7 +429,7 @@ class FrankensteinTerminal:
             text_color=self._colors['electric_green'],
             anchor="w"
         )
-        self._health_label.place(x=8, y=96)
+        self._health_label.place(x=8, y=92)
         
         # CPU with mini bar
         self._cpu_label = ctk.CTkLabel(
@@ -449,7 +439,7 @@ class FrankensteinTerminal:
             text_color=self._colors['text_secondary'],
             anchor="w"
         )
-        self._cpu_label.place(x=8, y=116)
+        self._cpu_label.place(x=8, y=112)
         
         # RAM with mini bar
         self._ram_label = ctk.CTkLabel(
@@ -459,7 +449,7 @@ class FrankensteinTerminal:
             text_color=self._colors['text_secondary'],
             anchor="w"
         )
-        self._ram_label.place(x=115, y=116)
+        self._ram_label.place(x=115, y=112)
         
         # Diagnosis line
         self._diagnosis_label = ctk.CTkLabel(
@@ -471,7 +461,7 @@ class FrankensteinTerminal:
             wraplength=220,
             justify="left"
         )
-        self._diagnosis_label.place(x=8, y=140)
+        self._diagnosis_label.place(x=8, y=132)
         
         # Start live monitor update loop
         self._start_monitor_updates()
@@ -828,198 +818,111 @@ class FrankensteinTerminal:
         self._prompt_label.configure(text=self._get_prompt())
     
     def _start_monitor_updates(self):
-        """Start the live monitor update loop with ADAPTIVE intervals"""
-        # Initialize low memory manager first
-        try:
-            from core.low_memory_mode import (
-                get_low_memory_manager,
-                check_startup_memory,
-                MemoryMode
-            )
-            
-            # Check startup memory conditions
-            startup = check_startup_memory()
-            if startup.get('warning'):
-                print(f"⚠️ {startup['warning']}")
-            
-            # Initialize manager
-            self._low_memory_manager = get_low_memory_manager()
-            self._low_memory_manager.start()
-            self._low_memory_manager.add_mode_callback(self._on_memory_mode_change)
-            
-            # Get initial settings
-            settings = self._low_memory_manager.get_settings()
-            self._monitor_interval = int(settings.ui_update_interval)
-            self._memory_mode = self._low_memory_manager.get_mode()
-            
-        except ImportError:
-            # Fallback if low memory module not available
-            self._monitor_interval = 5000
-            self._memory_mode = None
-        
-        # Initialize monitoring state
-        self._resource_manager = None
-        self._security_module_available = None
-        self._monitor_update_count = 0
-        self._last_cpu = 0
-        self._last_mem = 0
-        
-        # First update
+        """Start the live monitor update loop"""
         self._update_monitor_panel()
     
     def _update_monitor_panel(self):
-        """
-        Update the live security/resource monitor panel.
-        
-        ULTRA-OPTIMIZED VERSION v2.0:
-        - Cached imports (only check once)
-        - Skip updates if values unchanged (delta detection)
-        - Much longer intervals (5-10s when idle)
-        - Only start resource manager when absolutely needed
-        - No auto-start of any heavy monitors
-        - Minimal label updates (only when changed)
-        """
+        """Update the live security/resource monitor panel"""
         if not self._running:
             return
         
-        self._monitor_update_count += 1
-        
         try:
-            # ===== SECURITY SECTION (check every 10 updates to save resources) =====
-            if self._monitor_update_count % 10 == 1:
-                # Only check security availability once
-                if self._security_module_available is None:
-                    try:
-                        from security import get_monitor
-                        self._security_module_available = True
-                    except ImportError:
-                        self._security_module_available = False
-                
-                if self._security_module_available:
-                    try:
-                        from security import get_monitor, ThreatSeverity
-                        monitor = get_monitor()
-                        if monitor._running:
-                            stats = monitor.get_stats()
-                            severity = ThreatSeverity[stats['current_severity']]
-                            self._threat_label.configure(
-                                text=f"{severity.icon} {severity.label}",
-                                text_color=severity.color
-                            )
-                            self._blocked_label.configure(
-                                text=f"Blocked: {stats['threats_blocked']}   Active: {stats['active_threats']}"
-                            )
-                        else:
-                            self._threat_label.configure(text="● STANDBY", text_color=self._colors['text_secondary'])
-                            self._blocked_label.configure(text="Shield: Off (saves CPU)")
-                    except Exception:
-                        pass
-                else:
-                    # Security module not available - only update if first time
-                    if self._monitor_update_count == 1:
-                        self._threat_label.configure(text="● SECURE", text_color=self._colors['electric_green'])
-                        self._blocked_label.configure(text="Shield: N/A")
-            
-            # ===== HARDWARE SECTION (main update) =====
+            # Get security stats
             try:
-                # Lazy import and init
-                if self._resource_manager is None:
-                    from core.resource_manager import get_resource_manager
-                    self._resource_manager = get_resource_manager()
-                    # Start the manager - but it has its own adaptive polling
-                    if not self._resource_manager._running:
-                        self._resource_manager.start()
+                from security import get_monitor, ThreatSeverity
+                monitor = get_monitor()
+                if not monitor._running:
+                    monitor.start()
+                stats = monitor.get_stats()
+                severity = ThreatSeverity[stats['current_severity']]
                 
-                from core.resource_manager import MonitorState
+                # Update threat level
+                self._threat_label.configure(
+                    text=f"{severity.icon} {severity.label}",
+                    text_color=severity.color
+                )
                 
-                # Get cached sample (very low overhead - uses cache)
-                sample = self._resource_manager.get_sample()
-                state = self._resource_manager.get_state()
+                # Update blocked count
+                self._blocked_label.configure(
+                    text=f"Blocked: {stats['threats_blocked']}   Active: {stats['active_threats']}"
+                )
+            except ImportError:
+                self._threat_label.configure(text="● SECURE", text_color=self._colors['electric_green'])
+                self._blocked_label.configure(text="Blocked: 0   Active: 0")
+            
+            # Get hardware health status and resources
+            try:
+                from core import get_governor, get_hardware_monitor, HealthStatus
+                governor = get_governor()
+                gov_status = governor.get_status()
+                cpu = gov_status.get('cpu_percent', 0)
+                mem = gov_status.get('memory_percent', 0)
                 
-                if sample:
-                    cpu = round(sample.cpu_percent)
-                    mem = round(sample.memory_percent)
-                    
-                    # DELTA DETECTION: Only update labels if values changed significantly
-                    cpu_changed = abs(cpu - self._last_cpu) >= 2  # 2% threshold
-                    mem_changed = abs(mem - self._last_mem) >= 2
-                    
-                    if cpu_changed or mem_changed or self._monitor_update_count <= 2:
-                        self._last_cpu = cpu
-                        self._last_mem = mem
-                        
-                        max_cpu = self._resource_manager.MAX_CPU
-                        max_mem = self._resource_manager.MAX_MEMORY
-                        
-                        # Health status
-                        if state == MonitorState.CRITICAL:
-                            self._health_label.configure(text="⚠️ CRITICAL", text_color="#ff0000")
-                        elif state == MonitorState.ALERT:
-                            self._health_label.configure(text="🟠 ALERT", text_color="#ff9900")
-                        elif state == MonitorState.ACTIVE:
-                            self._health_label.configure(text="🟢 ACTIVE", text_color=self._colors['electric_green'])
-                        else:
-                            self._health_label.configure(text="● IDLE", text_color=self._colors['text_secondary'])
-                        
-                        # CPU color
-                        if cpu > max_cpu:
-                            cpu_color = "#ff4444"
-                        elif cpu > max_cpu * 0.85:
-                            cpu_color = "#ff9900"
-                        elif cpu > max_cpu * 0.70:
-                            cpu_color = "#ffcc00"
-                        else:
-                            cpu_color = "#8b949e"
-                        
-                        # RAM color
-                        if mem > max_mem:
-                            mem_color = "#ff4444"
-                        elif mem > max_mem * 0.85:
-                            mem_color = "#ff9900"
-                        elif mem > max_mem * 0.70:
-                            mem_color = "#ffcc00"
-                        else:
-                            mem_color = "#8b949e"
-                        
-                        self._cpu_label.configure(text=f"⚡ CPU: {cpu}%", text_color=cpu_color)
-                        self._ram_label.configure(text=f"🧠 RAM: {mem}%", text_color=mem_color)
-                        
-                        # Diagnosis only for warning states
-                        if state in (MonitorState.CRITICAL, MonitorState.ALERT):
-                            headroom = self._resource_manager.get_headroom()
-                            cause = f"Headroom: CPU {headroom['cpu']:.0f}% | RAM {headroom['memory']:.0f}%"
-                            self._diagnosis_label.configure(text=f"⚠ {cause}")
-                        else:
-                            self._diagnosis_label.configure(text="")
-                    
-                    # ADAPTIVE INTERVAL v2: Much more conservative
-                    if state == MonitorState.CRITICAL:
-                        self._monitor_interval = 2000   # 2 seconds when critical
-                    elif state == MonitorState.ALERT:
-                        self._monitor_interval = 3000   # 3 seconds when alert  
-                    elif state == MonitorState.ACTIVE:
-                        self._monitor_interval = 5000   # 5 seconds when active
-                    else:
-                        self._monitor_interval = 8000   # 8 seconds when idle (was 4s)
+                # Get hardware monitor
+                hw_monitor = get_hardware_monitor()
+                if not hw_monitor._running:
+                    hw_monitor.start()
+                
+                hw_stats = hw_monitor.get_stats()
+                health = hw_monitor.get_health_status()
+                max_cpu = hw_stats.get('tier_max_cpu', 80)
+                max_mem = hw_stats.get('tier_max_memory', 70)
+                
+                # Update health label
+                self._health_label.configure(
+                    text=f"{health.icon} {health.label}",
+                    text_color=health.color
+                )
+                
+                # Color code CPU based on limits
+                if cpu > max_cpu:
+                    cpu_color = "#ff4444"  # Red - over limit
+                elif cpu > max_cpu * 0.85:
+                    cpu_color = "#ff9900"  # Orange - warning
+                elif cpu > max_cpu * 0.70:
+                    cpu_color = "#ffcc00"  # Yellow - elevated
                 else:
-                    # No sample yet - first run
-                    if self._monitor_update_count <= 2:
-                        self._cpu_label.configure(text="⚡ CPU: --%", text_color=self._colors['text_secondary'])
-                        self._ram_label.configure(text="🧠 RAM: --%", text_color=self._colors['text_secondary'])
-                        self._health_label.configure(text="● STARTING", text_color=self._colors['text_secondary'])
+                    cpu_color = "#8b949e"  # Gray - normal
+                
+                # Color code RAM based on limits
+                if mem > max_mem:
+                    mem_color = "#ff4444"  # Red - over limit
+                elif mem > max_mem * 0.85:
+                    mem_color = "#ff9900"  # Orange - warning
+                elif mem > max_mem * 0.70:
+                    mem_color = "#ffcc00"  # Yellow - elevated
+                else:
+                    mem_color = "#8b949e"  # Gray - normal
+                
+                self._cpu_label.configure(text=f"⚡ CPU: {cpu:.0f}%", text_color=cpu_color)
+                self._ram_label.configure(text=f"🧠 RAM: {mem:.0f}%", text_color=mem_color)
+                
+                # Show diagnosis if warning or worse
+                diagnosis = hw_stats.get('diagnosis', {})
+                if health in (HealthStatus.WARNING, HealthStatus.CRITICAL, HealthStatus.OVERLOAD):
+                    cause = diagnosis.get('primary_cause', '')
+                    if cause:
+                        # Truncate for display (wider panel allows more text)
+                        if len(cause) > 35:
+                            cause = cause[:32] + "..."
+                        self._diagnosis_label.configure(
+                            text=f"⚠ {cause}",
+                            text_color=health.color
+                        )
+                else:
+                    self._diagnosis_label.configure(text="")
                     
             except ImportError:
-                if self._monitor_update_count <= 2:
-                    self._cpu_label.configure(text="⚡ CPU: --%", text_color=self._colors['text_secondary'])
-                    self._ram_label.configure(text="🧠 RAM: --%", text_color=self._colors['text_secondary'])
-                    self._health_label.configure(text="● STABLE", text_color=self._colors['electric_green'])
-                    self._diagnosis_label.configure(text="")
+                self._cpu_label.configure(text="⚡ CPU: --%", text_color=self._colors['text_secondary'])
+                self._ram_label.configure(text="🧠 RAM: --%", text_color=self._colors['text_secondary'])
+                self._health_label.configure(text="● STABLE", text_color=self._colors['electric_green'])
+                self._diagnosis_label.configure(text="")
         except Exception:
             pass
         
-        # Schedule next update with ADAPTIVE interval
+        # Schedule next update (every 2 seconds)
         if self._running and self._root:
-            self._root.after(self._monitor_interval, self._update_monitor_panel)
+            self._root.after(2000, self._update_monitor_panel)
 
     def _show_welcome(self):
         """Display welcome message - Monster Lab Theme"""
@@ -1732,310 +1635,6 @@ class FrankensteinTerminal:
         except ImportError as e:
             self._write_error(f"Diagnostics module not available: {e}")
             self._write_output("Make sure core/system_diagnostics.py exists.\n")
-
-    # ==================== RESOURCE MANAGEMENT (OPTIMIZED) ====================
-    
-    def _cmd_resources(self, args: List[str]):
-        """
-        Resource management and optimization commands.
-        
-        Usage:
-            resources           - Show current resource status
-            resources stats     - Show detailed statistics
-            resources agents    - Show active agent count
-            resources start     - Start security monitor (if needed)
-            resources stop      - Stop security monitor (saves resources)
-        """
-        try:
-            from core.resource_manager import get_resource_manager, MonitorState
-            
-            if self._resource_manager is None:
-                self._resource_manager = get_resource_manager()
-            
-            if not args:
-                # Default: show status
-                self._show_resource_status()
-                return
-            
-            subcmd = args[0].lower()
-            
-            if subcmd == "stats":
-                self._show_resource_stats()
-            elif subcmd == "agents":
-                count = self._resource_manager.get_active_agent_count()
-                self._write_output(f"\n  Active Agents: {count}\n\n")
-            elif subcmd == "start":
-                self._start_security_monitor()
-            elif subcmd == "stop":
-                self._stop_security_monitor()
-            elif subcmd == "help":
-                self._write_output(self._cmd_resources.__doc__ + "\n")
-            else:
-                self._write_error(f"Unknown subcommand: {subcmd}")
-                self._write_output("Use 'resources help' for usage.\n")
-                
-        except ImportError as e:
-            self._write_error(f"Resource manager not available: {e}")
-    
-    def _show_resource_status(self):
-        """Show compact resource status with optimization metrics"""
-        try:
-            from core.resource_manager import MonitorState
-            
-            stats = self._resource_manager.get_stats()
-            state = self._resource_manager.get_state()
-            
-            # State icons
-            state_icons = {
-                MonitorState.IDLE: "💤",
-                MonitorState.ACTIVE: "🟢",
-                MonitorState.ALERT: "🟠",
-                MonitorState.CRITICAL: "🔴"
-            }
-            
-            self._write_output("\n")
-            self._write_output("  ╔═══════════════════════════════════════════════════════╗\n")
-            self._write_output("  ║           RESOURCE OPTIMIZATION STATUS v2.0           ║\n")
-            self._write_output("  ╠═══════════════════════════════════════════════════════╣\n")
-            self._write_output(f"  ║  State: {state_icons.get(state, '●')} {state.value.upper():<40}  ║\n")
-            self._write_output(f"  ║  CPU:   {stats.get('cpu_percent', 0):.1f}% / {stats['max_cpu']}% hard limit               ║\n")
-            self._write_output(f"  ║  RAM:   {stats.get('memory_percent', 0):.1f}% / {stats['max_memory']}% hard limit               ║\n")
-            self._write_output("  ╠═══════════════════════════════════════════════════════╣\n")
-            
-            # Optimization metrics
-            self._write_output("  ║  🔧 OPTIMIZATION SETTINGS                              ║\n")
-            self._write_output(f"  ║  └─ Resource Poll:    Every {stats['interval']:.0f}s (adaptive)       ║\n")
-            self._write_output(f"  ║  └─ UI Update:        Every {self._monitor_interval/1000:.0f}s (adaptive)       ║\n")
-            self._write_output(f"  ║  └─ Cache TTL:        1.0s                            ║\n")
-            self._write_output(f"  ║  └─ Delta Detection:  2% threshold                    ║\n")
-            self._write_output("  ╠═══════════════════════════════════════════════════════╣\n")
-            
-            # Headroom
-            cpu_head = stats.get('cpu_headroom', 0)
-            mem_head = stats.get('memory_headroom', 0)
-            self._write_output(f"  ║  CPU Headroom:  {cpu_head:.0f}% remaining                       ║\n")
-            self._write_output(f"  ║  RAM Headroom:  {mem_head:.0f}% remaining                       ║\n")
-            
-            # Safety status
-            is_safe = stats.get('is_safe', True)
-            safe_icon = "✅" if is_safe else "⚠️"
-            safe_text = "WITHIN LIMITS" if is_safe else "EXCEEDING LIMITS"
-            self._write_output(f"  ║  Status: {safe_icon} {safe_text:<40}  ║\n")
-            self._write_output("  ╠═══════════════════════════════════════════════════════╣\n")
-            self._write_output("  ║  Tips: 'resources stop' to pause security monitor     ║\n")
-            self._write_output("  ║        'resources agents' to see active tasks         ║\n")
-            self._write_output("  ╚═══════════════════════════════════════════════════════╝\n")
-            self._write_output("\n")
-            
-        except Exception as e:
-            self._write_error(f"Error getting status: {e}")
-    
-    def _show_resource_stats(self):
-        """Show detailed resource statistics"""
-        try:
-            stats = self._resource_manager.get_stats()
-            
-            self._write_output("\n  ═══ RESOURCE STATISTICS ═══\n\n")
-            for key, value in stats.items():
-                self._write_output(f"  {key}: {value}\n")
-            self._write_output("\n")
-            
-        except Exception as e:
-            self._write_error(f"Error getting stats: {e}")
-    
-    def _start_security_monitor(self):
-        """Start the security monitor (on-demand)"""
-        try:
-            from security import get_monitor
-            monitor = get_monitor()
-            if not monitor._running:
-                monitor.start()
-                self._write_success("Security monitor started")
-            else:
-                self._write_output("  Security monitor already running.\n")
-        except ImportError:
-            self._write_error("Security module not available")
-    
-    def _stop_security_monitor(self):
-        """Stop the security monitor to save resources"""
-        try:
-            from security import get_monitor
-            monitor = get_monitor()
-            if monitor._running:
-                monitor.stop()
-                self._write_success("Security monitor stopped (saving resources)")
-            else:
-                self._write_output("  Security monitor not running.\n")
-        except ImportError:
-            self._write_error("Security module not available")
-
-    # ==================== LOW MEMORY MODE ====================
-    
-    def _cmd_lowmem(self, args: List[str]):
-        """
-        Low Memory Mode management commands.
-        
-        Usage:
-            lowmem              - Show current mode and status
-            lowmem status       - Detailed status with recommendations
-            lowmem normal       - Switch to normal mode
-            lowmem conservative - Switch to conservative mode  
-            lowmem low          - Switch to low memory mode
-            lowmem critical     - Switch to critical/survival mode
-            lowmem auto         - Enable automatic mode detection
-        """
-        try:
-            from core.low_memory_mode import (
-                get_low_memory_manager, 
-                MemoryMode,
-                MODE_CONFIGS,
-                check_startup_memory
-            )
-            
-            # Initialize if needed
-            if self._low_memory_manager is None:
-                self._low_memory_manager = get_low_memory_manager()
-                if not self._low_memory_manager._running:
-                    self._low_memory_manager.start()
-                    # Register callback to update terminal settings
-                    self._low_memory_manager.add_mode_callback(self._on_memory_mode_change)
-            
-            if not args:
-                self._show_lowmem_status()
-                return
-            
-            subcmd = args[0].lower()
-            
-            if subcmd == "status":
-                self._show_lowmem_detailed_status()
-            elif subcmd == "normal":
-                self._low_memory_manager.set_mode(MemoryMode.NORMAL)
-                self._write_success("Switched to NORMAL mode (full features)")
-            elif subcmd == "conservative":
-                self._low_memory_manager.set_mode(MemoryMode.CONSERVATIVE)
-                self._write_success("Switched to CONSERVATIVE mode")
-            elif subcmd == "low":
-                self._low_memory_manager.set_mode(MemoryMode.LOW_MEMORY)
-                self._write_success("Switched to LOW MEMORY mode")
-            elif subcmd == "critical":
-                self._low_memory_manager.set_mode(MemoryMode.CRITICAL)
-                self._write_success("Switched to CRITICAL mode (survival)")
-            elif subcmd == "auto":
-                self._low_memory_manager.clear_override()
-                self._write_success("Auto-detection enabled")
-            elif subcmd == "help":
-                self._write_output(self._cmd_lowmem.__doc__ + "\n")
-            else:
-                self._write_error(f"Unknown mode: {subcmd}")
-                self._write_output("Valid modes: normal, conservative, low, critical, auto\n")
-                
-        except ImportError as e:
-            self._write_error(f"Low memory module not available: {e}")
-    
-    def _show_lowmem_status(self):
-        """Show compact low memory status"""
-        try:
-            from core.low_memory_mode import MemoryMode
-            
-            status = self._low_memory_manager.get_status()
-            mode = MemoryMode(status['mode'])
-            
-            # Mode icons and colors
-            mode_display = {
-                MemoryMode.NORMAL: ("🟢", "NORMAL", "Full features enabled"),
-                MemoryMode.CONSERVATIVE: ("🟡", "CONSERVATIVE", "Reduced polling, some features limited"),
-                MemoryMode.LOW_MEMORY: ("🟠", "LOW MEMORY", "Minimal features, very slow updates"),
-                MemoryMode.CRITICAL: ("🔴", "CRITICAL", "Survival mode - bare minimum"),
-            }
-            
-            icon, name, desc = mode_display.get(mode, ("●", mode.value, ""))
-            
-            self._write_output("\n")
-            self._write_output("  ╔════════════════════════════════════════════════════════╗\n")
-            self._write_output("  ║              LOW MEMORY MODE STATUS                    ║\n")
-            self._write_output("  ╠════════════════════════════════════════════════════════╣\n")
-            self._write_output(f"  ║  Mode: {icon} {name:<45}  ║\n")
-            self._write_output(f"  ║  {desc:<53}  ║\n")
-            self._write_output("  ╠════════════════════════════════════════════════════════╣\n")
-            self._write_output(f"  ║  RAM Used:      {status['last_memory_percent']:.1f}%                               ║\n")
-            self._write_output(f"  ║  RAM Free:      {status['last_free_gb']:.2f} GB                              ║\n")
-            self._write_output(f"  ║  Auto-Detect:   {'ON' if status['auto_detect'] else 'OFF (manual override)'}                        ║\n")
-            self._write_output("  ╠════════════════════════════════════════════════════════╣\n")
-            self._write_output("  ║  Commands: lowmem [normal|conservative|low|critical]   ║\n")
-            self._write_output("  ║            lowmem auto    (re-enable auto-detection)   ║\n")
-            self._write_output("  ║            lowmem status  (detailed view)              ║\n")
-            self._write_output("  ╚════════════════════════════════════════════════════════╝\n")
-            self._write_output("\n")
-            
-        except Exception as e:
-            self._write_error(f"Error: {e}")
-    
-    def _show_lowmem_detailed_status(self):
-        """Show detailed low memory status with recommendations"""
-        try:
-            from core.low_memory_mode import MemoryMode, MODE_CONFIGS
-            
-            status = self._low_memory_manager.get_status()
-            mode = MemoryMode(status['mode'])
-            settings = status['settings']
-            recommendations = self._low_memory_manager.get_recommendations()
-            
-            self._write_output("\n")
-            self._write_output("  ═══════════════════════════════════════════════════════════\n")
-            self._write_output("                  LOW MEMORY MODE - DETAILED STATUS           \n")
-            self._write_output("  ═══════════════════════════════════════════════════════════\n\n")
-            
-            self._write_output(f"  Current Mode:      {mode.value.upper()}\n")
-            self._write_output(f"  Auto-Detect:       {'Enabled' if status['auto_detect'] else 'Disabled'}\n")
-            self._write_output(f"  Manual Override:   {status['manual_override'] or 'None'}\n")
-            self._write_output(f"  Mode Changes:      {status['mode_changes']}\n\n")
-            
-            self._write_output("  MEMORY STATUS:\n")
-            self._write_output(f"    Used:            {status['last_memory_percent']:.1f}%\n")
-            self._write_output(f"    Free:            {status['last_free_gb']:.2f} GB\n\n")
-            
-            self._write_output("  CURRENT SETTINGS:\n")
-            self._write_output(f"    Resource Poll:   {settings['resource_poll_interval']}s\n")
-            self._write_output(f"    UI Update:       {settings['ui_update_interval']}ms\n")
-            self._write_output(f"    Security:        {'Enabled' if settings['security_enabled'] else 'Disabled'}\n")
-            self._write_output(f"    Synthesis:       {'Enabled' if settings['synthesis_enabled'] else 'Disabled'}\n")
-            self._write_output(f"    Quantum:         {'Enabled' if settings['quantum_enabled'] else 'Disabled'}\n")
-            self._write_output(f"    Max Output:      {settings['max_output_lines']} lines\n\n")
-            
-            if recommendations:
-                self._write_output("  RECOMMENDATIONS:\n")
-                for i, rec in enumerate(recommendations, 1):
-                    self._write_output(f"    {i}. {rec}\n")
-                self._write_output("\n")
-            
-            # Show all modes
-            self._write_output("  AVAILABLE MODES:\n")
-            self._write_output("    normal       - Full features (RAM < 60%)\n")
-            self._write_output("    conservative - Reduced features (RAM 60-70%)\n")
-            self._write_output("    low          - Minimal features (RAM 70-80%)\n")
-            self._write_output("    critical     - Survival mode (RAM > 80%)\n\n")
-            
-        except Exception as e:
-            self._write_error(f"Error: {e}")
-    
-    def _on_memory_mode_change(self, mode, settings):
-        """Callback when memory mode changes - update terminal settings"""
-        try:
-            # Update monitor interval
-            self._monitor_interval = int(settings.ui_update_interval)
-            
-            # Store the mode
-            self._memory_mode = mode
-            
-            # Update UI if needed
-            if hasattr(self, '_monitor_frame') and self._monitor_frame:
-                if settings.enable_live_monitor_panel:
-                    self._monitor_frame.place(relx=1.0, rely=0.0, x=-16, y=65, anchor="ne")
-                else:
-                    self._monitor_frame.place_forget()
-            
-        except Exception:
-            pass
 
     # ==================== QUANTUM MODE ====================
     
@@ -3016,34 +2615,6 @@ DIAGNOSTICS:
   diagnose fix <n>    Apply recommendation #n
   diagnose kill <name>  Terminate a process
   diagnose quick      Quick CPU/RAM stats
-
-RESOURCE OPTIMIZATION:
-  resources       Show resource optimization status (or 'res')
-  resources stats     Detailed resource statistics
-  resources agents    Show active agent count
-  resources start     Start security monitor (on-demand)
-  resources stop      Stop security monitor (saves CPU/RAM)
-
-LOW MEMORY MODE:
-  lowmem          Show current memory mode status
-  lowmem status       Detailed status with recommendations
-  lowmem normal       Full features (for systems with plenty of RAM)
-  lowmem conservative Reduced features (60-70% RAM usage)
-  lowmem low          Minimal features (70-80% RAM usage)
-  lowmem critical     Survival mode (>80% RAM usage)
-  lowmem auto         Re-enable automatic mode detection
-
-  ┌────────────────────────────────────────────────────┐
-  │  🧠 LOW MEMORY MODE:                              │
-  │                                                    │
-  │  Automatically detects RAM pressure and adjusts:  │
-  │  • Polling intervals (4s → 30s)                   │
-  │  • UI update frequency                            │
-  │  • Feature availability                           │
-  │  • Output buffer size                             │
-  │                                                    │
-  │  Tip: Use 'lowmem low' if Claude Desktop is open  │
-  └────────────────────────────────────────────────────┘
 
 QUANTUM MODE:
   quantum         Enter quantum computing mode (or 'q')
