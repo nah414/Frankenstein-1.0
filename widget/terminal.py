@@ -15,6 +15,7 @@ Features:
 """
 
 import os
+import re
 import sys
 import shutil
 import subprocess
@@ -2117,16 +2118,188 @@ class FrankensteinTerminal:
     # ==================== GIT COMMANDS ====================
     
     def _cmd_git(self, args: List[str], raw_line: str = None):
-        """Git version control commands"""
+        """Enhanced Git - full Bash replacement with progress, colors, auth."""
         if not args:
-            self._write_output("Usage: git <command> [options]\n")
-            self._write_output("Common commands: status, add, commit, push, pull, log, branch, checkout, diff, clone, init\n")
+            self._write_output("╔═══════════════════════════════════════════════════════════╗\n")
+            self._write_output("║  FRANKENSTEIN GIT - Full Replacement                      ║\n")
+            self._write_output("╠═══════════════════════════════════════════════════════════╣\n")
+            self._write_output("║  clone <url> [dir]       Clone with progress              ║\n")
+            self._write_output("║  status                  Color-coded file states           ║\n")
+            self._write_output("║  log [--graph]           Commit visualization             ║\n")
+            self._write_output("║  branch [-a]             Branch management                ║\n")
+            self._write_output("║  remote [-v]             Remote management                ║\n")
+            self._write_output("║  pull/push/fetch         With progress tracking            ║\n")
+            self._write_output("╚═══════════════════════════════════════════════════════════╝\n")
             return
-        if raw_line:
-            self._execute_system_command(raw_line)
+
+        cmd = args[0].lower()
+        handlers = {
+            'clone': lambda: self._git_clone(args[1:]),
+            'status': lambda: self._git_status(args[1:]),
+            'log': lambda: self._git_log(args[1:]),
+            'branch': lambda: self._git_branch(args[1:]),
+            'remote': lambda: self._git_remote(args[1:]),
+            'pull': lambda: self._git_progress('pull', args[1:]),
+            'fetch': lambda: self._git_progress('fetch', args[1:]),
+            'push': lambda: self._git_progress('push', args[1:]),
+        }
+
+        if cmd in handlers:
+            handlers[cmd]()
         else:
             self._execute_system_command("git " + " ".join(args))
-    
+
+    def _git_clone(self, args: List[str]):
+        """Clone with real-time progress bar."""
+        if not args:
+            self._write_error("Usage: git clone <url> [directory]\n")
+            return
+
+        url = args[0]
+        cmd = ['git', 'clone', '--progress'] + args
+        self._write_output(f"⚡ Cloning {url}...\n")
+
+        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1, cwd=str(self._cwd))
+        pattern = r'(\w+\s+\w+):\s+(\d+)%\s+\((\d+)/(\d+)\)'
+        last_t = time.time()
+
+        for line in process.stderr:
+            m = re.search(pattern, line)
+            if m and time.time() - last_t > 0.2:
+                stage = m.group(1)
+                pct = int(m.group(2))
+                bar = '█' * (pct//5) + '░' * (20 - pct//5)
+                self._write_output(f"\r  {stage}: [{bar}] {pct}%", flush=True)
+                last_t = time.time()
+            elif 'done' in line.lower():
+                self._write_output(line)
+
+        if process.wait() == 0:
+            self._write_success("\n✅ Clone complete!\n")
+        else:
+            self._write_error("\n❌ Clone failed\n")
+
+    def _git_status(self, args: List[str]):
+        """Status with colors and icons."""
+        result = subprocess.run(['git', 'status', '--porcelain', '-b'], capture_output=True, text=True, cwd=str(self._cwd))
+        if result.returncode != 0:
+            self._write_error("❌ Not a git repository\n")
+            return
+
+        lines = result.stdout.strip().split('\n')
+        if lines and lines[0].startswith('##'):
+            self._write_output(f"📍 {lines[0][3:]}\n\n")
+
+        staged = []
+        modified = []
+        untracked = []
+
+        for line in lines[1:]:
+            if not line.strip():
+                continue
+            status = line[:2]
+            file = line[3:]
+
+            if status[0] in 'MARC':
+                staged.append((status[0], file))
+            elif status[1] == 'M':
+                modified.append(file)
+            elif status == '??':
+                untracked.append(file)
+
+        if staged:
+            self._write_success("Changes staged:\n")
+            for s, f in staged:
+                if s == 'M':
+                    icon = '✅'
+                elif s == 'A':
+                    icon = '➕'
+                else:
+                    icon = '❌'
+                self._write_output(f"  {icon} {f}\n")
+
+        if modified:
+            self._write_warning("\nChanges not staged:\n")
+            for f in modified:
+                self._write_output(f"  📝 {f}\n")
+
+        if untracked:
+            self._write_output("\nUntracked:\n")
+            for f in untracked:
+                self._write_output(f"  ❓ {f}\n")
+
+        if not (staged or modified or untracked):
+            self._write_success("✨ Working tree clean\n")
+
+    def _git_log(self, args: List[str]):
+        """Enhanced log with graph."""
+        cmd = ['git', 'log', '--oneline', '--graph', '--decorate', '--all', '-20']
+        if args:
+            cmd.extend(args)
+
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(self._cwd))
+        if result.returncode == 0:
+            for line in result.stdout.split('\n'):
+                if 'HEAD' in line:
+                    self._write_success(line + '\n')
+                elif '*' in line:
+                    self._write_output(line.replace('*', '●') + '\n')
+                else:
+                    self._write_output(line + '\n')
+        else:
+            self._write_error(result.stderr)
+
+    def _git_branch(self, args: List[str]):
+        """Branch management with highlighting."""
+        if not args or args[0] == '-a':
+            result = subprocess.run(['git', 'branch', '-a', '-v'], capture_output=True, text=True, cwd=str(self._cwd))
+            for line in result.stdout.split('\n'):
+                if line.startswith('*'):
+                    self._write_success(f"  {line} ← Current\n")
+                elif 'remotes/' in line:
+                    self._write_output(f"  {line.replace('remotes/', '🌐 ')}\n")
+                elif line.strip():
+                    self._write_output(f"  {line}\n")
+        else:
+            self._execute_system_command("git branch " + " ".join(args))
+
+    def _git_remote(self, args: List[str]):
+        """Remote management."""
+        if not args or args[0] == '-v':
+            result = subprocess.run(['git', 'remote', '-v'], capture_output=True, text=True, cwd=str(self._cwd))
+            if result.stdout.strip():
+                self._write_output("📡 Remotes:\n")
+                for line in result.stdout.split('\n'):
+                    if line.strip():
+                        self._write_output(f"  {line}\n")
+            else:
+                self._write_warning("No remotes configured\n")
+        else:
+            self._execute_system_command("git remote " + " ".join(args))
+
+    def _git_progress(self, operation: str, args: List[str]):
+        """Generic progress for pull/push/fetch."""
+        cmd = ['git', operation, '--progress'] + args
+        self._write_output(f"⚡ Running git {operation}...\n")
+
+        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1, cwd=str(self._cwd))
+        pattern = r'(\d+)%'
+        last_t = time.time()
+
+        for line in process.stderr:
+            if time.time() - last_t > 0.2:
+                m = re.search(pattern, line)
+                if m:
+                    pct = int(m.group(1))
+                    bar = '█' * (pct//5) + '░' * (20 - pct//5)
+                    self._write_output(f"\r  [{bar}] {pct}%", flush=True)
+                    last_t = time.time()
+
+        if process.wait() == 0:
+            self._write_success(f"\n✅ {operation.capitalize()} complete!\n")
+        else:
+            self._write_error(f"\n❌ {operation.capitalize()} failed\n")
+
     # ==================== SSH COMMANDS ====================
     
     def _cmd_ssh(self, args: List[str], raw_line: str = None):
@@ -2409,7 +2582,26 @@ class FrankensteinTerminal:
                 'status': 'status - Show Frankenstein system status',
                 'frank': 'frank <cmd> - Frankenstein commands (status, version, quote)',
                 # Git
-                'git': 'git <cmd> - Git commands (status, add, commit, push, pull, log, branch, checkout)',
+                'git': '''git <cmd> - ENHANCED Git Bash replacement with progress bars & colors
+
+ENHANCED COMMANDS (with visual progress & icons):
+  git clone <url> [dir]  Clone repo with real-time progress bar
+  git status             Color-coded file states with icons
+                         ✅ staged  📝 modified  ❓ untracked
+  git log [--graph]      Visual commit graph with colors
+  git branch [-a]        Branch list with current highlighted
+  git remote [-v]        Show remotes with visual indicators
+  git pull/push/fetch    Progress bars for network operations
+
+STANDARD COMMANDS (passed through):
+  git add <file>         Stage files for commit
+  git commit -m "msg"    Commit with message
+  git checkout <branch>  Switch branches
+  git diff               Show changes
+  git init               Initialize repository
+
+Type 'git' with no args to see the enhanced features menu.
+''',
                 # SSH
                 'ssh': 'ssh [user@]host - Connect to remote host via SSH',
                 'scp': 'scp src dest - Secure copy files over SSH',
@@ -2560,14 +2752,15 @@ FRANKENSTEIN:
   frank quote     Get an inspirational quote
   frank version   Show version info
 
-GIT:
-  git status      Show repository status
-  git add         Stage files for commit
-  git commit      Commit staged changes
-  git push/pull   Sync with remote
-  git log         Show commit history
-  git branch      List/create branches
-  git checkout    Switch branches
+GIT (ENHANCED - Progress Bars & Colors):
+  git             Show enhanced Git features menu
+  git clone       Clone with real-time progress ⚡
+  git status      Color-coded files (✅📝❓)
+  git log         Visual commit graph with colors
+  git branch      Highlighted branch list
+  git remote      Show remotes with indicators
+  git pull/push   Network operations with progress
+  git add/commit  Standard Git commands (all supported)
 
 SSH:
   ssh             Connect to remote host
