@@ -241,7 +241,9 @@ class TrueSynthesisEngine:
         self._state: Optional[QuantumState] = None
         self._hamiltonian: Optional[np.ndarray] = None
         self._history: List[SimulationResult] = []
+        self._max_history = 50  # Limit history to prevent RAM overflow
         self._gate_log: List[Dict[str, Any]] = []
+        self._max_gate_log = 100  # Keep last 100 gates for debugging
         
         # Initialize storage
         self._init_storage()
@@ -277,8 +279,20 @@ class TrueSynthesisEngine:
         (self.config.storage_path / "results").mkdir(exist_ok=True)
         (self.config.storage_path / "cache").mkdir(exist_ok=True)
 
+    # ==================== MEMORY MANAGEMENT ====================
+
+    def _trim_gate_log(self):
+        """Trim gate log to prevent memory buildup"""
+        if len(self._gate_log) > self._max_gate_log:
+            self._gate_log = self._gate_log[-self._max_gate_log:]
+
+    def _trim_history(self):
+        """Trim simulation history to prevent RAM overflow"""
+        if len(self._history) > self._max_history:
+            self._history = self._history[-self._max_history:]
+
     # ==================== STATE INITIALIZATION ====================
-    
+
     def initialize_qubits(self, n_qubits: int, initial_state: str = "zero") -> QuantumState:
         """
         Initialize quantum register.
@@ -372,30 +386,35 @@ class TrueSynthesisEngine:
         H = np.array([[1, 1], [1, -1]], dtype=np.complex128) / np.sqrt(2)
         self._apply_single_qubit_gate(H, target)
         self._gate_log.append({"gate": "H", "target": target})
+        self._trim_gate_log()
     
     def pauli_x(self, target: int):
         """Pauli-X (NOT) gate"""
         X = np.array([[0, 1], [1, 0]], dtype=np.complex128)
         self._apply_single_qubit_gate(X, target)
         self._gate_log.append({"gate": "X", "target": target})
+        self._trim_gate_log()
     
     def pauli_y(self, target: int):
         """Pauli-Y gate"""
         Y = np.array([[0, -1j], [1j, 0]], dtype=np.complex128)
         self._apply_single_qubit_gate(Y, target)
         self._gate_log.append({"gate": "Y", "target": target})
+        self._trim_gate_log()
     
     def pauli_z(self, target: int):
         """Pauli-Z gate"""
         Z = np.array([[1, 0], [0, -1]], dtype=np.complex128)
         self._apply_single_qubit_gate(Z, target)
         self._gate_log.append({"gate": "Z", "target": target})
+        self._trim_gate_log()
     
     def phase(self, target: int, phi: float):
         """Phase gate: P(φ) = [[1,0],[0,e^(iφ)]]"""
         P = np.array([[1, 0], [0, np.exp(1j * phi)]], dtype=np.complex128)
         self._apply_single_qubit_gate(P, target)
         self._gate_log.append({"gate": "P", "target": target, "phi": phi})
+        self._trim_gate_log()
     
     def rotation_x(self, target: int, theta: float):
         """Rotation around X-axis: Rx(θ)"""
@@ -403,6 +422,7 @@ class TrueSynthesisEngine:
         Rx = np.array([[c, -1j * s], [-1j * s, c]], dtype=np.complex128)
         self._apply_single_qubit_gate(Rx, target)
         self._gate_log.append({"gate": "Rx", "target": target, "theta": theta})
+        self._trim_gate_log()
     
     def rotation_y(self, target: int, theta: float):
         """Rotation around Y-axis: Ry(θ)"""
@@ -410,6 +430,7 @@ class TrueSynthesisEngine:
         Ry = np.array([[c, -s], [s, c]], dtype=np.complex128)
         self._apply_single_qubit_gate(Ry, target)
         self._gate_log.append({"gate": "Ry", "target": target, "theta": theta})
+        self._trim_gate_log()
     
     def rotation_z(self, target: int, theta: float):
         """Rotation around Z-axis: Rz(θ)"""
@@ -417,18 +438,21 @@ class TrueSynthesisEngine:
                        [0, np.exp(1j * theta / 2)]], dtype=np.complex128)
         self._apply_single_qubit_gate(Rz, target)
         self._gate_log.append({"gate": "Rz", "target": target, "theta": theta})
+        self._trim_gate_log()
     
     def cnot(self, control: int, target: int):
         """Controlled-NOT gate"""
         X = np.array([[0, 1], [1, 0]], dtype=np.complex128)
         self._apply_two_qubit_gate(X, control, target)
         self._gate_log.append({"gate": "CNOT", "control": control, "target": target})
+        self._trim_gate_log()
     
     def cz(self, control: int, target: int):
         """Controlled-Z gate"""
         Z = np.array([[1, 0], [0, -1]], dtype=np.complex128)
         self._apply_two_qubit_gate(Z, control, target)
         self._gate_log.append({"gate": "CZ", "control": control, "target": target})
+        self._trim_gate_log()
     
     def swap(self, qubit1: int, qubit2: int):
         """SWAP gate via 3 CNOTs"""
@@ -438,6 +462,7 @@ class TrueSynthesisEngine:
         # Replace last 3 gate log entries with single SWAP
         self._gate_log = self._gate_log[:-3]
         self._gate_log.append({"gate": "SWAP", "qubits": [qubit1, qubit2]})
+        self._trim_gate_log()
 
     # ==================== SCHRÖDINGER EQUATION SOLVER ====================
     
@@ -533,6 +558,7 @@ class TrueSynthesisEngine:
         )
         
         self._history.append(result)
+        self._trim_history()  # Prevent RAM overflow from simulation results
         logger.info(f"Schrödinger evolution complete: {computation_time:.3f}s, {n_steps} steps")
         return result
 

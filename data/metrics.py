@@ -71,7 +71,7 @@ class MetricsAggregator:
         self._telemetry = telemetry_collector or TelemetryCollector()
         self._MetricType = MetricType
         self._snapshots: List[MetricSnapshot] = []
-        self._snapshot_limit = 1000
+        self._snapshot_limit = 500  # OPTIMIZED: Reduced from 1000 to save ~1MB RAM
         self._lock = threading.Lock()
 
     

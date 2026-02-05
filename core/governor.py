@@ -55,12 +55,12 @@ class ResourceGovernor:
     overwhelming the laptop while still being useful.
     """
 
-    def __init__(self, poll_interval: float = 1.0):
+    def __init__(self, poll_interval: float = 3.0):
         """
         Initialize the Governor.
 
         Args:
-            poll_interval: Seconds between resource checks (default 1.0)
+            poll_interval: Seconds between resource checks (default 3.0, optimized for tier1)
         """
         self.poll_interval = poll_interval
         self._running = False
@@ -74,9 +74,9 @@ class ResourceGovernor:
         self._violation_count = 0
         self._start_time: Optional[float] = None
 
-        # History for trend analysis (last 60 samples)
+        # History for trend analysis (optimized for tier1)
         self._history: List[ResourceSnapshot] = []
-        self._max_history = 60
+        self._max_history = 30  # OPTIMIZED: 30 samples = ~90 seconds at 3s interval
 
     def start(self) -> bool:
         """
@@ -150,8 +150,9 @@ class ResourceGovernor:
                 safe=True
             )
 
-        # Get CPU (short interval for responsiveness)
-        cpu = psutil.cpu_percent(interval=0.1)
+        # Get CPU (non-blocking, uses cached value from previous call)
+        # Note: First call returns 0.0, subsequent calls use interval since last call
+        cpu = psutil.cpu_percent(interval=0)
 
         # Get memory
         mem = psutil.virtual_memory()

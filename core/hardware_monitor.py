@@ -128,8 +128,8 @@ class HardwareHealthMonitor:
         self._history_minutes = history_minutes
         self._prediction_minutes = prediction_minutes
         
-        # History storage (samples every 2 seconds = 30 per minute)
-        max_samples = history_minutes * 30
+        # History storage (samples every 5 seconds = 12 per minute, optimized)
+        max_samples = history_minutes * 12
         self._cpu_history: deque = deque(maxlen=max_samples)
         self._memory_history: deque = deque(maxlen=max_samples)
         self._timestamps: deque = deque(maxlen=max_samples)
@@ -182,7 +182,7 @@ class HardwareHealthMonitor:
             try:
                 self._collect_sample()
                 self._analyze_health()
-                time.sleep(2.0)  # Sample every 2 seconds
+                time.sleep(5.0)  # Sample every 5 seconds (optimized for tier1)
             except Exception as e:
                 print(f"Hardware monitor error: {e}")
                 time.sleep(5.0)

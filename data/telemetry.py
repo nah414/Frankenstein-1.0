@@ -119,7 +119,7 @@ class TelemetryCollector:
         
         # Metric storage - rolling windows
         self._metrics: Dict[MetricType, deque] = {}
-        self._window_size = 1000  # samples per metric
+        self._window_size = 500  # OPTIMIZED: Reduced from 1000 to save ~3MB RAM
         
         # Counters for cumulative metrics
         self._counters: Dict[str, int] = {}

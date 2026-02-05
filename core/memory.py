@@ -69,7 +69,7 @@ class MemorySystem:
         self._lock = threading.Lock()
         self._session: Optional[SessionState] = None
         self._task_history: List[TaskRecord] = []
-        self._max_history = 1000  # Rolling limit
+        self._max_history = 500  # OPTIMIZED: Reduced from 1000 for tier1 RAM limits  # Rolling limit
 
         # Initialize on first access
         self._initialized = False

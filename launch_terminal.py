@@ -39,11 +39,17 @@ def main():
     
     # Launch terminal
     try:
+        # Start resource governor first (critical safety monitor)
+        from core import get_governor
+        governor = get_governor()
+        governor.start()
+        print("✓ Resource Governor started")
+
         from widget.terminal import launch_terminal
         print("✓ Terminal module loaded")
         print("\n🚀 Launching terminal window...")
         print("(Close this console or press Ctrl+C to exit)\n")
-        
+
         terminal = launch_terminal()
         
         # Keep main thread alive

@@ -133,7 +133,7 @@ class EventBus:
         
         self._subscribers: Dict[EventType, List[Callable[[Event], None]]] = {}
         self._history: List[Event] = []
-        self._history_limit = 10000
+        self._history_limit = 1000  # OPTIMIZED: Reduced from 10000 to save ~2MB RAM
         self._event_queue: Queue = Queue()
         self._running = False
         self._dispatch_thread: Optional[threading.Thread] = None

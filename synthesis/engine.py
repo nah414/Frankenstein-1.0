@@ -133,9 +133,11 @@ class SynthesisEngine:
         self._statevector: Optional[np.ndarray] = None
         self._density_matrix: Optional[np.ndarray] = None
         
-        # Circuit tracking
+        # Circuit tracking (with memory limits to prevent RAM buildup)
         self._gate_log: List[Dict[str, Any]] = []
+        self._max_gate_log = 100  # Keep last 100 gates for debugging
         self._result_history: List[ComputeResult] = []
+        self._max_results = 50  # Keep last 50 results to prevent RAM overflow
         
         # Callbacks
         self._output_callback: Optional[Callable[[str], None]] = None
@@ -225,6 +227,9 @@ class SynthesisEngine:
             "control": control,
             "timestamp": time.time()
         })
+        # Trim gate log to prevent memory buildup
+        if len(self._gate_log) > self._max_gate_log:
+            self._gate_log.pop(0)
     
     def _expand_gate(self, gate: np.ndarray, target: int, n: int) -> np.ndarray:
         """Expand single-qubit gate to full n-qubit space using tensor products"""
@@ -715,7 +720,10 @@ class SynthesisEngine:
             )
         
         self._result_history.append(result)
-        
+        # Trim result history to prevent RAM overflow
+        if len(self._result_history) > self._max_results:
+            self._result_history.pop(0)
+
         # Trigger visualization
         do_viz = visualize if visualize is not None else self.auto_visualize
         if do_viz and result.success:

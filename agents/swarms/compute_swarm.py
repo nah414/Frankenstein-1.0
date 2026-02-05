@@ -770,13 +770,40 @@ class ComputeSwarm:
     """
     
     def __init__(self):
-        self.physics = PhysicsAgent()
-        self.math = MathAgent()
-        self.quantum = QuantumSimAgent()
-        self._agents = {
-            "physics": self.physics,
-            "math": self.math,
-            "quantum": self.quantum
-        }
+        # Lazy-load agents on first access to save memory at startup
+        self._agents_cache = {}
         self._task_history: List[ComputeResult] = []
-        logger.info("ComputeSwarm initialized with 3 agents")
+        logger.info("ComputeSwarm initialized with lazy agent loading (optimized)")
+
+    @property
+    def physics(self):
+        """Lazy-load PhysicsAgent on first access"""
+        if 'physics' not in self._agents_cache:
+            logger.info("Loading PhysicsAgent on-demand...")
+            self._agents_cache['physics'] = PhysicsAgent()
+        return self._agents_cache['physics']
+
+    @property
+    def math(self):
+        """Lazy-load MathAgent on first access"""
+        if 'math' not in self._agents_cache:
+            logger.info("Loading MathAgent on-demand...")
+            self._agents_cache['math'] = MathAgent()
+        return self._agents_cache['math']
+
+    @property
+    def quantum(self):
+        """Lazy-load QuantumSimAgent on first access"""
+        if 'quantum' not in self._agents_cache:
+            logger.info("Loading QuantumSimAgent on-demand...")
+            self._agents_cache['quantum'] = QuantumSimAgent()
+        return self._agents_cache['quantum']
+
+    @property
+    def _agents(self):
+        """Backward compatibility: return dict of loaded agents"""
+        return {
+            "physics": self.physics,   # Will lazy-load if accessed
+            "math": self.math,         # Will lazy-load if accessed
+            "quantum": self.quantum    # Will lazy-load if accessed
+        }
