@@ -168,6 +168,8 @@ class FrankensteinTerminal:
             'providers': self._cmd_providers,
             'connect': self._cmd_connect,
             'disconnect': self._cmd_disconnect,
+            # Workload Analyzer (Phase 3 Step 3)
+            'analyze': self._cmd_analyze,
             # System Diagnostics
             'diagnose': self._cmd_diagnose,
             # Quantum Mode
@@ -945,6 +947,7 @@ class FrankensteinTerminal:
     ┌─────────────────────────────────────────────────────────────────┐
     │  🔬 COMMANDS     help · status · security · hardware · diagnose │
     │  🔌 PROVIDERS    Type 'providers' for quantum & classical compute│
+    │  📊 ANALYZER     Type 'analyze help' to profile workloads       │
     │  ⚛️  QUANTUM      Type 'q' or 'quantum' to enter quantum mode   │
     │  🧪 SYNTHESIS    Type 'synthesis' for physics simulations       │
     └─────────────────────────────────────────────────────────────────┘
@@ -1657,6 +1660,16 @@ class FrankensteinTerminal:
             handle_disconnect_command(args, self._write_output)
         except ImportError as e:
             self._write_error(f"Provider registry not available: {e}")
+
+    # ==================== WORKLOAD ANALYZER (Phase 3 Step 3) ====================
+
+    def _cmd_analyze(self, args: List[str]):
+        """Analyze workloads and recommend optimal execution targets."""
+        try:
+            from integration.commands import handle_analyze_command
+            handle_analyze_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Workload analyzer not available: {e}")
 
     # ==================== SYSTEM DIAGNOSTICS ====================
     
@@ -2717,6 +2730,46 @@ EXAMPLES:
   disconnect ibm_quantum     Disconnect from IBM Quantum
   disconnect all             Disconnect all active providers
 ''',
+                # Workload Analyzer (Phase 3 Step 3)
+                'analyze': '''analyze - Profile & route computational workloads
+
+Analyzes a workload and tells you exactly where to run it,
+how much memory it needs, and which providers are best.
+
+SUBCOMMANDS:
+  analyze circuit <qubits> [depth] [--shots N] [--variational]
+    Profile a quantum gate circuit. Shows qubit count, depth,
+    entanglement density, QV estimate, and ranked providers.
+    Example: analyze circuit 10 20
+    Example: analyze circuit 5 10 --variational
+
+  analyze qubo <variables> [--reads N]
+    Profile a QUBO/Ising annealing problem. Shows variable
+    count, embedding estimate, D-Wave compatibility.
+    Example: analyze qubo 200
+
+  analyze matrix <op> <rows> <cols> [--iterations N]
+    Profile classical numerical compute. Operations:
+    matmul, eigenvalue, fft, svd, inverse, solve, simulation
+    Example: analyze matrix matmul 1000 1000
+    Example: analyze matrix eigenvalue 500 500
+
+  analyze synthesis [--dims N] [--states N] [--no-lorentz]
+    Profile a Predictive Synthesis Engine workload.
+    Example: analyze synthesis --dims 5 --states 32
+
+WHAT THE REPORT SHOWS:
+  • Workload type classification
+  • Complexity tier (trivial → infeasible for your hardware)
+  • Memory, CPU time, GPU usefulness estimates
+  • Provider ranking with suitability scores (0-100)
+  • Routing recommendation (local sim / cloud / hybrid)
+  • Actionable tips specific to your hardware tier
+
+The analyzer cross-references YOUR hardware (from 'hardware')
+with YOUR installed providers (from 'providers') to give
+personalized, real recommendations.
+''',
                 # Diagnostics
                 'diagnose': 'diagnose [refresh|fix|kill|quick] - System diagnostics and optimization',
                 # Quantum Mode
@@ -2911,6 +2964,25 @@ PROVIDERS (Quantum + Classical):
   │  Local options (no cloud needed):                 │
   │    connect local_simulator  (quantum sim)         │
   │    connect local_cpu        (CPU compute)         │
+  └────────────────────────────────────────────────────┘
+
+WORKLOAD ANALYZER (Profile & Route):
+  analyze circuit <qubits> [depth]  Profile a quantum circuit
+  analyze qubo <variables>          Profile an annealing problem
+  analyze matrix <op> <rows> <cols> Profile classical compute
+  analyze synthesis                 Profile PSE workload
+  analyze help                      Full usage guide
+
+  ┌────────────────────────────────────────────────────┐
+  │  QUICK START — ANALYZER:                          │
+  │                                                    │
+  │  analyze circuit 10 20     (10 qubits, depth 20) │
+  │  analyze qubo 200          (200-var optimization) │
+  │  analyze matrix matmul 1000 1000  (1K×1K matmul) │
+  │  analyze synthesis --states 32  (PSE 32-state)   │
+  │                                                    │
+  │  Each analysis shows: complexity tier, memory,    │
+  │  CPU time, ranked providers, and routing advice.  │
   └────────────────────────────────────────────────────┘
 
 DIAGNOSTICS:

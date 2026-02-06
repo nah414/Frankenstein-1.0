@@ -36,6 +36,10 @@ Or double-click `RUN_FRANKENSTEIN.bat` on Windows.
 | **Editors** | `nano`, `vim`, `notepad`, `code` |
 | **Environment** | `export`, `env`, `set`, `unset` |
 | **Scripting** | `python`, `node`, `source` |
+| **Hardware** | `hardware` — live system detection & tier classification |
+| **Providers** | `providers`, `providers suggest`, `providers setup <id>` |
+| **Workloads** | `analyze "<task>"`, `analyze quantum`, `analyze classical` |
+| **Connections** | `connect <id>`, `disconnect <id>` |
 
 Type `help` in the terminal for full command list.
 
@@ -88,6 +92,16 @@ Frankenstein-1.0/
 │   ├── metrics.py        # Statistics aggregation
 │   └── storage.py        # File-based JSON persistence
 │
+├── integration/          # Phase 3: Universal Integration
+│   ├── discovery.py      # Hardware auto-detection engine
+│   ├── analyzer.py       # Workload profiling & complexity scoring
+│   ├── commands.py       # Terminal command handlers
+│   ├── guide.py          # Smart recommendation engine
+│   └── providers/        # Provider registry & adapters
+│       ├── registry.py   # Central registry (14 providers)
+│       ├── quantum/      # Quantum adapter stubs
+│       └── classical/    # Classical adapter stubs
+│
 ├── quantum/              # Quantum computing integration
 ├── classical/            # Classical computing
 ├── configs/              # Configuration files
@@ -136,11 +150,22 @@ FRANKENSTEIN is being built in 4 phases. Each phase adds new capabilities while 
 
 ### Phase 3: Universal Integration 🔄 IN PROGRESS
 *The Ultimate Connection & Configuration Optimizer*
-- **All Quantum Providers**: IBM, AWS Braket, Azure, Google, IonQ, Rigetti, Xanadu, D-Wave
-- **All Classical Hardware**: Intel, AMD, NVIDIA, Apple Silicon, ARM, TPUs, FPGAs
-- Intelligent workload router (local vs cloud vs quantum)
-- Cost/performance optimization
-- Local quantum simulation (18+ qubits)
+
+| Step | Feature | Status |
+|------|---------|--------|
+| 1 | Hardware Discovery Engine — auto-detects CPU, GPU, RAM, tier classification | ✅ Complete |
+| 2 | Provider Registry + Smart Guide — 14 providers, lazy-load, `providers suggest` | ✅ Complete |
+| 3 | Workload Analyzer — task profiling, complexity scoring, provider matching | ✅ Complete |
+| 4 | Configuration Optimizer | 📋 Planned |
+| 5 | Intelligent Router | 📋 Planned |
+| 6 | Permission & Automation | 📋 Planned |
+| 7 | Real-Time Adaptation | 📋 Planned |
+| 8 | Terminal Integration (Final Polish) | 📋 Planned |
+
+**Supported Providers (14 total):**
+- **Quantum Cloud**: IBM Quantum, AWS Braket, Azure Quantum, Google Cirq, IonQ, Rigetti, Xanadu, D-Wave
+- **Quantum Local**: Built-in NumPy simulator (~20 qubits on 8GB RAM)
+- **Classical**: Local CPU, NVIDIA CUDA, AMD ROCm, Intel oneAPI, Apple Metal
 
 ### Phase 4: Autonomous Agents 📋 PLANNED
 *MCP Framework with Multi-Agent Collaboration*
