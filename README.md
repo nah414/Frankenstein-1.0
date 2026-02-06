@@ -173,6 +173,7 @@ FRANKENSTEIN is being built in 4 phases. Each phase adds new capabilities while 
 - Built-in agent library (Compute, Research, Optimization, Security, Hardware)
 - Multi-agent orchestration and collaboration
 - User-defined agent creation
+- Extensive safety guardrails 
 
 ---
 
