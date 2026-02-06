@@ -164,6 +164,10 @@ class FrankensteinTerminal:
             'security': self._cmd_security,
             # Hardware
             'hardware': self._cmd_hardware,
+            # Provider Registry (Phase 3 Step 2)
+            'providers': self._cmd_providers,
+            'connect': self._cmd_connect,
+            'disconnect': self._cmd_disconnect,
             # System Diagnostics
             'diagnose': self._cmd_diagnose,
             # Quantum Mode
@@ -819,68 +823,38 @@ class FrankensteinTerminal:
         self._prompt_label.configure(text=self._get_prompt())
     
     def _start_monitor_updates(self):
-        """Start the live monitor update loop with staggered monitor initialization"""
-        # Governor starts immediately (already started in frankenstein.py)
-        # Schedule staggered monitor startups to prevent simultaneous thread creation
-        # This optimization reduces CPU spike from 100% to ~40-60% at startup
-        threading.Timer(2.0, self._start_hardware_monitor).start()  # Delay 2s
-        threading.Timer(4.0, self._start_security_monitor).start()  # Delay 4s
-
-        # Start immediate UI update (doesn't wait for all monitors)
+        """Start the live monitor update loop"""
         self._update_monitor_panel()
-
-    def _start_hardware_monitor(self):
-        """Delayed startup of hardware monitor (2s delay to reduce thread contention)"""
-        try:
-            from core import get_hardware_monitor
-            hw_monitor = get_hardware_monitor()
-            if not hw_monitor._running:
-                hw_monitor.start()
-        except Exception as e:
-            print(f"Hardware monitor startup failed: {e}")
-
-    def _start_security_monitor(self):
-        """Delayed startup of security monitor (4s delay to reduce thread contention)"""
-        try:
-            from security import get_monitor
-            monitor = get_monitor()
-            if not monitor._running:
-                monitor.start()
-        except Exception as e:
-            print(f"Security monitor startup failed: {e}")
-
+    
     def _update_monitor_panel(self):
         """Update the live security/resource monitor panel"""
         if not self._running:
             return
-
+        
         try:
-            # Get security stats (monitor may not be started yet - graceful degradation)
+            # Get security stats
             try:
                 from security import get_monitor, ThreatSeverity
                 monitor = get_monitor()
-                if monitor._running:  # Only query if already started
-                    stats = monitor.get_stats()
-                    severity = ThreatSeverity[stats['current_severity']]
-
-                    # Update threat level
-                    self._threat_label.configure(
-                        text=f"{severity.icon} {severity.label}",
-                        text_color=severity.color
-                    )
-
-                    # Update blocked count
-                    self._blocked_label.configure(
-                        text=f"Blocked: {stats['threats_blocked']}   Active: {stats['active_threats']}"
-                    )
-                else:
-                    # Monitor not started yet - show pending state
-                    self._threat_label.configure(text="● STARTING...", text_color=self._colors['text_secondary'])
-                    self._blocked_label.configure(text="Initializing...")
+                if not monitor._running:
+                    monitor.start()
+                stats = monitor.get_stats()
+                severity = ThreatSeverity[stats['current_severity']]
+                
+                # Update threat level
+                self._threat_label.configure(
+                    text=f"{severity.icon} {severity.label}",
+                    text_color=severity.color
+                )
+                
+                # Update blocked count
+                self._blocked_label.configure(
+                    text=f"Blocked: {stats['threats_blocked']}   Active: {stats['active_threats']}"
+                )
             except ImportError:
                 self._threat_label.configure(text="● SECURE", text_color=self._colors['electric_green'])
                 self._blocked_label.configure(text="Blocked: 0   Active: 0")
-
+            
             # Get hardware health status and resources
             try:
                 from core import get_governor, get_hardware_monitor, HealthStatus
@@ -888,28 +862,24 @@ class FrankensteinTerminal:
                 gov_status = governor.get_status()
                 cpu = gov_status.get('cpu_percent', 0)
                 mem = gov_status.get('memory_percent', 0)
-
-                # Get hardware monitor (may not be started yet - graceful degradation)
+                
+                # Get hardware monitor
                 hw_monitor = get_hardware_monitor()
-                if hw_monitor._running:  # Only query if already started
-
-                    hw_stats = hw_monitor.get_stats()
-                    health = hw_monitor.get_health_status()
-                    max_cpu = hw_stats.get('tier_max_cpu', 80)
-                    max_mem = hw_stats.get('tier_max_memory', 70)
-
-                    # Update health label
-                    self._health_label.configure(
-                        text=f"{health.icon} {health.label}",
-                        text_color=health.color
-                    )
-                else:
-                    # Hardware monitor not started yet - use defaults
-                    max_cpu = 80
-                    max_mem = 70
-                    self._health_label.configure(text="● STARTING...", text_color=self._colors['text_secondary'])
-
-                # Color code CPU based on limits (governor data always available)
+                if not hw_monitor._running:
+                    hw_monitor.start()
+                
+                hw_stats = hw_monitor.get_stats()
+                health = hw_monitor.get_health_status()
+                max_cpu = hw_stats.get('tier_max_cpu', 80)
+                max_mem = hw_stats.get('tier_max_memory', 70)
+                
+                # Update health label
+                self._health_label.configure(
+                    text=f"{health.icon} {health.label}",
+                    text_color=health.color
+                )
+                
+                # Color code CPU based on limits
                 if cpu > max_cpu:
                     cpu_color = "#ff4444"  # Red - over limit
                 elif cpu > max_cpu * 0.85:
@@ -918,7 +888,7 @@ class FrankensteinTerminal:
                     cpu_color = "#ffcc00"  # Yellow - elevated
                 else:
                     cpu_color = "#8b949e"  # Gray - normal
-
+                
                 # Color code RAM based on limits
                 if mem > max_mem:
                     mem_color = "#ff4444"  # Red - over limit
@@ -928,26 +898,22 @@ class FrankensteinTerminal:
                     mem_color = "#ffcc00"  # Yellow - elevated
                 else:
                     mem_color = "#8b949e"  # Gray - normal
-
+                
                 self._cpu_label.configure(text=f"⚡ CPU: {cpu:.0f}%", text_color=cpu_color)
                 self._ram_label.configure(text=f"🧠 RAM: {mem:.0f}%", text_color=mem_color)
-
-
-                # Show diagnosis if warning or worse (only if hardware monitor running)
-                if hw_monitor._running:
-                    diagnosis = hw_stats.get('diagnosis', {})
-                    if health in (HealthStatus.WARNING, HealthStatus.CRITICAL, HealthStatus.OVERLOAD):
-                        cause = diagnosis.get('primary_cause', '')
-                        if cause:
-                            # Truncate for display (wider panel allows more text)
-                            if len(cause) > 35:
-                                cause = cause[:32] + "..."
-                            self._diagnosis_label.configure(
-                                text=f"⚠ {cause}",
-                                text_color=health.color
-                            )
-                    else:
-                        self._diagnosis_label.configure(text="")
+                
+                # Show diagnosis if warning or worse
+                diagnosis = hw_stats.get('diagnosis', {})
+                if health in (HealthStatus.WARNING, HealthStatus.CRITICAL, HealthStatus.OVERLOAD):
+                    cause = diagnosis.get('primary_cause', '')
+                    if cause:
+                        # Truncate for display (wider panel allows more text)
+                        if len(cause) > 35:
+                            cause = cause[:32] + "..."
+                        self._diagnosis_label.configure(
+                            text=f"⚠ {cause}",
+                            text_color=health.color
+                        )
                 else:
                     self._diagnosis_label.configure(text="")
                     
@@ -978,6 +944,7 @@ class FrankensteinTerminal:
 
     ┌─────────────────────────────────────────────────────────────────┐
     │  🔬 COMMANDS     help · status · security · hardware · diagnose │
+    │  🔌 PROVIDERS    Type 'providers' for quantum & classical compute│
     │  ⚛️  QUANTUM      Type 'q' or 'quantum' to enter quantum mode   │
     │  🧪 SYNTHESIS    Type 'synthesis' for physics simulations       │
     └─────────────────────────────────────────────────────────────────┘
@@ -1663,6 +1630,33 @@ class FrankensteinTerminal:
         except ImportError as e:
             self._write_error(f"Hardware monitor not available: {e}")
             self._write_output("Make sure core/hardware_monitor.py exists.\n")
+
+    # ==================== PROVIDER REGISTRY COMMANDS (Phase 3 Step 2) ====================
+
+    def _cmd_providers(self, args: List[str]):
+        """Provider registry — list, scan, and manage compute providers"""
+        try:
+            from integration.commands import handle_providers_command
+            handle_providers_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Provider registry not available: {e}")
+            self._write_output("Make sure integration/providers/registry.py exists.\n")
+
+    def _cmd_connect(self, args: List[str]):
+        """Connect to a quantum or classical compute provider"""
+        try:
+            from integration.commands import handle_connect_command
+            handle_connect_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Provider registry not available: {e}")
+
+    def _cmd_disconnect(self, args: List[str]):
+        """Disconnect from a compute provider"""
+        try:
+            from integration.commands import handle_disconnect_command
+            handle_disconnect_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Provider registry not available: {e}")
 
     # ==================== SYSTEM DIAGNOSTICS ====================
     
@@ -2668,6 +2662,61 @@ Type 'git' with no args to see the enhanced features menu.
                 'security': 'security [status|log|report|test] - Security dashboard and threat monitor',
                 # Hardware
                 'hardware': 'hardware [status|trend|tiers|recommend] - Hardware health monitor',
+                # Provider Registry
+                'providers': '''providers - Manage quantum and classical compute providers
+
+SUBCOMMANDS:
+  providers              Show all providers with SDK status
+  providers scan         Refresh SDK availability scan
+  providers info <id>    Detailed info for a specific provider
+  providers install <id> Show pip install command for SDK
+  providers quantum      List quantum providers only
+  providers classical    List classical providers only
+  providers suggest      🧠 Smart recommendations for YOUR hardware
+  providers setup <id>   📘 Step-by-step setup guide for a provider
+
+PROVIDER IDs (quantum):
+  ibm_quantum        IBM Quantum (Qiskit) — 127 qubits, free tier
+  aws_braket         AWS Braket — multi-provider access, free tier
+  azure_quantum      Azure Quantum — IonQ + Quantinuum, free credits
+  google_cirq        Google Quantum AI (Cirq) — 72 qubits
+  ionq               IonQ trapped-ion — 36 qubits, free credits
+  rigetti            Rigetti (PyQuil) — 84 qubits, free tier
+  xanadu             Xanadu/PennyLane — photonic, free tier
+  dwave              D-Wave — annealing, 5000 qubits, free tier
+  local_simulator    Built-in NumPy simulator — ~20 qubits on 8GB
+
+PROVIDER IDs (classical):
+  local_cpu          Local CPU (NumPy/SciPy) — always available
+  nvidia_cuda        NVIDIA CUDA (CuPy) — requires NVIDIA GPU
+  amd_rocm           AMD ROCm (PyTorch) — requires AMD GPU
+  intel_oneapi       Intel oneAPI (DPNP) — optimizes for Intel
+  apple_metal        Apple Metal (PyTorch MPS) — macOS M-series only
+
+EXAMPLES:
+  providers info ibm_quantum
+  providers install aws_braket
+  providers scan
+''',
+                'connect': '''connect <provider_id> - Connect to a compute provider
+
+Establishes a connection to a quantum or classical provider.
+SDK must be installed first (use 'providers install <id>').
+Cloud providers may require credentials configured via their website.
+
+EXAMPLES:
+  connect local_simulator    Connect to built-in quantum sim
+  connect ibm_quantum        Connect to IBM Quantum (needs API key)
+  connect local_cpu          Connect to local CPU compute
+
+After connecting, use 'providers' to verify connection status.
+''',
+                'disconnect': '''disconnect <id> | disconnect all - Disconnect from providers
+
+EXAMPLES:
+  disconnect ibm_quantum     Disconnect from IBM Quantum
+  disconnect all             Disconnect all active providers
+''',
                 # Diagnostics
                 'diagnose': 'diagnose [refresh|fix|kill|quick] - System diagnostics and optimization',
                 # Quantum Mode
@@ -2839,6 +2888,30 @@ HARDWARE:
   hardware trend  Resource trend analysis
   hardware tiers  Hardware tier reference
   hardware recommend  Switch recommendation
+
+PROVIDERS (Quantum + Classical):
+  providers       List all compute providers with SDK status
+  providers scan  Refresh SDK availability scan
+  providers info  Detailed info on a specific provider
+  providers suggest  🧠 Smart recommendations for YOUR hardware
+  providers setup <id>  📘 Step-by-step setup guide for any provider
+  providers install  Show install command for a provider SDK
+  connect <id>    Connect to a provider (e.g. connect ibm_quantum)
+  disconnect <id> Disconnect from a provider
+  
+  ┌────────────────────────────────────────────────────┐
+  │  QUICK START — PROVIDERS:                         │
+  │                                                    │
+  │  1. providers suggest  (what's best for MY PC?)   │
+  │  2. providers setup ibm_quantum  (step-by-step)   │
+  │  3. connect ibm_quantum  (go live)                │
+  │  4. providers  (verify 🟢 status)                  │
+  │  5. disconnect ibm_quantum  (when done)           │
+  │                                                    │
+  │  Local options (no cloud needed):                 │
+  │    connect local_simulator  (quantum sim)         │
+  │    connect local_cpu        (CPU compute)         │
+  └────────────────────────────────────────────────────┘
 
 DIAGNOSTICS:
   diagnose        Run full system diagnosis
