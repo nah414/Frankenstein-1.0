@@ -2,7 +2,7 @@
 
 **Physics-Grounded AI Desktop Assistant**
 
-A quantum-classical hybrid AI system with an integrated terminal interface for scientific computing and engineering tasks. Phase 1 (Core Engine) and Phase 2 (Predictive Synthesis) are complete. Phase 3 (Universal Integration) is now in progress. 
+A quantum-classical hybrid AI system with an integrated terminal interface for scientific computing and engineering tasks. Phase 1 (Core Engine), Phase 2 (Predictive Synthesis), and Phase 3 Steps 1-4 (Universal Integration) are complete.
 
 ---
 
@@ -36,12 +36,72 @@ Or double-click `RUN_FRANKENSTEIN.bat` on Windows.
 | **Editors** | `nano`, `vim`, `notepad`, `code` |
 | **Environment** | `export`, `env`, `set`, `unset` |
 | **Scripting** | `python`, `node`, `source` |
-| **Hardware** | `hardware` — live system detection & tier classification |
-| **Providers** | `providers`, `providers suggest`, `providers setup <id>` |
-| **Workloads** | `analyze "<task>"`, `analyze quantum`, `analyze classical` |
-| **Connections** | `connect <id>`, `disconnect <id>` |
+| **Providers** | `providers`, `connect`, `disconnect`, `credentials` |
+| **Diagnostics** | `hardware`, `security`, `diagnose`, `status` |
+| **Quantum** | `quantum`, `qubit`, `bloch`, `synthesis` |
 
-Type `help` in the terminal for full command list.
+Type `help` or `help <command>` in the terminal for detailed guides.
+
+---
+
+## 🔌 Provider Integration (Phase 3)
+
+Frankenstein connects to **29 providers** across quantum and classical computing. All providers are lazy-loaded — nothing runs until you explicitly connect.
+
+### Quantum Providers (19)
+| Provider | ID | Technology |
+|----------|----|------------|
+| IBM Quantum | `ibm_quantum` | Superconducting |
+| AWS Braket | `aws_braket` | Multi-vendor gateway |
+| Azure Quantum | `azure_quantum` | Multi-vendor gateway |
+| Google Quantum AI | `google_cirq` | Superconducting |
+| IonQ | `ionq` | Trapped ion |
+| Rigetti | `rigetti` | Superconducting |
+| Xanadu | `xanadu` | Photonic |
+| D-Wave | `dwave` | Quantum annealing |
+| Quantinuum | `quantinuum` | Trapped ion |
+| IQM | `iqm` | Superconducting |
+| QuEra | `quera` | Neutral atom |
+| Oxford QC | `oxford` | Superconducting |
+| Atom Computing | `atom_computing` | Neutral atom |
+| Pasqal | `pasqal` | Neutral atom |
+| AQT | `aqt` | Trapped ion |
+| NVIDIA Quantum Cloud | `nvidia_quantum_cloud` | Simulation |
+| Qiskit Aer | `qiskit_aer` | Local simulator |
+| cuQuantum | `cuquantum` | GPU simulator |
+| Local Simulator | `local_simulator` | NumPy (free, offline) |
+
+### Classical Providers (10)
+| Provider | ID | Architecture |
+|----------|----|-------------|
+| Local CPU | `local_cpu` | x86/ARM (free, always available) |
+| NVIDIA CUDA | `nvidia_cuda` | CUDA GPU |
+| AMD ROCm | `amd_rocm` | ROCm GPU |
+| Apple Metal | `apple_metal` | Metal GPU |
+| Intel oneAPI | `intel_oneapi` | oneAPI accelerator |
+| ARM Compute | `arm` | ARM CPU |
+| RISC-V | `risc_v` | RISC-V CPU |
+| Google TPU | `tpu` | TPU accelerator |
+| FPGA | `fpga` | FPGA fabric |
+| NPU | `npu` | Neural Processing Unit |
+
+### Quick Connect
+
+```bash
+# Free, no credentials needed:
+connect local_simulator
+connect local_cpu
+
+# Cloud providers (credentials required):
+credentials save ibm_quantum --token "YOUR_TOKEN"
+connect ibm_quantum
+
+# Verify credentials before connecting:
+credentials verify ibm_quantum
+
+# Check what's connected:
+providers
+```
 
 ---
 
@@ -49,65 +109,63 @@ Type `help` in the terminal for full command list.
 
 ```
 Frankenstein-1.0/
-├── launch_terminal.py    # Terminal launcher
-├── frankenstein.py       # Main entry point
-├── RUN_FRANKENSTEIN.bat  # Windows quick launch
-├── requirements.txt      # Dependencies
+├── launch_terminal.py        # Terminal launcher
+├── frankenstein.py           # Main entry point
+├── RUN_FRANKENSTEIN.bat      # Windows quick launch
+├── requirements.txt          # Dependencies
 │
-├── widget/               # Terminal UI
-│   ├── terminal.py       # Monster Terminal implementation
-│   ├── quantum_mode.py   # Quantum mode interface
-│   └── synthesis_panel.py # Synthesis control panel
+├── widget/                   # Terminal UI
+│   ├── terminal.py           # Monster Terminal (3000+ lines)
+│   ├── quantum_mode.py       # Quantum REPL mode
+│   └── synthesis_panel.py    # Synthesis control panel
 │
-├── core/                 # Core engine
-│   ├── governor.py       # Resource management
-│   ├── safety.py         # Safety constraints
-│   ├── memory.py         # Memory systems
-│   ├── orchestrator.py   # Task orchestration
-│   ├── hardware_monitor.py    # Hardware monitoring
-│   ├── hardware_dashboard.py  # Hardware dashboard
-│   └── system_diagnostics.py  # System diagnostics
+├── core/                     # Core engine
+│   ├── governor.py           # Resource governor (5-level auto-throttle)
+│   ├── safety.py             # Immutable safety constraints
+│   ├── memory.py             # Session persistence
+│   ├── orchestrator.py       # Task orchestration
+│   ├── hardware_monitor.py   # Hardware health monitoring
+│   ├── hardware_dashboard.py # Hardware dashboard
+│   └── system_diagnostics.py # System diagnostics
 │
-├── synthesis/            # Predictive Synthesis Engine
-│   ├── engine.py         # Main synthesis engine
+├── integration/              # Universal Integration Engine
+│   ├── discovery.py          # Hardware auto-detection
+│   ├── credentials.py        # Credential management (JSON storage)
+│   ├── commands.py           # Terminal command handlers
+│   ├── guide.py              # Smart provider recommendations
+│   └── providers/
+│       ├── base.py           # ProviderAdapter ABC + dataclasses
+│       ├── registry.py       # ProviderRegistry (29 providers)
+│       ├── quantum/          # 19 quantum adapter modules
+│       └── classical/        # 10 classical adapter modules
+│
+├── synthesis/                # Predictive Synthesis Engine
+│   ├── engine.py             # Main synthesis engine
 │   ├── relativistic_quantum.py  # Lorentz transformations
-│   ├── core/             # True engine implementation
-│   ├── compute/          # Math/physics/quantum compute
-│   └── quantum/          # Quantum visualization & circuits
+│   ├── core/                 # True engine implementation
+│   ├── compute/              # Math/physics/quantum compute
+│   └── quantum/              # Bloch sphere & circuit visualization
 │
-├── security/             # Security module
-│   ├── monitor.py        # Threat detection
-│   ├── dashboard.py      # Security dashboard
-│   └── shield.py         # The Shield widget
+├── security/                 # Security module
+│   ├── monitor.py            # Live threat detection
+│   ├── dashboard.py          # Security dashboard
+│   └── shield.py             # Input/output filtering
 │
-├── agents/               # AI agents
-│   ├── base.py           # Base agent framework
-│   ├── sandbox.py        # Sandboxed execution
-│   └── swarms/           # Compute swarm implementation
+├── agents/                   # AI agents (lazy-loaded)
+│   ├── base.py               # Base agent framework
+│   ├── sandbox.py            # Sandboxed execution
+│   └── swarms/               # Compute swarm implementation
 │
-├── data/                 # Data Pipeline & Telemetry
-│   ├── pipeline.py       # Unified data flow management
-│   ├── telemetry.py      # Always-on metrics collection
-│   ├── events.py         # Pub/sub event bus
-│   ├── metrics.py        # Statistics aggregation
-│   └── storage.py        # File-based JSON persistence
+├── data/                     # Data Pipeline & Telemetry
+│   ├── pipeline.py           # Unified data flow
+│   ├── telemetry.py          # Metrics collection
+│   ├── events.py             # Pub/sub event bus
+│   ├── metrics.py            # Statistics aggregation
+│   └── storage.py            # JSON persistence
 │
-├── integration/          # Phase 3: Universal Integration
-│   ├── discovery.py      # Hardware auto-detection engine
-│   ├── analyzer.py       # Workload profiling & complexity scoring
-│   ├── commands.py       # Terminal command handlers
-│   ├── guide.py          # Smart recommendation engine
-│   └── providers/        # Provider registry & adapters
-│       ├── registry.py   # Central registry (14 providers)
-│       ├── quantum/      # Quantum adapter stubs
-│       └── classical/    # Classical adapter stubs
-│
-├── quantum/              # Quantum computing integration
-├── classical/            # Classical computing
-├── configs/              # Configuration files
-├── tests/                # Unit tests
-├── assets/               # Icons and resources
-└── docs/                 # Documentation
+├── configs/                  # Configuration files
+├── tests/                    # Unit tests
+└── assets/                   # Icons and resources
 ```
 
 ---
@@ -117,8 +175,9 @@ Frankenstein-1.0/
 Hard-coded limits protect your system:
 - **CPU**: Max 80%
 - **Memory**: Max 70%
-- **Auto-throttle**: Enabled
+- **Auto-throttle**: Enabled (5-level progressive)
 - **Emergency stop**: Available
+- **Lazy loading**: All providers, monitors, and agents only initialize on explicit user command
 
 ---
 
@@ -149,23 +208,23 @@ FRANKENSTEIN is being built in 4 phases. Each phase adds new capabilities while 
 | 8 | Lab Monitors Panel (Final Polish) | ✅ Complete |
 
 ### Phase 3: Universal Integration 🔄 IN PROGRESS
-*The Ultimate Connection & Configuration Optimizer*
+*Quantum + Classical Provider Connectivity*
 
 | Step | Feature | Status |
 |------|---------|--------|
-| 1 | Hardware Discovery Engine — auto-detects CPU, GPU, RAM, tier classification | ✅ Complete |
-| 2 | Provider Registry + Smart Guide — 14 providers, lazy-load, `providers suggest` | ✅ Complete |
-| 3 | Workload Analyzer — task profiling, complexity scoring, provider matching | ✅ Complete |
-| 4 | Configuration Optimizer | 📋 Planned |
-| 5 | Intelligent Router | 📋 Planned |
-| 6 | Permission & Automation | 📋 Planned |
-| 7 | Real-Time Adaptation | 📋 Planned |
-| 8 | Terminal Integration (Final Polish) | 📋 Planned |
+| 1 | Hardware Discovery (auto-detect CPU, GPU, QPU) | ✅ Complete |
+| 2 | Provider Registry (29 providers cataloged) | ✅ Complete |
+| 3 | Setup Guide + Smart Recommendations | ✅ Complete |
+| 4 | Provider Adapters + Credential Management | ✅ Complete |
+| 5 | Intelligent Workload Router | 📋 Planned |
+| 6 | Cost/Performance Optimization | 📋 Planned |
 
-**Supported Providers (14 total):**
-- **Quantum Cloud**: IBM Quantum, AWS Braket, Azure Quantum, Google Cirq, IonQ, Rigetti, Xanadu, D-Wave
-- **Quantum Local**: Built-in NumPy simulator (~20 qubits on 8GB RAM)
-- **Classical**: Local CPU, NVIDIA CUDA, AMD ROCm, Intel oneAPI, Apple Metal
+**Step 4 delivered:**
+- 30 provider adapter modules (19 quantum + 11 classical) with consistent API
+- Credential management with save/list/show/delete/verify subcommands
+- `connect` command auto-detects missing credentials and shows setup guidance
+- All adapters handle missing SDKs gracefully (no crashes, clear install instructions)
+- Full help system with detailed per-provider setup guides
 
 ### Phase 4: Autonomous Agents 📋 PLANNED
 *MCP Framework with Multi-Agent Collaboration*
@@ -173,7 +232,6 @@ FRANKENSTEIN is being built in 4 phases. Each phase adds new capabilities while 
 - Built-in agent library (Compute, Research, Optimization, Security, Hardware)
 - Multi-agent orchestration and collaboration
 - User-defined agent creation
-- Extensive safety guardrails 
 
 ---
 
@@ -182,6 +240,22 @@ FRANKENSTEIN is being built in 4 phases. Each phase adds new capabilities while 
 - Python 3.10+
 - Windows 10/11
 - Git (for version control commands)
+
+### Core Dependencies (required)
+- `customtkinter` — Terminal UI
+- `numpy` — Numerical computing
+- `psutil` — System monitoring
+
+### Optional SDKs (install only what you need)
+```bash
+pip install qiskit qiskit-ibm-runtime    # IBM Quantum
+pip install amazon-braket-sdk            # AWS Braket
+pip install azure-quantum                # Azure Quantum
+pip install cirq cirq-google             # Google Quantum
+pip install pennylane                    # Xanadu
+pip install dwave-ocean-sdk              # D-Wave
+pip install cupy-cuda12x                 # NVIDIA CUDA
+```
 
 ---
 

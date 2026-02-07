@@ -16,12 +16,15 @@ ALL components are LAZY-LOADED — nothing runs at import time.
 
 from .discovery import HardwareDiscovery, get_hardware_fingerprint
 from .providers.registry import ProviderRegistry, get_registry
+from .credentials import CredentialManager, get_credential_manager
 
 __all__ = [
     'HardwareDiscovery',
     'get_hardware_fingerprint',
     'ProviderRegistry',
     'get_registry',
+    'CredentialManager',
+    'get_credential_manager',
 ]
 
 __version__ = '0.2.0'
