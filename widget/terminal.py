@@ -828,96 +828,99 @@ class FrankensteinTerminal:
         self._update_monitor_panel()
     
     def _update_monitor_panel(self):
-        """Update the live security/resource monitor panel"""
+        """Update the live security/resource monitor panel.
+
+        LAZY LOADING: Uses lightweight psutil directly for CPU/RAM display.
+        Does NOT import core/__init__.py or security/__init__.py at startup
+        to avoid pulling in heavyweight modules (orchestrator, memory, etc.).
+        Monitors are only started when the user explicitly runs a command.
+        """
         if not self._running:
             return
-        
+
         try:
-            # Get security stats
+            # Security stats — only show if monitor was already started by user
             try:
-                from security import get_monitor, ThreatSeverity
-                monitor = get_monitor()
-                if not monitor._running:
-                    monitor.start()
-                stats = monitor.get_stats()
-                severity = ThreatSeverity[stats['current_severity']]
-                
-                # Update threat level
-                self._threat_label.configure(
-                    text=f"{severity.icon} {severity.label}",
-                    text_color=severity.color
-                )
-                
-                # Update blocked count
-                self._blocked_label.configure(
-                    text=f"Blocked: {stats['threats_blocked']}   Active: {stats['active_threats']}"
-                )
-            except ImportError:
+                if self._security_monitor and self._security_monitor._running:
+                    from security.monitor import ThreatSeverity
+                    stats = self._security_monitor.get_stats()
+                    severity = ThreatSeverity[stats['current_severity']]
+                    self._threat_label.configure(
+                        text=f"{severity.icon} {severity.label}",
+                        text_color=severity.color
+                    )
+                    self._blocked_label.configure(
+                        text=f"Blocked: {stats['threats_blocked']}   Active: {stats['active_threats']}"
+                    )
+                else:
+                    self._threat_label.configure(text="● SECURE", text_color=self._colors['electric_green'])
+                    self._blocked_label.configure(text="Blocked: 0   Active: 0")
+            except Exception:
                 self._threat_label.configure(text="● SECURE", text_color=self._colors['electric_green'])
                 self._blocked_label.configure(text="Blocked: 0   Active: 0")
-            
-            # Get hardware health status and resources
+
+            # CPU/RAM — use psutil directly (lightweight, no core/__init__ import chain)
             try:
-                from core import get_governor, get_hardware_monitor, HealthStatus
-                governor = get_governor()
-                gov_status = governor.get_status()
-                cpu = gov_status.get('cpu_percent', 0)
-                mem = gov_status.get('memory_percent', 0)
-                
-                # Get hardware monitor
-                hw_monitor = get_hardware_monitor()
-                if not hw_monitor._running:
-                    hw_monitor.start()
-                
-                hw_stats = hw_monitor.get_stats()
-                health = hw_monitor.get_health_status()
-                max_cpu = hw_stats.get('tier_max_cpu', 80)
-                max_mem = hw_stats.get('tier_max_memory', 70)
-                
-                # Update health label
-                self._health_label.configure(
-                    text=f"{health.icon} {health.label}",
-                    text_color=health.color
-                )
-                
-                # Color code CPU based on limits
-                if cpu > max_cpu:
-                    cpu_color = "#ff4444"  # Red - over limit
-                elif cpu > max_cpu * 0.85:
-                    cpu_color = "#ff9900"  # Orange - warning
-                elif cpu > max_cpu * 0.70:
-                    cpu_color = "#ffcc00"  # Yellow - elevated
-                else:
-                    cpu_color = "#8b949e"  # Gray - normal
-                
-                # Color code RAM based on limits
-                if mem > max_mem:
-                    mem_color = "#ff4444"  # Red - over limit
-                elif mem > max_mem * 0.85:
-                    mem_color = "#ff9900"  # Orange - warning
-                elif mem > max_mem * 0.70:
-                    mem_color = "#ffcc00"  # Yellow - elevated
-                else:
-                    mem_color = "#8b949e"  # Gray - normal
-                
-                self._cpu_label.configure(text=f"⚡ CPU: {cpu:.0f}%", text_color=cpu_color)
-                self._ram_label.configure(text=f"🧠 RAM: {mem:.0f}%", text_color=mem_color)
-                
-                # Show diagnosis if warning or worse
-                diagnosis = hw_stats.get('diagnosis', {})
-                if health in (HealthStatus.WARNING, HealthStatus.CRITICAL, HealthStatus.OVERLOAD):
-                    cause = diagnosis.get('primary_cause', '')
-                    if cause:
-                        # Truncate for display (wider panel allows more text)
-                        if len(cause) > 35:
-                            cause = cause[:32] + "..."
-                        self._diagnosis_label.configure(
-                            text=f"⚠ {cause}",
+                import psutil
+                cpu = psutil.cpu_percent(interval=None)
+                mem = psutil.virtual_memory().percent
+                max_cpu = 80
+                max_mem = 70
+
+                # If hardware monitor was started by user, use its richer data
+                if self._hardware_monitor and self._hardware_monitor._running:
+                    try:
+                        from core.hardware_monitor import HealthStatus
+                        hw_stats = self._hardware_monitor.get_stats()
+                        health = self._hardware_monitor.get_health_status()
+                        max_cpu = hw_stats.get('tier_max_cpu', 80)
+                        max_mem = hw_stats.get('tier_max_memory', 70)
+                        self._health_label.configure(
+                            text=f"{health.icon} {health.label}",
                             text_color=health.color
                         )
+                        diagnosis = hw_stats.get('diagnosis', {})
+                        if health in (HealthStatus.WARNING, HealthStatus.CRITICAL, HealthStatus.OVERLOAD):
+                            cause = diagnosis.get('primary_cause', '')
+                            if cause:
+                                if len(cause) > 35:
+                                    cause = cause[:32] + "..."
+                                self._diagnosis_label.configure(
+                                    text=f"⚠ {cause}",
+                                    text_color=health.color
+                                )
+                        else:
+                            self._diagnosis_label.configure(text="")
+                    except Exception:
+                        self._health_label.configure(text="● STABLE", text_color=self._colors['electric_green'])
+                        self._diagnosis_label.configure(text="")
                 else:
+                    self._health_label.configure(text="● STABLE", text_color=self._colors['electric_green'])
                     self._diagnosis_label.configure(text="")
-                    
+
+                # Color code CPU
+                if cpu > max_cpu:
+                    cpu_color = "#ff4444"
+                elif cpu > max_cpu * 0.85:
+                    cpu_color = "#ff9900"
+                elif cpu > max_cpu * 0.70:
+                    cpu_color = "#ffcc00"
+                else:
+                    cpu_color = "#8b949e"
+
+                # Color code RAM
+                if mem > max_mem:
+                    mem_color = "#ff4444"
+                elif mem > max_mem * 0.85:
+                    mem_color = "#ff9900"
+                elif mem > max_mem * 0.70:
+                    mem_color = "#ffcc00"
+                else:
+                    mem_color = "#8b949e"
+
+                self._cpu_label.configure(text=f"⚡ CPU: {cpu:.0f}%", text_color=cpu_color)
+                self._ram_label.configure(text=f"🧠 RAM: {mem:.0f}%", text_color=mem_color)
+
             except ImportError:
                 self._cpu_label.configure(text="⚡ CPU: --%", text_color=self._colors['text_secondary'])
                 self._ram_label.configure(text="🧠 RAM: --%", text_color=self._colors['text_secondary'])
@@ -925,10 +928,10 @@ class FrankensteinTerminal:
                 self._diagnosis_label.configure(text="")
         except Exception:
             pass
-        
-        # Schedule next update (every 2 seconds)
+
+        # Schedule next update (every 3 seconds — lighter than 2s)
         if self._running and self._root:
-            self._root.after(2000, self._update_monitor_panel)
+            self._root.after(3000, self._update_monitor_panel)
 
     def _show_welcome(self):
         """Display welcome message - Monster Lab Theme"""
@@ -1519,13 +1522,14 @@ class FrankensteinTerminal:
     def _cmd_status(self, args: List[str]):
         """Show Frankenstein system status"""
         try:
-            from core import get_governor, get_memory
+            from core.governor import get_governor
+            from core.memory import get_memory
             governor = get_governor()
             memory = get_memory()
-            
+
             status = governor.get_status()
             session = memory.get_session_stats()
-            
+
             self._write_output("\n⚡ FRANKENSTEIN 1.0 STATUS\n")
             self._write_output("=" * 40 + "\n")
             self._write_output(f"CPU:        {status.get('cpu_percent', 'N/A')}%\n")
@@ -1568,22 +1572,22 @@ class FrankensteinTerminal:
     def _cmd_security(self, args: List[str]):
         """Security dashboard and threat monitoring commands"""
         try:
-            from security import get_monitor, get_dashboard, handle_security_command, ThreatSeverity
-            
-            # Initialize monitor if needed
+            from security.monitor import get_monitor
+            from security.dashboard import get_dashboard, handle_security_command
+
+            # Initialize monitor if needed (only on explicit user command)
             if self._security_monitor is None:
                 self._security_monitor = get_monitor()
                 if not self._security_monitor._running:
                     self._security_monitor.start()
-                    # Add callback to update status label
                     self._security_monitor.add_severity_callback(self._on_security_severity_change)
-            
+
             if self._security_dashboard is None:
                 self._security_dashboard = get_dashboard()
-            
+
             # Handle the command
             handle_security_command(args, self._write_output)
-            
+
         except ImportError as e:
             self._write_error(f"Security module not available: {e}")
             self._write_output("Make sure security/ directory exists with all required files.\n")
@@ -1600,7 +1604,7 @@ class FrankensteinTerminal:
     def _update_security_status(self, severity):
         """Update the terminal status label based on security state"""
         try:
-            from security import ThreatSeverity
+            from security.monitor import ThreatSeverity
             if severity in (ThreatSeverity.CRITICAL, ThreatSeverity.HIGH):
                 self._status_label.configure(text=f"  {severity.icon} THREAT  ", text_color=severity.color)
             elif severity == ThreatSeverity.MEDIUM:
@@ -1617,17 +1621,18 @@ class FrankensteinTerminal:
     def _cmd_hardware(self, args: List[str]):
         """Hardware health monitor and auto-switch commands"""
         try:
-            from core import get_hardware_monitor, handle_hardware_command
-            
-            # Initialize monitor if needed
+            from core.hardware_monitor import get_hardware_monitor
+            from core.hardware_dashboard import handle_hardware_command
+
+            # Initialize monitor if needed (only on explicit user command)
             if self._hardware_monitor is None:
                 self._hardware_monitor = get_hardware_monitor()
                 if not self._hardware_monitor._running:
                     self._hardware_monitor.start()
-            
+
             # Handle the command
             handle_hardware_command(args, self._write_output)
-            
+
         except ImportError as e:
             self._write_error(f"Hardware monitor not available: {e}")
             self._write_output("Make sure core/hardware_monitor.py exists.\n")
