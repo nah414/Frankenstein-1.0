@@ -168,8 +168,7 @@ class FrankensteinTerminal:
             'providers': self._cmd_providers,
             'connect': self._cmd_connect,
             'disconnect': self._cmd_disconnect,
-            # Workload Analyzer (Phase 3 Step 3)
-            'analyze': self._cmd_analyze,
+            'credentials': self._cmd_credentials,
             # System Diagnostics
             'diagnose': self._cmd_diagnose,
             # Quantum Mode
@@ -180,6 +179,11 @@ class FrankensteinTerminal:
             'synth': self._cmd_synthesis,  # Alias
             'bloch': self._cmd_bloch,      # Quick Bloch sphere
             'qubit': self._cmd_qubit,      # Quick qubit operations
+            # Intelligent Router (Phase 3 Step 5)
+            'route': self._cmd_route,
+            'route-options': self._cmd_route_options,
+            'route-test': self._cmd_route_test,
+            'route-history': self._cmd_route_history,
         }
         
         # Security monitor integration
@@ -423,7 +427,7 @@ class FrankensteinTerminal:
         # Divider
         ctk.CTkLabel(
             self._monitor_frame,
-            text="─" * 30,
+            text="-" * 30,
             font=("Consolas", 6),
             text_color=self._colors['border_glow']
         ).place(x=4, y=84)
@@ -829,96 +833,99 @@ class FrankensteinTerminal:
         self._update_monitor_panel()
     
     def _update_monitor_panel(self):
-        """Update the live security/resource monitor panel"""
+        """Update the live security/resource monitor panel.
+
+        LAZY LOADING: Uses lightweight psutil directly for CPU/RAM display.
+        Does NOT import core/__init__.py or security/__init__.py at startup
+        to avoid pulling in heavyweight modules (orchestrator, memory, etc.).
+        Monitors are only started when the user explicitly runs a command.
+        """
         if not self._running:
             return
-        
+
         try:
-            # Get security stats
+            # Security stats — only show if monitor was already started by user
             try:
-                from security import get_monitor, ThreatSeverity
-                monitor = get_monitor()
-                if not monitor._running:
-                    monitor.start()
-                stats = monitor.get_stats()
-                severity = ThreatSeverity[stats['current_severity']]
-                
-                # Update threat level
-                self._threat_label.configure(
-                    text=f"{severity.icon} {severity.label}",
-                    text_color=severity.color
-                )
-                
-                # Update blocked count
-                self._blocked_label.configure(
-                    text=f"Blocked: {stats['threats_blocked']}   Active: {stats['active_threats']}"
-                )
-            except ImportError:
+                if self._security_monitor and self._security_monitor._running:
+                    from security.monitor import ThreatSeverity
+                    stats = self._security_monitor.get_stats()
+                    severity = ThreatSeverity[stats['current_severity']]
+                    self._threat_label.configure(
+                        text=f"{severity.icon} {severity.label}",
+                        text_color=severity.color
+                    )
+                    self._blocked_label.configure(
+                        text=f"Blocked: {stats['threats_blocked']}   Active: {stats['active_threats']}"
+                    )
+                else:
+                    self._threat_label.configure(text="● SECURE", text_color=self._colors['electric_green'])
+                    self._blocked_label.configure(text="Blocked: 0   Active: 0")
+            except Exception:
                 self._threat_label.configure(text="● SECURE", text_color=self._colors['electric_green'])
                 self._blocked_label.configure(text="Blocked: 0   Active: 0")
-            
-            # Get hardware health status and resources
+
+            # CPU/RAM — use psutil directly (lightweight, no core/__init__ import chain)
             try:
-                from core import get_governor, get_hardware_monitor, HealthStatus
-                governor = get_governor()
-                gov_status = governor.get_status()
-                cpu = gov_status.get('cpu_percent', 0)
-                mem = gov_status.get('memory_percent', 0)
-                
-                # Get hardware monitor
-                hw_monitor = get_hardware_monitor()
-                if not hw_monitor._running:
-                    hw_monitor.start()
-                
-                hw_stats = hw_monitor.get_stats()
-                health = hw_monitor.get_health_status()
-                max_cpu = hw_stats.get('tier_max_cpu', 80)
-                max_mem = hw_stats.get('tier_max_memory', 70)
-                
-                # Update health label
-                self._health_label.configure(
-                    text=f"{health.icon} {health.label}",
-                    text_color=health.color
-                )
-                
-                # Color code CPU based on limits
-                if cpu > max_cpu:
-                    cpu_color = "#ff4444"  # Red - over limit
-                elif cpu > max_cpu * 0.85:
-                    cpu_color = "#ff9900"  # Orange - warning
-                elif cpu > max_cpu * 0.70:
-                    cpu_color = "#ffcc00"  # Yellow - elevated
-                else:
-                    cpu_color = "#8b949e"  # Gray - normal
-                
-                # Color code RAM based on limits
-                if mem > max_mem:
-                    mem_color = "#ff4444"  # Red - over limit
-                elif mem > max_mem * 0.85:
-                    mem_color = "#ff9900"  # Orange - warning
-                elif mem > max_mem * 0.70:
-                    mem_color = "#ffcc00"  # Yellow - elevated
-                else:
-                    mem_color = "#8b949e"  # Gray - normal
-                
-                self._cpu_label.configure(text=f"⚡ CPU: {cpu:.0f}%", text_color=cpu_color)
-                self._ram_label.configure(text=f"🧠 RAM: {mem:.0f}%", text_color=mem_color)
-                
-                # Show diagnosis if warning or worse
-                diagnosis = hw_stats.get('diagnosis', {})
-                if health in (HealthStatus.WARNING, HealthStatus.CRITICAL, HealthStatus.OVERLOAD):
-                    cause = diagnosis.get('primary_cause', '')
-                    if cause:
-                        # Truncate for display (wider panel allows more text)
-                        if len(cause) > 35:
-                            cause = cause[:32] + "..."
-                        self._diagnosis_label.configure(
-                            text=f"⚠ {cause}",
+                import psutil
+                cpu = psutil.cpu_percent(interval=None)
+                mem = psutil.virtual_memory().percent
+                max_cpu = 80
+                max_mem = 70
+
+                # If hardware monitor was started by user, use its richer data
+                if self._hardware_monitor and self._hardware_monitor._running:
+                    try:
+                        from core.hardware_monitor import HealthStatus
+                        hw_stats = self._hardware_monitor.get_stats()
+                        health = self._hardware_monitor.get_health_status()
+                        max_cpu = hw_stats.get('tier_max_cpu', 80)
+                        max_mem = hw_stats.get('tier_max_memory', 70)
+                        self._health_label.configure(
+                            text=f"{health.icon} {health.label}",
                             text_color=health.color
                         )
+                        diagnosis = hw_stats.get('diagnosis', {})
+                        if health in (HealthStatus.WARNING, HealthStatus.CRITICAL, HealthStatus.OVERLOAD):
+                            cause = diagnosis.get('primary_cause', '')
+                            if cause:
+                                if len(cause) > 35:
+                                    cause = cause[:32] + "..."
+                                self._diagnosis_label.configure(
+                                    text=f"⚠ {cause}",
+                                    text_color=health.color
+                                )
+                        else:
+                            self._diagnosis_label.configure(text="")
+                    except Exception:
+                        self._health_label.configure(text="● STABLE", text_color=self._colors['electric_green'])
+                        self._diagnosis_label.configure(text="")
                 else:
+                    self._health_label.configure(text="● STABLE", text_color=self._colors['electric_green'])
                     self._diagnosis_label.configure(text="")
-                    
+
+                # Color code CPU
+                if cpu > max_cpu:
+                    cpu_color = "#ff4444"
+                elif cpu > max_cpu * 0.85:
+                    cpu_color = "#ff9900"
+                elif cpu > max_cpu * 0.70:
+                    cpu_color = "#ffcc00"
+                else:
+                    cpu_color = "#8b949e"
+
+                # Color code RAM
+                if mem > max_mem:
+                    mem_color = "#ff4444"
+                elif mem > max_mem * 0.85:
+                    mem_color = "#ff9900"
+                elif mem > max_mem * 0.70:
+                    mem_color = "#ffcc00"
+                else:
+                    mem_color = "#8b949e"
+
+                self._cpu_label.configure(text=f"⚡ CPU: {cpu:.0f}%", text_color=cpu_color)
+                self._ram_label.configure(text=f"🧠 RAM: {mem:.0f}%", text_color=mem_color)
+
             except ImportError:
                 self._cpu_label.configure(text="⚡ CPU: --%", text_color=self._colors['text_secondary'])
                 self._ram_label.configure(text="🧠 RAM: --%", text_color=self._colors['text_secondary'])
@@ -926,38 +933,37 @@ class FrankensteinTerminal:
                 self._diagnosis_label.configure(text="")
         except Exception:
             pass
-        
-        # Schedule next update (every 2 seconds)
+
+        # Schedule next update (every 3 seconds — lighter than 2s)
         if self._running and self._root:
-            self._root.after(2000, self._update_monitor_panel)
+            self._root.after(3000, self._update_monitor_panel)
 
     def _show_welcome(self):
         """Display welcome message - Monster Lab Theme"""
         welcome = f"""
 
         ███████╗██████╗  █████╗ ███╗   ██╗██╗  ██╗
-        ██╔════╝██╔══██╗██╔══██╗████╗  ██║██║ ██╔╝
+        ██╔====╝██╔==██╗██╔==██╗████╗  ██║██║ ██╔╝
         █████╗  ██████╔╝███████║██╔██╗ ██║█████╔╝ 
-        ██╔══╝  ██╔══██╗██╔══██║██║╚██╗██║██╔═██╗ 
+        ██╔==╝  ██╔==██╗██╔==██║██║╚██╗██║██╔=██╗ 
         ██║     ██║  ██║██║  ██║██║ ╚████║██║  ██╗
-        ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝ ENSTEIN 1.0
+        ╚=╝     ╚=╝  ╚=╝╚=╝  ╚=╝╚=╝  ╚===╝╚=╝  ╚=╝ ENSTEIN 1.0
 
                  🧟 "Frankenstein, here to serve science." 🧟
 
-    ┌─────────────────────────────────────────────────────────────────┐
-    │  🔬 COMMANDS     help · status · security · hardware · diagnose │
-    │  🔌 PROVIDERS    Type 'providers' for quantum & classical compute│
-    │  📊 ANALYZER     Type 'analyze help' to profile workloads       │
-    │  ⚛️  QUANTUM      Type 'q' or 'quantum' to enter quantum mode   │
-    │  🧪 SYNTHESIS    Type 'synthesis' for physics simulations       │
-    └─────────────────────────────────────────────────────────────────┘
+    +-----------------------------------------------------------------+
+    |  🔬 COMMANDS     help · status · security · hardware · diagnose |
+    |  🔌 PROVIDERS    Type 'providers' for quantum & classical compute|
+    |  ⚛️  QUANTUM      Type 'q' or 'quantum' to enter quantum mode   |
+    |  🧪 SYNTHESIS    Type 'synthesis' for physics simulations       |
+    +-----------------------------------------------------------------+
 
     ⚡ Session: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     📂 Working: {self._cwd}
 
-    ═══════════════════════════════════════════════════════════════════
+    ===================================================================
     IT'S ALIVE! Type 'help' to begin your experiment...
-    ═══════════════════════════════════════════════════════════════════
+    ===================================================================
 
 """
         self._write_output(welcome, color="#00ff88")
@@ -1521,13 +1527,14 @@ class FrankensteinTerminal:
     def _cmd_status(self, args: List[str]):
         """Show Frankenstein system status"""
         try:
-            from core import get_governor, get_memory
+            from core.governor import get_governor
+            from core.memory import get_memory
             governor = get_governor()
             memory = get_memory()
-            
+
             status = governor.get_status()
             session = memory.get_session_stats()
-            
+
             self._write_output("\n⚡ FRANKENSTEIN 1.0 STATUS\n")
             self._write_output("=" * 40 + "\n")
             self._write_output(f"CPU:        {status.get('cpu_percent', 'N/A')}%\n")
@@ -1570,22 +1577,22 @@ class FrankensteinTerminal:
     def _cmd_security(self, args: List[str]):
         """Security dashboard and threat monitoring commands"""
         try:
-            from security import get_monitor, get_dashboard, handle_security_command, ThreatSeverity
-            
-            # Initialize monitor if needed
+            from security.monitor import get_monitor
+            from security.dashboard import get_dashboard, handle_security_command
+
+            # Initialize monitor if needed (only on explicit user command)
             if self._security_monitor is None:
                 self._security_monitor = get_monitor()
                 if not self._security_monitor._running:
                     self._security_monitor.start()
-                    # Add callback to update status label
                     self._security_monitor.add_severity_callback(self._on_security_severity_change)
-            
+
             if self._security_dashboard is None:
                 self._security_dashboard = get_dashboard()
-            
+
             # Handle the command
             handle_security_command(args, self._write_output)
-            
+
         except ImportError as e:
             self._write_error(f"Security module not available: {e}")
             self._write_output("Make sure security/ directory exists with all required files.\n")
@@ -1602,7 +1609,7 @@ class FrankensteinTerminal:
     def _update_security_status(self, severity):
         """Update the terminal status label based on security state"""
         try:
-            from security import ThreatSeverity
+            from security.monitor import ThreatSeverity
             if severity in (ThreatSeverity.CRITICAL, ThreatSeverity.HIGH):
                 self._status_label.configure(text=f"  {severity.icon} THREAT  ", text_color=severity.color)
             elif severity == ThreatSeverity.MEDIUM:
@@ -1619,17 +1626,18 @@ class FrankensteinTerminal:
     def _cmd_hardware(self, args: List[str]):
         """Hardware health monitor and auto-switch commands"""
         try:
-            from core import get_hardware_monitor, handle_hardware_command
-            
-            # Initialize monitor if needed
+            from core.hardware_monitor import get_hardware_monitor
+            from core.hardware_dashboard import handle_hardware_command
+
+            # Initialize monitor if needed (only on explicit user command)
             if self._hardware_monitor is None:
                 self._hardware_monitor = get_hardware_monitor()
                 if not self._hardware_monitor._running:
                     self._hardware_monitor.start()
-            
+
             # Handle the command
             handle_hardware_command(args, self._write_output)
-            
+
         except ImportError as e:
             self._write_error(f"Hardware monitor not available: {e}")
             self._write_output("Make sure core/hardware_monitor.py exists.\n")
@@ -1661,15 +1669,49 @@ class FrankensteinTerminal:
         except ImportError as e:
             self._write_error(f"Provider registry not available: {e}")
 
-    # ==================== WORKLOAD ANALYZER (Phase 3 Step 3) ====================
-
-    def _cmd_analyze(self, args: List[str]):
-        """Analyze workloads and recommend optimal execution targets."""
+    def _cmd_credentials(self, args: List[str]):
+        """Manage saved provider credentials"""
         try:
-            from integration.commands import handle_analyze_command
-            handle_analyze_command(args, self._write_output)
+            from integration.commands import handle_credentials_command
+            handle_credentials_command(args, self._write_output)
         except ImportError as e:
-            self._write_error(f"Workload analyzer not available: {e}")
+            self._write_error(f"Credentials module not available: {e}")
+            self._write_output("Make sure integration/credentials.py exists.\n")
+
+    # ==================== INTELLIGENT ROUTER (Phase 3 Step 5) ====================
+
+    def _cmd_route(self, args: List[str]):
+        """Route a workload to the optimal compute provider"""
+        try:
+            from router.commands import handle_route_command
+            handle_route_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Router module not available: {e}")
+            self._write_output("Make sure router/ directory exists.\n")
+
+    def _cmd_route_options(self, args: List[str]):
+        """Show all compatible providers for a workload"""
+        try:
+            from router.commands import handle_route_options_command
+            handle_route_options_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Router module not available: {e}")
+
+    def _cmd_route_test(self, args: List[str]):
+        """Test routing to a specific provider"""
+        try:
+            from router.commands import handle_route_test_command
+            handle_route_test_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Router module not available: {e}")
+
+    def _cmd_route_history(self, args: List[str]):
+        """Show past routing decisions"""
+        try:
+            from router.commands import handle_route_history_command
+            handle_route_history_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Router module not available: {e}")
 
     # ==================== SYSTEM DIAGNOSTICS ====================
     
@@ -1752,9 +1794,9 @@ class FrankensteinTerminal:
     def _show_synthesis_help(self):
         """Show synthesis engine help"""
         help_text = """
-╔═══════════════════════════════════════════════════════════════════╗
+╔===================================================================╗
 ║            FRANKENSTEIN SYNTHESIS ENGINE - REAL COMPUTATIONS      ║
-╠═══════════════════════════════════════════════════════════════════╣
+╠===================================================================╣
 ║  COMPUTATION COMMANDS (performs actual calculations):             ║
 ║                                                                   ║
 ║  synthesis compute <expr>     Evaluate expression                 ║
@@ -1782,7 +1824,7 @@ class FrankensteinTerminal:
 ║    Example: synthesis physics gamma 0.8c                          ║
 ║                                                                   ║
 ║  synthesis status             Show engine status                  ║
-╚═══════════════════════════════════════════════════════════════════╝
+╚===================================================================╝
 """
         self._write_output(help_text)
     
@@ -1932,16 +1974,16 @@ class FrankensteinTerminal:
             
             result = engine.solve_schrodinger(H, t_max, n_steps, store_trajectory=False)
             
-            self._write_output("\n  ╔═══════════════════════════════════════════╗\n")
+            self._write_output("\n  ╔===========================================╗\n")
             self._write_output("  ║      SCHRÖDINGER EVOLUTION COMPLETE       ║\n")
-            self._write_output("  ╠═══════════════════════════════════════════╣\n")
+            self._write_output("  ╠===========================================╣\n")
             self._write_output(f"  ║  Qubits: {info['n_qubits']:<33} ║\n")
             self._write_output(f"  ║  Dimension: {dim:<30} ║\n")
             self._write_output(f"  ║  Time: {t_max:.4f}{' '*29} ║\n")
             self._write_output(f"  ║  Steps: {n_steps:<32} ║\n")
             self._write_output(f"  ║  Computation: {result.computation_time*1000:.2f} ms{' '*21} ║\n")
             self._write_output(f"  ║  Final Energy: {result.expectation_values.get('energy', 0):.4f}{' '*20} ║\n")
-            self._write_output("  ╚═══════════════════════════════════════════╝\n\n")
+            self._write_output("  ╚===========================================╝\n\n")
             
         except Exception as e:
             self._write_error(f"Error: {e}\n")
@@ -1970,12 +2012,12 @@ class FrankensteinTerminal:
             if cmd == "init":
                 n = int(args[1]) if len(args) > 1 else 2
                 engine.initialize_qubits(n, 'zero')
-                self._write_output(f"\n  Initialized {n} qubits in |{'0'*n}⟩\n\n")
+                self._write_output(f"\n  Initialized {n} qubits in |{'0'*n}>\n\n")
             
             elif cmd == "bell":
                 engine.create_bell_state()
                 result = engine.measure(1024, collapse=False)
-                self._write_output("\n  Bell State Created: (|00⟩ + |11⟩)/√2\n")
+                self._write_output("\n  Bell State Created: (|00> + |11>)/√2\n")
                 self._write_output(f"  Measurement (1024 shots): {result['counts']}\n\n")
             
             elif cmd == "ghz":
@@ -2020,7 +2062,7 @@ class FrankensteinTerminal:
                 for state, count in list(result['counts'].items())[:8]:
                     pct = 100 * count / shots
                     bar = '█' * int(pct / 5)
-                    self._write_output(f"    |{state}⟩: {count:5d} ({pct:5.1f}%) {bar}\n")
+                    self._write_output(f"    |{state}>: {count:5d} ({pct:5.1f}%) {bar}\n")
                 self._write_output("\n")
             
             elif cmd == "evolve":
@@ -2045,7 +2087,7 @@ class FrankensteinTerminal:
                     self._write_output(f"  Non-zero states: {info['nonzero_states']}\n")
                     self._write_output("  Top states:\n")
                     for s in info['top_states'][:5]:
-                        self._write_output(f"    |{s['state']}⟩: P={s['probability']:.4f}\n")
+                        self._write_output(f"    |{s['state']}>: P={s['probability']:.4f}\n")
                     self._write_output("\n")
                 else:
                     self._write_output("\n  No quantum state initialized\n\n")
@@ -2097,16 +2139,16 @@ class FrankensteinTerminal:
             storage = status['storage']
             
             self._write_output("\n")
-            self._write_output("  ╔══════════════════════════════════════════════════════════╗\n")
+            self._write_output("  ╔==========================================================╗\n")
             self._write_output("  ║          TRUE SYNTHESIS ENGINE STATUS                    ║\n")
-            self._write_output("  ╠══════════════════════════════════════════════════════════╣\n")
+            self._write_output("  ╠==========================================================╣\n")
             self._write_output(f"  ║  Engine:     {status['engine']:40} ║\n")
             self._write_output(f"  ║  Max Qubits: {hw['max_qubits']:<40} ║\n")
             self._write_output(f"  ║  Max Memory: {hw['max_memory_GB']:.1f} GB{' '*33} ║\n")
             self._write_output(f"  ║  Storage:    {hw['max_storage_GB']:.1f} GB allocated{' '*24} ║\n")
             self._write_output(f"  ║  Used:       {storage['used_bytes']/1e6:.2f} MB ({storage['used_percent']:.1f}%){' '*22} ║\n")
             self._write_output(f"  ║  Files:      {storage['file_count']:<40} ║\n")
-            self._write_output("  ╠══════════════════════════════════════════════════════════╣\n")
+            self._write_output("  ╠==========================================================╣\n")
             
             if status['initialized']:
                 info = engine.get_state_info()
@@ -2116,7 +2158,7 @@ class FrankensteinTerminal:
             else:
                 self._write_output(f"  ║  QUANTUM STATE: Not initialized                          ║\n")
             
-            self._write_output("  ╚══════════════════════════════════════════════════════════╝\n\n")
+            self._write_output("  ╚==========================================================╝\n\n")
         except Exception as e:
             self._write_error(f"Error: {e}\n")
 
@@ -2149,8 +2191,8 @@ class FrankensteinTerminal:
             
             if not args:
                 self._write_output("Usage: qubit <n> or qubit |state>\n")
-                self._write_output("  qubit 2      - Initialize 2 qubits in |00⟩\n")
-                self._write_output("  qubit |+⟩    - Initialize in |+⟩ state\n")
+                self._write_output("  qubit 2      - Initialize 2 qubits in |00>\n")
+                self._write_output("  qubit |+>    - Initialize in |+> state\n")
                 self._write_output("\nTip: Use 'quantum' or 'q' for full quantum mode.\n")
                 return
             
@@ -2165,16 +2207,16 @@ class FrankensteinTerminal:
     def _cmd_git(self, args: List[str], raw_line: str = None):
         """Enhanced Git - full Bash replacement with progress, colors, auth."""
         if not args:
-            self._write_output("╔═══════════════════════════════════════════════════════════╗\n")
+            self._write_output("╔===========================================================╗\n")
             self._write_output("║  FRANKENSTEIN GIT - Full Replacement                      ║\n")
-            self._write_output("╠═══════════════════════════════════════════════════════════╣\n")
+            self._write_output("╠===========================================================╣\n")
             self._write_output("║  clone <url> [dir]       Clone with progress              ║\n")
             self._write_output("║  status                  Color-coded file states           ║\n")
             self._write_output("║  log [--graph]           Commit visualization             ║\n")
             self._write_output("║  branch [-a]             Branch management                ║\n")
             self._write_output("║  remote [-v]             Remote management                ║\n")
             self._write_output("║  pull/push/fetch         With progress tracking            ║\n")
-            self._write_output("╚═══════════════════════════════════════════════════════════╝\n")
+            self._write_output("╚===========================================================╝\n")
             return
 
         cmd = args[0].lower()
@@ -2675,103 +2717,474 @@ Type 'git' with no args to see the enhanced features menu.
                 'security': 'security [status|log|report|test] - Security dashboard and threat monitor',
                 # Hardware
                 'hardware': 'hardware [status|trend|tiers|recommend] - Hardware health monitor',
-                # Provider Registry
+                # Provider Registry (Phase 3 Step 4 - ALL 30 PROVIDERS)
                 'providers': '''providers - Manage quantum and classical compute providers
+
+PHASE 3 STEP 4 COMPLETE: 30 provider adapters available!
 
 SUBCOMMANDS:
   providers              Show all providers with SDK status
   providers scan         Refresh SDK availability scan
   providers info <id>    Detailed info for a specific provider
   providers install <id> Show pip install command for SDK
-  providers quantum      List quantum providers only
-  providers classical    List classical providers only
-  providers suggest      🧠 Smart recommendations for YOUR hardware
-  providers setup <id>   📘 Step-by-step setup guide for a provider
+  providers quantum      List quantum providers only (19 total)
+  providers classical    List classical providers only (10 total)
 
-PROVIDER IDs (quantum):
-  ibm_quantum        IBM Quantum (Qiskit) — 127 qubits, free tier
-  aws_braket         AWS Braket — multi-provider access, free tier
-  azure_quantum      Azure Quantum — IonQ + Quantinuum, free credits
-  google_cirq        Google Quantum AI (Cirq) — 72 qubits
-  ionq               IonQ trapped-ion — 36 qubits, free credits
-  rigetti            Rigetti (PyQuil) — 84 qubits, free tier
-  xanadu             Xanadu/PennyLane — photonic, free tier
-  dwave              D-Wave — annealing, 5000 qubits, free tier
-  local_simulator    Built-in NumPy simulator — ~20 qubits on 8GB
+===============================================================
+QUANTUM PROVIDERS (19 Total)
+===============================================================
 
-PROVIDER IDs (classical):
-  local_cpu          Local CPU (NumPy/SciPy) — always available
-  nvidia_cuda        NVIDIA CUDA (CuPy) — requires NVIDIA GPU
-  amd_rocm           AMD ROCm (PyTorch) — requires AMD GPU
-  intel_oneapi       Intel oneAPI (DPNP) — optimizes for Intel
-  apple_metal        Apple Metal (PyTorch MPS) — macOS M-series only
+CLOUD PLATFORMS (6):
+  local_simulator        Built-in NumPy simulator — 20 qubits, offline, FREE ✅
+  ibm_quantum            IBM Quantum — 127 qubits, free tier (10 min/mo)
+  aws_braket             AWS Braket — multi-provider (IonQ, Rigetti, D-Wave)
+  azure_quantum          Azure Quantum — IonQ + Quantinuum, free credits
+  google_cirq            Google Quantum AI — 72 qubits, research access
+  nvidia_quantum_cloud   NVIDIA Quantum Cloud — cuQuantum GPU acceleration
+
+HARDWARE VENDORS (11):
+  ionq                   IonQ — 36 qubits, trapped-ion, free tier
+  rigetti                Rigetti — 84 qubits, superconducting
+  quantinuum             Quantinuum — 56 qubits, trapped-ion (via Azure)
+  xanadu                 Xanadu — 24 qubits, photonic (PennyLane)
+  dwave                  D-Wave — 5000 qubits, quantum annealing
+  iqm                    IQM — 20 qubits, superconducting (Europe)
+  quera                  QuEra — 256 qubits, neutral atom
+  oxford                 Oxford QC — 32 qubits, superconducting (UK)
+  atom_computing         Atom Computing — 1225 qubits, neutral atom
+  pasqal                 Pasqal — 200 qubits, neutral atom (France)
+  aqt                    AQT Alpine — 24 qubits, trapped-ion (Austria)
+
+ADVANCED SIMULATORS (2):
+  qiskit_aer             Qiskit Aer — GPU-accelerated, 32+ qubits
+  cuquantum              cuQuantum — NVIDIA GPU simulator, 30+ qubits
+
+===============================================================
+CLASSICAL PROVIDERS (10 Total)
+===============================================================
+
+CPUs (5):
+  local_cpu              Local CPU — NumPy/SciPy, always available ✅
+  intel                  Intel oneAPI — optimized for Intel CPUs
+  amd                    AMD — optimized for AMD CPUs  
+  arm                    ARM — ARM processors
+  risc_v                 RISC-V — RISC-V architectures
+
+GPUs (4):
+  nvidia_cuda            NVIDIA CUDA — CuPy GPU acceleration
+  amd_rocm               AMD ROCm — AMD GPU compute (PyTorch)
+  intel_oneapi           Intel oneAPI — Intel GPU support
+  apple_metal            Apple Metal — M-series GPU (macOS only)
+
+ACCELERATORS (3):
+  tpu                    Google TPU — Tensor Processing Units
+  fpga                   FPGA — Field-Programmable Gate Arrays
+  npu                    NPU — Neural Processing Units
+
+===============================================================
+QUICK START
+===============================================================
+
+WORKS RIGHT NOW (No setup needed):
+  connect local_simulator    Quantum simulation, 20 qubits, instant
+  connect local_cpu          Classical compute, NumPy/SciPy
+
+SETUP REQUIRED (Install SDK first):
+  providers install ibm_quantum      Show install command
+  connect ibm_quantum                Connect after SDK install
 
 EXAMPLES:
-  providers info ibm_quantum
-  providers install aws_braket
-  providers scan
+  providers info ibm_quantum         Full details about IBM Quantum
+  providers quantum                  List all quantum providers
+  providers install aws_braket       Show AWS Braket install steps
 ''',
-                'connect': '''connect <provider_id> - Connect to a compute provider
+                'connect': '''connect <provider_id> [OPTIONS] - Connect to a compute provider
 
-Establishes a connection to a quantum or classical provider.
+Phase 3 Step 4: 30 provider adapters available!
+
+Establishes connection to quantum or classical provider.
 SDK must be installed first (use 'providers install <id>').
-Cloud providers may require credentials configured via their website.
+
+IMPORTANT: Most cloud providers require paid accounts or credits.
+Only local_simulator and local_cpu are completely free.
+
+═══════════════════════════════════════════════════════════════
+CREDENTIAL MANAGEMENT (3 METHODS)
+═══════════════════════════════════════════════════════════════
+
+METHOD 1: Inline credentials (Quick testing)
+  connect ibm_quantum --token "YOUR_API_TOKEN"
+  connect aws_braket --credentials '{"access_key":"...","secret":"..."}'
+
+METHOD 2: Provider's native storage (RECOMMENDED - Most secure)
+  Each SDK has built-in encrypted credential storage:
+  
+  IBM Quantum (saves to ~/.qiskit/qiskit-ibm.json):
+    python -c "from qiskit_ibm_runtime import QiskitRuntimeService; \
+               QiskitRuntimeService.save_account(token='YOUR_TOKEN')"
+  
+  AWS (saves to ~/.aws/credentials):
+    aws configure
+    # Enter: Access Key ID, Secret Access Key, Region
+  
+  Azure (saves to Azure CLI config):
+    az login
+    # Follow browser authentication
+  
+  Google Cloud (saves to ~/.config/gcloud):
+    gcloud auth application-default login
+
+METHOD 3: Environment variables (CI/CD, automation)
+  export IBM_QUANTUM_TOKEN="your_token"
+  export AWS_ACCESS_KEY_ID="your_key"
+  export AWS_SECRET_ACCESS_KEY="your_secret"
+  export AZURE_SUBSCRIPTION_ID="your_sub_id"
+  # Then: connect <provider_id>
+
+SECURITY BEST PRACTICES:
+  ✓ Use Method 2 (native SDK storage) for production
+  ✓ Use Method 1 for quick testing only
+  ✓ NEVER commit credentials to Git
+  ✓ Use .env files with .gitignore for local development
+  ✓ Rotate API keys regularly
+  ✓ Use separate keys for dev/production
+
+═══════════════════════════════════════════════════════════════
+FREE - AVAILABLE RIGHT NOW (No credentials, no costs)
+═══════════════════════════════════════════════════════════════
+
+  connect local_simulator    20 qubits, instant, offline, FREE ✅
+  connect local_cpu          NumPy/SciPy, always available, FREE ✅
+
+═══════════════════════════════════════════════════════════════
+CLOUD QUANTUM (Requires credentials + COSTS MONEY 💰)
+═══════════════════════════════════════════════════════════════
+
+⚠️  WARNING: These providers charge for usage beyond free tiers!
+    Always check pricing before connecting.
+
+IBM Quantum (FREE tier: 10 min/month, then paid)
+  Setup:
+    1. pip install qiskit qiskit-ibm-runtime
+    2. Create account: https://quantum.ibm.com
+    3. Get API token from account settings
+    4. Save token:
+       python -c "from qiskit_ibm_runtime import QiskitRuntimeService; \
+                  QiskitRuntimeService.save_account(token='YOUR_TOKEN')"
+    5. connect ibm_quantum
+  
+  OR pass token inline:
+    connect ibm_quantum --token "YOUR_API_TOKEN"
+
+AWS Braket (FREE tier: 1 hour simulator/month, then $$$)
+  Setup:
+    1. pip install amazon-braket-sdk
+    2. Create AWS account: https://aws.amazon.com
+    3. Enable Braket service in AWS Console
+    4. Configure AWS CLI:
+       aws configure
+       # Enter Access Key ID, Secret Key, Region (us-east-1)
+    5. connect aws_braket
+  
+  Pricing: ~$0.30/task (QPU), $0.075/min (simulator)
+
+Azure Quantum (FREE credits: $500 for new accounts, then paid)
+  Setup:
+    1. pip install azure-quantum
+    2. Create Azure account: https://portal.azure.com
+    3. Create Quantum Workspace
+    4. az login  (authenticate via browser)
+    5. connect azure_quantum --credentials '{
+         "subscription_id": "YOUR_SUB_ID",
+         "resource_group": "YOUR_RG",
+         "workspace_name": "YOUR_WS"
+       }'
+  
+  Pricing: Varies by provider (IonQ, Quantinuum)
+
+Google Quantum AI (Research access only - APPLICATION REQUIRED)
+  Setup:
+    1. pip install cirq cirq-google
+    2. Apply for access: https://quantumai.google/
+    3. Wait for approval (can take weeks/months)
+    4. Set up Google Cloud project
+    5. gcloud auth application-default login
+    6. connect google_cirq --credentials '{"project_id": "YOUR_PROJECT"}'
+  
+  Note: Not publicly available, research partners only
+
+NVIDIA Quantum Cloud (Requires NVIDIA NGC account)
+  Setup:
+    1. Create NGC account: https://ngc.nvidia.com
+    2. Generate API key from NGC portal
+    3. connect nvidia_quantum_cloud --credentials '{"api_key": "YOUR_KEY"}'
+  
+  Note: Pricing varies, check NVIDIA website
+
+═══════════════════════════════════════════════════════════════
+HARDWARE VENDORS (Via cloud platforms, mostly PAID)
+═══════════════════════════════════════════════════════════════
+
+IonQ (Via AWS Braket or Azure, ~$0.30/task)
+  connect ionq  # After configuring AWS/Azure credentials
+
+Rigetti (Via AWS Braket, ~$0.30/task)
+  connect rigetti  # After configuring AWS credentials
+
+Quantinuum (Via Azure Quantum, most expensive - $$$$)
+  connect quantinuum  # After configuring Azure credentials
+
+Xanadu (FREE tier available via Xanadu Cloud)
+  Setup:
+    1. pip install pennylane
+    2. Create account: https://cloud.xanadu.ai
+    3. Get API token
+    4. connect xanadu --token "YOUR_TOKEN"
+
+D-Wave (FREE minute/month, then paid)
+  Setup:
+    1. pip install dwave-ocean-sdk
+    2. Create account: https://cloud.dwavesys.com
+    3. Get API token
+    4. dwave config create  (interactive setup)
+    5. connect dwave
+
+IQM (European superconducting, 20 qubits)
+  connect iqm --token "YOUR_TOKEN"
+
+QuEra (Neutral atom, 256 qubits, via AWS Braket)
+  connect quera --token "YOUR_TOKEN"
+
+Oxford Quantum Circuits (UK, superconducting, 32 qubits)
+  connect oxford --token "YOUR_TOKEN"
+
+Atom Computing (Neutral atom, 1225 qubits)
+  connect atom_computing --token "YOUR_TOKEN"
+
+Pasqal (France, neutral atom, 200 qubits)
+  connect pasqal --token "YOUR_TOKEN"
+
+AQT Alpine Quantum Technologies (Austria, trapped-ion, FREE tier)
+  connect aqt --token "YOUR_TOKEN"
+
+═══════════════════════════════════════════════════════════════
+SIMULATORS (Requires GPU hardware, NO cloud costs)
+═══════════════════════════════════════════════════════════════
+
+Qiskit Aer (FREE - local GPU/CPU simulation)
+  connect qiskit_aer  # No credentials needed
+
+cuQuantum (FREE - requires NVIDIA GPU)
+  connect cuquantum  # No credentials needed
+
+═══════════════════════════════════════════════════════════════
+GPU ACCELERATION (Requires hardware, NO cloud costs)
+═══════════════════════════════════════════════════════════════
+
+NVIDIA CUDA (FREE - requires NVIDIA GPU)
+  connect nvidia_cuda  # No credentials needed
+
+AMD ROCm (FREE - requires AMD GPU)
+  connect amd_rocm  # No credentials needed
+
+Apple Metal (FREE - requires M1/M2/M3 Mac)
+  connect apple_metal  # No credentials needed
+
+Intel oneAPI (FREE - optimized for Intel hardware)
+  connect intel_oneapi  # No credentials needed
+
+═══════════════════════════════════════════════════════════════
+OTHER COMPUTE (Requires hardware, NO cloud costs)
+═══════════════════════════════════════════════════════════════
+
+ARM Compute (FREE - ARM processors, Raspberry Pi, etc.)
+  connect arm  # No credentials needed
+
+RISC-V Compute (FREE - open ISA, emerging platform)
+  connect risc_v  # No credentials needed
+
+Google TPU (FREE via Colab, or Google Cloud project)
+  connect tpu  # May need GCP project_id for cloud TPU
+
+FPGA (FREE - requires FPGA hardware, Xilinx/Intel)
+  connect fpga  # No credentials needed
+
+NPU (FREE - Intel/Qualcomm Neural Processing Unit)
+  connect npu  # No credentials needed
+
+═══════════════════════════════════════════════════════════════
+VERIFICATION & TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════
+
+After connecting:
+  providers                  Verify connection (shows ✅ checkmark)
+  providers info <id>        See available backends
+
+Common issues:
+  - "SDK not installed" → providers install <id>
+  - "Authentication failed" → Check credentials are correct
+  - "No backends available" → Provider may be down, check status page
+  - "Quota exceeded" → Check account credits/usage limits
+
+Disconnect when done to avoid accidental charges:
+  disconnect <id>           Release connection safely
+  disconnect all            Disconnect all providers
+
+═══════════════════════════════════════════════════════════════
+COST SUMMARY (Approximate, check current pricing)
+═══════════════════════════════════════════════════════════════
+
+FREE (No limits):
+  ✅ local_simulator, local_cpu, qiskit_aer, cuquantum
+  ✅ All GPU providers (if you have hardware)
+
+FREE Tier (Limited):
+  ⚡ IBM Quantum: 10 min/month free
+  ⚡ AWS Braket: 1 hour simulator/month free
+  ⚡ Azure Quantum: $500 credits for new accounts
+  ⚡ Xanadu: Limited free tier
+  ⚡ D-Wave: 1 minute/month free
+
+PAID (No free tier):
+  💰 Google Quantum AI: Research only, pricing N/A
+  💰 IonQ: ~$0.30/task via AWS/Azure
+  💰 Rigetti: ~$0.30/task via AWS
+  💰 Quantinuum: $$$ (most expensive)
+
+RECOMMENDATION FOR TESTING:
+  1. Start with local_simulator (completely free)
+  2. Experiment with IBM Quantum free tier (10 min/month)
+  3. Try AWS Braket free tier (1 hour/month)
+  4. Only use paid providers for production workloads
+
+⚠️  IMPORTANT: Always monitor your usage and set billing alerts!
+''',
+                'disconnect': '''disconnect <provider_id> | disconnect all - Disconnect from providers
+
+Safely disconnects from quantum or classical providers.
+Releases resources and clears credentials from memory.
 
 EXAMPLES:
-  connect local_simulator    Connect to built-in quantum sim
-  connect ibm_quantum        Connect to IBM Quantum (needs API key)
-  connect local_cpu          Connect to local CPU compute
+  disconnect ibm_quantum         Disconnect from IBM Quantum
+  disconnect local_simulator     Disconnect from local simulator
+  disconnect nvidia_cuda         Release GPU resources
+  disconnect all                 Disconnect ALL active providers
 
-After connecting, use 'providers' to verify connection status.
+BEST PRACTICES:
+- Disconnect cloud providers when done to avoid accidental usage
+- Disconnect GPU providers to free VRAM for other applications
+- Use 'disconnect all' before switching between projects
+
+VERIFICATION:
+  providers                      Check connection status after disconnect
 ''',
-                'disconnect': '''disconnect <id> | disconnect all - Disconnect from providers
-
-EXAMPLES:
-  disconnect ibm_quantum     Disconnect from IBM Quantum
-  disconnect all             Disconnect all active providers
-''',
-                # Workload Analyzer (Phase 3 Step 3)
-                'analyze': '''analyze - Profile & route computational workloads
-
-Analyzes a workload and tells you exactly where to run it,
-how much memory it needs, and which providers are best.
+                'credentials': '''credentials [save|list|delete|show|verify] - Manage provider API keys
 
 SUBCOMMANDS:
-  analyze circuit <qubits> [depth] [--shots N] [--variational]
-    Profile a quantum gate circuit. Shows qubit count, depth,
-    entanglement density, QV estimate, and ranked providers.
-    Example: analyze circuit 10 20
-    Example: analyze circuit 5 10 --variational
+  credentials                          Show usage guide
+  credentials save <id> --token TOKEN  Save API token for a provider
+  credentials save <id> --credentials '{...}'  Save JSON credentials
+  credentials list                     List providers with saved credentials
+  credentials show <id>                Show saved credentials (masked)
+  credentials delete <id>              Delete saved credentials
+  credentials verify <id>              Test if saved credentials work
 
-  analyze qubo <variables> [--reads N]
-    Profile a QUBO/Ising annealing problem. Shows variable
-    count, embedding estimate, D-Wave compatibility.
-    Example: analyze qubo 200
+EXAMPLES:
+  credentials save ibm_quantum --token "crn:v1:abc123..."
+  credentials save aws_braket --credentials '{"aws_access_key_id":"AKIA...","aws_secret_access_key":"...","region_name":"us-east-1"}'
+  credentials verify ibm_quantum
+  credentials list
+  credentials delete ibm_quantum
 
-  analyze matrix <op> <rows> <cols> [--iterations N]
-    Profile classical numerical compute. Operations:
-    matmul, eigenvalue, fft, svd, inverse, solve, simulation
-    Example: analyze matrix matmul 1000 1000
-    Example: analyze matrix eigenvalue 500 500
-
-  analyze synthesis [--dims N] [--states N] [--no-lorentz]
-    Profile a Predictive Synthesis Engine workload.
-    Example: analyze synthesis --dims 5 --states 32
-
-WHAT THE REPORT SHOWS:
-  • Workload type classification
-  • Complexity tier (trivial → infeasible for your hardware)
-  • Memory, CPU time, GPU usefulness estimates
-  • Provider ranking with suitability scores (0-100)
-  • Routing recommendation (local sim / cloud / hybrid)
-  • Actionable tips specific to your hardware tier
-
-The analyzer cross-references YOUR hardware (from 'hardware')
-with YOUR installed providers (from 'providers') to give
-personalized, real recommendations.
+NOTES:
+  Credentials stored in ~/.frankenstein/credentials.json
+  File permissions set to owner-only (600 on Unix) for basic protection
+  Use 'credentials verify <id>' to test before connecting
+  After saving, just run 'connect <id>' - credentials load automatically
 ''',
                 # Diagnostics
                 'diagnose': 'diagnose [refresh|fix|kill|quick] - System diagnostics and optimization',
+                # Intelligent Router (Phase 3 Step 5)
+                'route': '''route - Route workloads to optimal compute providers
+
+INTELLIGENT ROUTER (Phase 3 Step 5)
+
+Routes quantum and classical workloads to the best available
+provider based on hardware, resources, and user priority.
+
+USAGE:
+  route --qubits N --priority MODE
+  route --type TYPE --qubits N --depth N
+  route --type classical_optimization --threads 2 --memory 512
+
+OPTIONS:
+  --type TYPE       Workload type:
+                      quantum_simulation (default if --qubits > 0)
+                      classical_optimization (default otherwise)
+                      hybrid_computation
+                      data_synthesis
+  --qubits N        Number of qubits (default 0)
+  --depth N         Circuit depth (default 0)
+  --threads N       CPU threads needed (default 1)
+  --memory N        Memory in MB (default 100)
+  --priority MODE   cost | speed | accuracy (default cost)
+
+SAFETY:
+  Hard limits enforced: CPU max 80%, RAM max 70%
+  Routes that would exceed limits are automatically blocked.
+
+EXAMPLES:
+  route --qubits 10 --priority cost      Small quantum, prefer free
+  route --qubits 30 --priority accuracy  Large quantum, best fidelity
+  route --type classical_optimization    Classical CPU routing
+
+RELATED COMMANDS:
+  route-options    Show all compatible providers ranked
+  route-test       Test routing to a specific provider
+  route-history    Show past routing decisions
+''',
+                'route-options': 'route-options --type TYPE --qubits N - Show all compatible providers ranked',
+                'route-test': 'route-test --provider NAME --qubits N - Test routing to a specific provider',
+                'route-history': 'route-history [--limit N] - Show past routing decisions',
+                'routing': '''routing - Intelligent Router Help Topic
+
+PHASE 3 STEP 5: INTELLIGENT WORKLOAD ROUTER
+
+The router automatically selects the best quantum or classical
+compute provider for your workload.
+
+HOW IT WORKS:
+  1. Analyzes your workload (qubits, memory, priority)
+  2. Detects available hardware (CPU, GPU, tier)
+  3. Checks resource safety (CPU < 80%, RAM < 70%)
+  4. Scores providers (cost, speed, accuracy)
+  5. Returns optimal provider + fallback chain
+
+ROUTING RULES:
+  Quantum:
+    <=5 qubits   -> Local simulators (free, instant)
+    6-20 qubits  -> Local sim + cloud fallback
+    21-29 qubits -> Cloud providers (IBM, AWS, Azure)
+    30+ qubits   -> Large-scale providers (IonQ, Rigetti, QuEra)
+
+  Classical:
+    NVIDIA GPU   -> nvidia_cuda
+    AMD GPU      -> amd_rocm
+    Apple Silicon -> apple_metal
+    Intel CPU    -> intel_oneapi, local_cpu
+    Default      -> local_cpu (NumPy/SciPy)
+
+PRIORITY MODES:
+  cost     -> Prefer free/local providers (default)
+  speed    -> Prefer fastest execution
+  accuracy -> Prefer highest fidelity
+
+COMMANDS:
+  route --qubits 10 --priority cost
+  route-options --type quantum_simulation --qubits 5
+  route-test --provider ibm_quantum --qubits 10
+  route-history
+''',
                 # Quantum Mode
                 'quantum': '''quantum - Enter quantum computing REPL mode
 
@@ -2779,13 +3192,14 @@ ENTERING QUANTUM MODE:
   Just type 'quantum' or 'q' to enter the quantum computing sub-shell.
   
 QUANTUM MODE COMMANDS (once inside):
-  qubit <n>       Initialize n qubits in |0⟩ state
-  qubit |state>   Initialize specific state (|+⟩, |0⟩, |01⟩)
+  qubit <n>       Initialize n qubits in |0> state
+  qubit <n>       Initialize n qubits in state |0>
+  qubit STATE     Initialize specific state (|+>, |0>, etc)
   h <q>           Hadamard gate on qubit q
   x/y/z <q>       Pauli gates
   rx/ry/rz <q> θ  Rotation gates (use 'pi' for π)
   cx <c> <t>      CNOT gate (control c, target t)
-  measure         Measure + auto-launch 3D Bloch sphere
+  measure         Measure qubits and launch Bloch sphere visualization
   bloch           Launch Bloch sphere visualization
   bell            Quick Bell state creation
   ghz [n]         Quick GHZ state (n qubits)
@@ -2858,9 +3272,9 @@ EXAMPLES:
             return
         
         help_msg = """
-╔══════════════════════════════════════════════════════════════════╗
+╔==================================================================╗
 ║                    FRANKENSTEIN TERMINAL HELP                    ║
-╚══════════════════════════════════════════════════════════════════╝
+╚==================================================================╝
 
 NAVIGATION:
   cd [DIR]        Change directory (~ for home, .. for parent)
@@ -2942,48 +3356,37 @@ HARDWARE:
   hardware tiers  Hardware tier reference
   hardware recommend  Switch recommendation
 
-PROVIDERS (Quantum + Classical):
-  providers       List all compute providers with SDK status
-  providers scan  Refresh SDK availability scan
-  providers info  Detailed info on a specific provider
-  providers suggest  🧠 Smart recommendations for YOUR hardware
-  providers setup <id>  📘 Step-by-step setup guide for any provider
-  providers install  Show install command for a provider SDK
+PROVIDERS (Phase 3 Step 4: 30 Quantum + Classical Adapters):
+  providers       List all 30 compute providers with SDK status
+  providers quantum   List 19 quantum providers
+  providers classical List 10 classical providers
+  providers info <id> Detailed info on a specific provider
+  providers install <id>  Show install command for provider SDK
   connect <id>    Connect to a provider (e.g. connect ibm_quantum)
   disconnect <id> Disconnect from a provider
   
-  ┌────────────────────────────────────────────────────┐
-  │  QUICK START — PROVIDERS:                         │
-  │                                                    │
-  │  1. providers suggest  (what's best for MY PC?)   │
-  │  2. providers setup ibm_quantum  (step-by-step)   │
-  │  3. connect ibm_quantum  (go live)                │
-  │  4. providers  (verify 🟢 status)                  │
-  │  5. disconnect ibm_quantum  (when done)           │
-  │                                                    │
-  │  Local options (no cloud needed):                 │
-  │    connect local_simulator  (quantum sim)         │
-  │    connect local_cpu        (CPU compute)         │
-  └────────────────────────────────────────────────────┘
-
-WORKLOAD ANALYZER (Profile & Route):
-  analyze circuit <qubits> [depth]  Profile a quantum circuit
-  analyze qubo <variables>          Profile an annealing problem
-  analyze matrix <op> <rows> <cols> Profile classical compute
-  analyze synthesis                 Profile PSE workload
-  analyze help                      Full usage guide
-
-  ┌────────────────────────────────────────────────────┐
-  │  QUICK START — ANALYZER:                          │
-  │                                                    │
-  │  analyze circuit 10 20     (10 qubits, depth 20) │
-  │  analyze qubo 200          (200-var optimization) │
-  │  analyze matrix matmul 1000 1000  (1K×1K matmul) │
-  │  analyze synthesis --states 32  (PSE 32-state)   │
-  │                                                    │
-  │  Each analysis shows: complexity tier, memory,    │
-  │  CPU time, ranked providers, and routing advice.  │
-  └────────────────────────────────────────────────────┘
+  +----------------------------------------------------+
+  |  QUICK START — 30 PROVIDERS AVAILABLE:            |
+  |                                                    |
+  |  WORKS RIGHT NOW (no setup):                      |
+  |    connect local_simulator  (20 qubits, instant)  |
+  |    connect local_cpu        (NumPy/SciPy)         |
+  |                                                    |
+  |  CLOUD QUANTUM (setup required):                  |
+  |    providers install ibm_quantum                  |
+  |    connect ibm_quantum  (127 qubits, free tier)   |
+  |    connect aws_braket   (multi-provider access)   |
+  |    connect azure_quantum (IonQ + Quantinuum)      |
+  |    connect google_cirq  (72 qubits)               |
+  |                                                    |
+  |  GPU ACCELERATION:                                |
+  |    connect nvidia_cuda  (100x speedup)            |
+  |    connect amd_rocm     (AMD GPUs)                |
+  |    connect apple_metal  (M-series Macs)           |
+  |                                                    |
+  |  Full list: help providers                        |
+  |  Details: help connect                            |
+  +----------------------------------------------------+
 
 DIAGNOSTICS:
   diagnose        Run full system diagnosis
@@ -2992,39 +3395,61 @@ DIAGNOSTICS:
   diagnose kill <name>  Terminate a process
   diagnose quick      Quick CPU/RAM stats
 
+INTELLIGENT ROUTER (Phase 3 Step 5):
+  route --qubits N --priority MODE    Route workload to optimal provider
+  route-options --type TYPE --qubits N  Show all compatible providers
+  route-test --provider NAME --qubits N Test routing to specific provider
+  route-history                       Show past routing decisions
+
+  +----------------------------------------------------+
+  |  ROUTING QUICK START:                              |
+  |                                                    |
+  |  route --qubits 10 --priority cost                |
+  |    Routes 10-qubit simulation to best free option  |
+  |                                                    |
+  |  route --qubits 30 --priority accuracy            |
+  |    Routes to highest-fidelity quantum hardware     |
+  |                                                    |
+  |  route --type classical_optimization              |
+  |    Routes classical workload to best local compute|
+  |                                                    |
+  |  Safety: CPU max 80%, RAM max 70% enforced        |
+  |  Details: help route  |  Topics: help routing     |
+  +----------------------------------------------------+
+
 QUANTUM MODE:
   quantum         Enter quantum computing mode (or 'q')
   qubit <n>       Quick qubit initialization
   
-  ┌────────────────────────────────────────────────────┐
-  │  QUANTUM MODE QUICK START:                        │
-  │                                                    │
-  │  1. Type 'quantum' or 'q' to enter quantum mode   │
-  │  2. Initialize: qubit 2  (creates 2 qubits)       │
-  │  3. Apply gates: h 0, cx 0 1  (Bell state)        │
-  │  4. Measure: measure  (auto-shows 3D Bloch!)      │
-  │  5. Type 'back' to return to main terminal        │
-  │                                                    │
-  │  Shortcuts: bell, ghz, qft for common circuits    │
-  │  Toggle viz: viz off (disable auto-visualization) │
-  └────────────────────────────────────────────────────┘
+  +----------------------------------------------------+
+  |  QUANTUM MODE QUICK START:                        |
+  |                                                    |
+  |  1. Type 'quantum' or 'q' to enter quantum mode   |
+  |  2. Initialize: qubit 2  (creates 2 qubits)       |
+  |  3. Apply gates: h 0, cx 0 1  (Bell state)        |
+  |  4. Measure: measure  (auto-shows 3D Bloch!)      |
+  |  5. Type 'back' to return to main terminal        |
+  |                                                    |
+  |  Shortcuts: bell, ghz, qft for common circuits    |
+  |  Toggle viz: viz off (disable auto-visualization) |
+  +----------------------------------------------------+
 
 SYNTHESIS ENGINE:
   synthesis       Schrödinger-Lorentz quantum simulations
   synth           Alias for synthesis
   bloch [type]    Launch 3D Bloch sphere (rabi, spiral, precession)
   
-  ┌────────────────────────────────────────────────────┐
-  │  SYNTHESIS QUICK COMMANDS:                        │
-  │                                                    │
-  │  synthesis run gaussian    - Wave packet evolution│
-  │  synthesis run tunneling   - Quantum tunneling    │
-  │  synthesis run harmonic    - Harmonic oscillator  │
-  │  synthesis lorentz 0.5     - Apply Lorentz boost  │
-  │  synthesis compare 0.3     - Lab vs boosted frame │
-  │  bloch rabi                - 3D Rabi oscillation  │
-  │  bloch spiral --gamma 1.2  - Relativistic spiral  │
-  └────────────────────────────────────────────────────┘
+  +----------------------------------------------------+
+  |  SYNTHESIS QUICK COMMANDS:                        |
+  |                                                    |
+  |  synthesis run gaussian    - Wave packet evolution|
+  |  synthesis run tunneling   - Quantum tunneling    |
+  |  synthesis run harmonic    - Harmonic oscillator  |
+  |  synthesis lorentz 0.5     - Apply Lorentz boost  |
+  |  synthesis compare 0.3     - Lab vs boosted frame |
+  |  bloch rabi                - 3D Rabi oscillation  |
+  |  bloch spiral --gamma 1.2  - Relativistic spiral  |
+  +----------------------------------------------------+
 
 TIPS:
   - Use Tab for path completion

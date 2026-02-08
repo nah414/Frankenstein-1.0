@@ -225,6 +225,78 @@ QUANTUM_PROVIDERS: Dict[str, ProviderInfo] = {
         max_qubits=20,
         notes="No cloud needed. Limited by local RAM (~20 qubits on 8GB)."
     ),
+    # --- Hardware Vendors ---
+    "quantinuum": ProviderInfo(
+        id="quantinuum", name="Quantinuum", provider_type=ProviderType.QUANTUM_CLOUD,
+        capabilities=[ProviderCapability.GATE_BASED],
+        sdk_package="pytket-quantinuum", sdk_import="pytket",
+        description="Trapped-ion quantum computers (H-series)", website="https://www.quantinuum.com",
+        free_tier=False, max_qubits=56, notes="Via Azure Quantum or direct. High fidelity trapped-ion."
+    ),
+    "iqm": ProviderInfo(
+        id="iqm", name="IQM", provider_type=ProviderType.QUANTUM_CLOUD,
+        capabilities=[ProviderCapability.GATE_BASED],
+        sdk_package="iqm-client", sdk_import="iqm",
+        description="Superconducting qubits (Europe)", website="https://www.meetiqm.com",
+        free_tier=False, max_qubits=20, notes="European quantum computing company."
+    ),
+    "quera": ProviderInfo(
+        id="quera", name="QuEra Computing", provider_type=ProviderType.QUANTUM_CLOUD,
+        capabilities=[ProviderCapability.GATE_BASED, ProviderCapability.SIMULATION],
+        sdk_package="bloqade", sdk_import="bloqade",
+        description="Neutral atom quantum computing", website="https://www.quera.com",
+        free_tier=True, max_qubits=256, notes="Neutral atom platform. Available via AWS Braket."
+    ),
+    "oxford": ProviderInfo(
+        id="oxford", name="Oxford Quantum Circuits", provider_type=ProviderType.QUANTUM_CLOUD,
+        capabilities=[ProviderCapability.GATE_BASED],
+        sdk_package="qcaas-client", sdk_import="qcaas_client",
+        description="Superconducting quantum processor (UK)", website="https://oxfordquantumcircuits.com",
+        free_tier=False, max_qubits=32, notes="UK-based. Coaxmon qubit architecture."
+    ),
+    "atom_computing": ProviderInfo(
+        id="atom_computing", name="Atom Computing", provider_type=ProviderType.QUANTUM_CLOUD,
+        capabilities=[ProviderCapability.GATE_BASED],
+        sdk_package="atomiq", sdk_import="atomiq",
+        description="Neutral atom quantum computing (1225 qubits)", website="https://atom-computing.com",
+        free_tier=False, max_qubits=1225, notes="Largest qubit count. Nuclear spin qubits."
+    ),
+    "pasqal": ProviderInfo(
+        id="pasqal", name="Pasqal", provider_type=ProviderType.QUANTUM_CLOUD,
+        capabilities=[ProviderCapability.GATE_BASED, ProviderCapability.SIMULATION],
+        sdk_package="pasqal-cloud", sdk_import="pasqal_cloud",
+        description="Neutral atom quantum computing (France)", website="https://www.pasqal.com",
+        free_tier=False, max_qubits=200, notes="Pulser framework for analog quantum computing."
+    ),
+    "aqt": ProviderInfo(
+        id="aqt", name="AQT Alpine Quantum Technologies", provider_type=ProviderType.QUANTUM_CLOUD,
+        capabilities=[ProviderCapability.GATE_BASED],
+        sdk_package="aqt-client", sdk_import="aqt",
+        description="Trapped-ion quantum computing (Austria)", website="https://www.aqt.eu",
+        free_tier=True, max_qubits=24, notes="Austrian trapped-ion platform. Free tier available."
+    ),
+    "nvidia_quantum_cloud": ProviderInfo(
+        id="nvidia_quantum_cloud", name="NVIDIA Quantum Cloud", provider_type=ProviderType.QUANTUM_CLOUD,
+        capabilities=[ProviderCapability.SIMULATION, ProviderCapability.GPU_COMPUTE],
+        sdk_package="cuquantum", sdk_import="cuquantum",
+        description="GPU-accelerated quantum simulation via NVIDIA cloud", website="https://www.nvidia.com/en-us/solutions/quantum-computing/",
+        free_tier=False, max_qubits=40, notes="cuQuantum on NVIDIA GPUs. Requires NGC account."
+    ),
+    # --- Advanced Simulators ---
+    "qiskit_aer": ProviderInfo(
+        id="qiskit_aer", name="Qiskit Aer", provider_type=ProviderType.QUANTUM_LOCAL,
+        capabilities=[ProviderCapability.SIMULATION, ProviderCapability.GATE_BASED],
+        sdk_package="qiskit-aer", sdk_import="qiskit_aer",
+        description="High-performance quantum circuit simulator (GPU optional)", website="https://qiskit.github.io/qiskit-aer/",
+        free_tier=True, max_qubits=32, notes="Local simulator. GPU acceleration with qiskit-aer-gpu."
+    ),
+    "cuquantum": ProviderInfo(
+        id="cuquantum", name="cuQuantum", provider_type=ProviderType.QUANTUM_LOCAL,
+        capabilities=[ProviderCapability.SIMULATION, ProviderCapability.GPU_COMPUTE],
+        sdk_package="cuquantum-python", sdk_import="cuquantum",
+        description="NVIDIA GPU-accelerated quantum simulation", website="https://developer.nvidia.com/cuquantum-sdk",
+        free_tier=True, max_qubits=30, notes="Requires NVIDIA GPU. Massive speedup for large circuits."
+    ),
 }
 
 CLASSICAL_PROVIDERS: Dict[str, ProviderInfo] = {
@@ -287,6 +359,41 @@ CLASSICAL_PROVIDERS: Dict[str, ProviderInfo] = {
         website="https://developer.apple.com/metal/",
         free_tier=True,
         notes="macOS only. PyTorch MPS backend for M1/M2/M3 chips."
+    ),
+    "arm": ProviderInfo(
+        id="arm", name="ARM Compute", provider_type=ProviderType.CLASSICAL_CPU,
+        capabilities=[ProviderCapability.CPU_COMPUTE],
+        sdk_package="numpy", sdk_import="numpy",
+        description="ARM processor optimized compute", website="https://www.arm.com",
+        free_tier=True, notes="ARM NEON optimizations. Raspberry Pi, phones, cloud ARM instances."
+    ),
+    "risc_v": ProviderInfo(
+        id="risc_v", name="RISC-V Compute", provider_type=ProviderType.CLASSICAL_CPU,
+        capabilities=[ProviderCapability.CPU_COMPUTE],
+        sdk_package="numpy", sdk_import="numpy",
+        description="RISC-V architecture compute", website="https://riscv.org",
+        free_tier=True, notes="Open ISA. Emerging platform for custom compute."
+    ),
+    "tpu": ProviderInfo(
+        id="tpu", name="Google TPU", provider_type=ProviderType.CLASSICAL_ACCEL,
+        capabilities=[ProviderCapability.TPU_COMPUTE],
+        sdk_package="jax", sdk_import="jax",
+        description="Google Tensor Processing Units via JAX", website="https://cloud.google.com/tpu",
+        free_tier=True, notes="Free TPU access via Google Colab. JAX/XLA backend."
+    ),
+    "fpga": ProviderInfo(
+        id="fpga", name="FPGA Compute", provider_type=ProviderType.CLASSICAL_ACCEL,
+        capabilities=[ProviderCapability.FPGA_COMPUTE],
+        sdk_package="pynq", sdk_import="pynq",
+        description="Field-Programmable Gate Array acceleration", website="https://www.xilinx.com/products/boards-and-kits/1-vad4rl.html",
+        free_tier=True, notes="Requires FPGA hardware (Xilinx/Intel). PYNQ framework."
+    ),
+    "npu": ProviderInfo(
+        id="npu", name="Neural Processing Unit", provider_type=ProviderType.CLASSICAL_ACCEL,
+        capabilities=[ProviderCapability.CPU_COMPUTE],
+        sdk_package="openvino", sdk_import="openvino",
+        description="Neural Processing Unit acceleration (Intel/Qualcomm)", website="https://docs.openvino.ai",
+        free_tier=True, notes="Intel NPU via OpenVINO. Qualcomm NPU via SNPE."
     ),
 }
 
@@ -457,22 +564,40 @@ class ProviderRegistry:
         """
         # Map provider_id to adapter module path
         adapter_map = {
-            # Quantum
+            # Quantum Cloud
             "ibm_quantum": ("integration.providers.quantum.ibm", "IBMQuantumAdapter"),
             "aws_braket": ("integration.providers.quantum.aws_braket", "AWSBraketAdapter"),
             "azure_quantum": ("integration.providers.quantum.azure", "AzureQuantumAdapter"),
-            "google_cirq": ("integration.providers.quantum.google", "GoogleCirqAdapter"),
-            "ionq": ("integration.providers.quantum.ionq", "IonQAdapter"),
+            "google_cirq": ("integration.providers.quantum.google", "GoogleQuantumAdapter"),
+            "ionq": ("integration.providers.quantum.ionq", "IonqAdapter"),
             "rigetti": ("integration.providers.quantum.rigetti", "RigettiAdapter"),
             "xanadu": ("integration.providers.quantum.xanadu", "XanaduAdapter"),
-            "dwave": ("integration.providers.quantum.dwave", "DWaveAdapter"),
+            "dwave": ("integration.providers.quantum.dwave", "DwaveAdapter"),
+            "quantinuum": ("integration.providers.quantum.quantinuum", "QuantinuumAdapter"),
+            "iqm": ("integration.providers.quantum.iqm", "IqmAdapter"),
+            "quera": ("integration.providers.quantum.quera", "QueraAdapter"),
+            "oxford": ("integration.providers.quantum.oxford", "OxfordAdapter"),
+            "atom_computing": ("integration.providers.quantum.atom_computing", "AtomComputingAdapter"),
+            "pasqal": ("integration.providers.quantum.pasqal", "PasqalAdapter"),
+            "aqt": ("integration.providers.quantum.aqt", "AqtAdapter"),
+            "nvidia_quantum_cloud": ("integration.providers.quantum.nvidia_qc", "NVIDIAQuantumCloudAdapter"),
+            # Quantum Local
             "local_simulator": ("integration.providers.quantum.local_sim", "LocalSimAdapter"),
-            # Classical
+            "qiskit_aer": ("integration.providers.quantum.qiskit_aer", "QiskitAerAdapter"),
+            "cuquantum": ("integration.providers.quantum.cuquantum", "cuQuantumAdapter"),
+            # Classical CPU
             "local_cpu": ("integration.providers.classical.cpu", "LocalCPUAdapter"),
+            "arm": ("integration.providers.classical.arm", "ArmAdapter"),
+            "risc_v": ("integration.providers.classical.risc_v", "RiscVAdapter"),
+            # Classical GPU
             "nvidia_cuda": ("integration.providers.classical.nvidia", "NVIDIACUDAAdapter"),
-            "amd_rocm": ("integration.providers.classical.amd", "AMDROCmAdapter"),
-            "intel_oneapi": ("integration.providers.classical.intel", "IntelOneAPIAdapter"),
-            "apple_metal": ("integration.providers.classical.apple", "AppleMetalAdapter"),
+            "amd_rocm": ("integration.providers.classical.amd", "AmdAdapter"),
+            "intel_oneapi": ("integration.providers.classical.intel", "IntelAdapter"),
+            "apple_metal": ("integration.providers.classical.apple", "AppleAdapter"),
+            # Classical Accelerators
+            "tpu": ("integration.providers.classical.tpu", "TpuAdapter"),
+            "fpga": ("integration.providers.classical.fpga", "FpgaAdapter"),
+            "npu": ("integration.providers.classical.npu", "NpuAdapter"),
         }
         
         if provider_id not in adapter_map:
