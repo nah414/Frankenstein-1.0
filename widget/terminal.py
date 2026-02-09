@@ -179,6 +179,11 @@ class FrankensteinTerminal:
             'synth': self._cmd_synthesis,  # Alias
             'bloch': self._cmd_bloch,      # Quick Bloch sphere
             'qubit': self._cmd_qubit,      # Quick qubit operations
+            # Intelligent Router (Phase 3 Step 5)
+            'route': self._cmd_route,
+            'route-options': self._cmd_route_options,
+            'route-test': self._cmd_route_test,
+            'route-history': self._cmd_route_history,
         }
         
         # Security monitor integration
@@ -1673,6 +1678,41 @@ class FrankensteinTerminal:
             self._write_error(f"Credentials module not available: {e}")
             self._write_output("Make sure integration/credentials.py exists.\n")
 
+    # ==================== INTELLIGENT ROUTER (Phase 3 Step 5) ====================
+
+    def _cmd_route(self, args: List[str]):
+        """Route a workload to the optimal compute provider"""
+        try:
+            from router.commands import handle_route_command
+            handle_route_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Router module not available: {e}")
+            self._write_output("Make sure router/ directory exists.\n")
+
+    def _cmd_route_options(self, args: List[str]):
+        """Show all compatible providers for a workload"""
+        try:
+            from router.commands import handle_route_options_command
+            handle_route_options_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Router module not available: {e}")
+
+    def _cmd_route_test(self, args: List[str]):
+        """Test routing to a specific provider"""
+        try:
+            from router.commands import handle_route_test_command
+            handle_route_test_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Router module not available: {e}")
+
+    def _cmd_route_history(self, args: List[str]):
+        """Show past routing decisions"""
+        try:
+            from router.commands import handle_route_history_command
+            handle_route_history_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Router module not available: {e}")
+
     # ==================== SYSTEM DIAGNOSTICS ====================
     
     def _cmd_diagnose(self, args: List[str]):
@@ -3064,6 +3104,87 @@ NOTES:
 ''',
                 # Diagnostics
                 'diagnose': 'diagnose [refresh|fix|kill|quick] - System diagnostics and optimization',
+                # Intelligent Router (Phase 3 Step 5)
+                'route': '''route - Route workloads to optimal compute providers
+
+INTELLIGENT ROUTER (Phase 3 Step 5)
+
+Routes quantum and classical workloads to the best available
+provider based on hardware, resources, and user priority.
+
+USAGE:
+  route --qubits N --priority MODE
+  route --type TYPE --qubits N --depth N
+  route --type classical_optimization --threads 2 --memory 512
+
+OPTIONS:
+  --type TYPE       Workload type:
+                      quantum_simulation (default if --qubits > 0)
+                      classical_optimization (default otherwise)
+                      hybrid_computation
+                      data_synthesis
+  --qubits N        Number of qubits (default 0)
+  --depth N         Circuit depth (default 0)
+  --threads N       CPU threads needed (default 1)
+  --memory N        Memory in MB (default 100)
+  --priority MODE   cost | speed | accuracy (default cost)
+
+SAFETY:
+  Hard limits enforced: CPU max 80%, RAM max 70%
+  Routes that would exceed limits are automatically blocked.
+
+EXAMPLES:
+  route --qubits 10 --priority cost      Small quantum, prefer free
+  route --qubits 30 --priority accuracy  Large quantum, best fidelity
+  route --type classical_optimization    Classical CPU routing
+
+RELATED COMMANDS:
+  route-options    Show all compatible providers ranked
+  route-test       Test routing to a specific provider
+  route-history    Show past routing decisions
+''',
+                'route-options': 'route-options --type TYPE --qubits N - Show all compatible providers ranked',
+                'route-test': 'route-test --provider NAME --qubits N - Test routing to a specific provider',
+                'route-history': 'route-history [--limit N] - Show past routing decisions',
+                'routing': '''routing - Intelligent Router Help Topic
+
+PHASE 3 STEP 5: INTELLIGENT WORKLOAD ROUTER
+
+The router automatically selects the best quantum or classical
+compute provider for your workload.
+
+HOW IT WORKS:
+  1. Analyzes your workload (qubits, memory, priority)
+  2. Detects available hardware (CPU, GPU, tier)
+  3. Checks resource safety (CPU < 80%, RAM < 70%)
+  4. Scores providers (cost, speed, accuracy)
+  5. Returns optimal provider + fallback chain
+
+ROUTING RULES:
+  Quantum:
+    <=5 qubits   -> Local simulators (free, instant)
+    6-20 qubits  -> Local sim + cloud fallback
+    21-29 qubits -> Cloud providers (IBM, AWS, Azure)
+    30+ qubits   -> Large-scale providers (IonQ, Rigetti, QuEra)
+
+  Classical:
+    NVIDIA GPU   -> nvidia_cuda
+    AMD GPU      -> amd_rocm
+    Apple Silicon -> apple_metal
+    Intel CPU    -> intel_oneapi, local_cpu
+    Default      -> local_cpu (NumPy/SciPy)
+
+PRIORITY MODES:
+  cost     -> Prefer free/local providers (default)
+  speed    -> Prefer fastest execution
+  accuracy -> Prefer highest fidelity
+
+COMMANDS:
+  route --qubits 10 --priority cost
+  route-options --type quantum_simulation --qubits 5
+  route-test --provider ibm_quantum --qubits 10
+  route-history
+''',
                 # Quantum Mode
                 'quantum': '''quantum - Enter quantum computing REPL mode
 
@@ -3273,6 +3394,28 @@ DIAGNOSTICS:
   diagnose fix <n>    Apply recommendation #n
   diagnose kill <name>  Terminate a process
   diagnose quick      Quick CPU/RAM stats
+
+INTELLIGENT ROUTER (Phase 3 Step 5):
+  route --qubits N --priority MODE    Route workload to optimal provider
+  route-options --type TYPE --qubits N  Show all compatible providers
+  route-test --provider NAME --qubits N Test routing to specific provider
+  route-history                       Show past routing decisions
+
+  +----------------------------------------------------+
+  |  ROUTING QUICK START:                              |
+  |                                                    |
+  |  route --qubits 10 --priority cost                |
+  |    Routes 10-qubit simulation to best free option  |
+  |                                                    |
+  |  route --qubits 30 --priority accuracy            |
+  |    Routes to highest-fidelity quantum hardware     |
+  |                                                    |
+  |  route --type classical_optimization              |
+  |    Routes classical workload to best local compute|
+  |                                                    |
+  |  Safety: CPU max 80%, RAM max 70% enforced        |
+  |  Details: help route  |  Topics: help routing     |
+  +----------------------------------------------------+
 
 QUANTUM MODE:
   quantum         Enter quantum computing mode (or 'q')
