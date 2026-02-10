@@ -29,16 +29,50 @@ from dataclasses import dataclass, field
 from enum import Enum
 import uuid
 
-import numpy as np
+# Phase 3.5: Load numpy via integration layer, fall back to pip
+try:
+    from libs.local_toolsets import load_numpy as _load_np
+    np = _load_np()
+    if np is None:
+        import numpy as np
+except ImportError:
+    import numpy as np
+
 from numpy import pi, sqrt, exp, sin, cos
 
-# Optional SciPy for advanced solvers
-try:
-    from scipy import linalg as sp_linalg
-    from scipy.integrate import solve_ivp
-    SCIPY_AVAILABLE = True
-except ImportError:
-    SCIPY_AVAILABLE = False
+# Phase 3.5: SciPy lazy-loaded via integration layer + pip fallback
+SCIPY_AVAILABLE = False
+_sp_linalg = None
+_solve_ivp = None
+
+def _ensure_scipy():
+    """Lazy-load SciPy on first use (integration layer -> pip fallback)."""
+    global SCIPY_AVAILABLE, _sp_linalg, _solve_ivp
+    if SCIPY_AVAILABLE:
+        return True
+    try:
+        from libs.local_toolsets import load_scipy as _load_sp
+        sp = _load_sp()
+        if sp is not None:
+            _sp_linalg = sp.linalg
+            try:
+                _solve_ivp = sp.integrate.solve_ivp
+            except AttributeError:
+                from scipy.integrate import solve_ivp as _sivp
+                _solve_ivp = _sivp
+            SCIPY_AVAILABLE = True
+            return True
+    except ImportError:
+        pass
+    try:
+        from scipy import linalg as _spl
+        from scipy.integrate import solve_ivp as _sivp
+        _sp_linalg = _spl
+        _solve_ivp = _sivp
+        SCIPY_AVAILABLE = True
+        return True
+    except ImportError:
+        return False
 
 
 class ComputeMode(Enum):
@@ -543,17 +577,17 @@ class SynthesisEngine:
         # Time points
         t_eval = np.linspace(t_span[0], t_span[1], num_points)
         
-        if SCIPY_AVAILABLE:
+        if _ensure_scipy():
             # Use SciPy's ODE solver for better accuracy
             def schrodinger_rhs(t, psi_flat):
                 psi = psi_flat[:dim] + 1j * psi_flat[dim:]
                 dpsi_dt = -1j / hbar * (hamiltonian @ psi)
                 return np.concatenate([dpsi_dt.real, dpsi_dt.imag])
-            
+
             # Flatten complex to real for solver
             y0 = np.concatenate([psi0.real, psi0.imag])
-            
-            sol = solve_ivp(
+
+            sol = _solve_ivp(
                 schrodinger_rhs,
                 t_span,
                 y0,
@@ -602,8 +636,8 @@ class SynthesisEngine:
         if self._statevector is None:
             raise RuntimeError("No statevector initialized")
         
-        if SCIPY_AVAILABLE:
-            U = sp_linalg.expm(-1j * hamiltonian * time / hbar)
+        if _ensure_scipy():
+            U = _sp_linalg.expm(-1j * hamiltonian * time / hbar)
         else:
             # Fallback: Taylor series approximation (less accurate)
             U = np.eye(len(hamiltonian), dtype=np.complex128)

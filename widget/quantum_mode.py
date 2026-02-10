@@ -92,6 +92,14 @@ class QuantumModeHandler:
             # NEW: Visualization toggle
             'viz': self._cmd_viz_toggle,
             'auto': self._cmd_viz_toggle,
+            # Phase 3.5: Local toolset commands
+            'decohere': self._cmd_decohere,
+            'mesolve': self._cmd_mesolve,
+            'transpile': self._cmd_transpile,
+            'encrypt': self._cmd_encrypt,
+            'decrypt': self._cmd_decrypt,
+            'entropy': self._cmd_entropy,
+            'toolsets': self._cmd_toolsets,
         }
     
     def set_output_callback(self, callback: Callable[[str], None]):
@@ -292,6 +300,16 @@ class QuantumModeHandler:
   viz [on|off]        Toggle auto Bloch sphere after measure
   auto [on|off]       Same as viz
                       (Default: ON - launches after every calculation)
+
+────────────────────── TOOLSET COMMANDS (Phase 3.5) ──────────────────────
+  decohere [type] [gamma]  Model decoherence on current state
+                           Types: amplitude_damping, dephasing, depolarizing
+  mesolve <H> <t>     Solve Lindblad master equation (requires QuTiP)
+  transpile [backend]  Transpile current gate log to Qiskit circuit
+  encrypt <text>       Quantum-assisted encryption (qencrypt)
+  decrypt <pkg>        Decrypt a qencrypt package
+  entropy              Compute von Neumann entropy of current state
+  toolsets             Show loaded/available local toolsets
 
 ────────────────────── TIPS ──────────────────────
   • Qubit indices are 0-based (rightmost = qubit 0)
@@ -982,8 +1000,236 @@ Example: evolve pauli_x 3.14159
             icon = "🟢" if self._auto_visualize else "🔴"
             self._output(f"{icon} Auto-visualization {status}\n")
     
+    # ==================== PHASE 3.5: TOOLSET COMMANDS ====================
+
+    def _cmd_decohere(self, args: List[str]):
+        """Model decoherence on the current state using QuTiP."""
+        dec_type = args[0] if args else "amplitude_damping"
+        gamma = float(args[1]) if len(args) > 1 else 0.1
+        try:
+            from agents.registry import get_registry
+            agent = get_registry().get("quantum_dynamics")
+            if agent is None:
+                self._output("quantum_dynamics agent not registered\n")
+                return
+
+            import qutip as qt
+            n = self._engine.get_num_qubits()
+            if n != 1:
+                self._output("decohere currently supports 1-qubit states\n")
+                return
+
+            sv = self._engine.get_state()
+            psi0 = qt.Qobj(sv.reshape(-1, 1))
+            tlist = np.linspace(0, 5.0 / max(gamma, 1e-6), 50)
+
+            r = agent.execute(
+                operation="decoherence",
+                state=psi0, gamma=gamma, tlist=tlist,
+                decoherence_type=dec_type,
+            )
+            if r.success:
+                final_purity = r.data["purities"][-1]
+                self._output(
+                    f"Decoherence ({dec_type}, gamma={gamma})\n"
+                    f"  Initial purity: {r.data['purities'][0]:.4f}\n"
+                    f"  Final purity:   {final_purity:.4f}  (t={tlist[-1]:.2f})\n"
+                )
+            else:
+                self._output(f"decohere failed: {r.error}\n")
+        except Exception as e:
+            self._output(f"decohere error: {e}\n")
+
+    def _cmd_mesolve(self, args: List[str]):
+        """Solve the Lindblad master equation via QuTiP mesolve."""
+        if len(args) < 2:
+            self._output("Usage: mesolve <hamiltonian> <time>\n")
+            self._output("  hamiltonian: pauli_x, pauli_z, precession\n")
+            return
+        try:
+            from agents.registry import get_registry
+            import qutip as qt
+
+            agent = get_registry().get("quantum_dynamics")
+            if agent is None:
+                self._output("quantum_dynamics agent not registered\n")
+                return
+
+            h_name = args[0].lower()
+            t_end = self._parse_angle(args[1])
+
+            from synthesis import hamiltonian_pauli_x, hamiltonian_pauli_z, hamiltonian_free_precession
+            h_map = {
+                "pauli_x": hamiltonian_pauli_x(),
+                "pauli_z": hamiltonian_pauli_z(),
+                "precession": hamiltonian_free_precession(),
+            }
+            H_np = h_map.get(h_name)
+            if H_np is None:
+                self._output(f"Unknown Hamiltonian: {h_name}\n")
+                return
+
+            H = qt.Qobj(H_np)
+            sv = self._engine.get_state()
+            rho0 = qt.Qobj(sv.reshape(-1, 1))
+            tlist = np.linspace(0, t_end, 50)
+
+            r = agent.execute(
+                operation="mesolve",
+                hamiltonian=H, rho0=rho0, tlist=tlist,
+                e_ops=[qt.sigmax(), qt.sigmay(), qt.sigmaz()],
+            )
+            if r.success:
+                ex = r.data["expect"]
+                self._output(
+                    f"mesolve complete (t=0..{t_end:.2f})\n"
+                    f"  <X>(final)={ex[0][-1]:.4f}  "
+                    f"<Y>(final)={ex[1][-1]:.4f}  "
+                    f"<Z>(final)={ex[2][-1]:.4f}\n"
+                )
+            else:
+                self._output(f"mesolve failed: {r.error}\n")
+        except Exception as e:
+            self._output(f"mesolve error: {e}\n")
+
+    def _cmd_transpile(self, args: List[str]):
+        """Transpile the current gate log to a Qiskit circuit."""
+        try:
+            from agents.registry import get_registry
+            agent = get_registry().get("quantum_hardware")
+            if agent is None:
+                self._output("quantum_hardware agent not registered\n")
+                return
+
+            # Build gate list from gate log
+            gates = []
+            for entry in self._engine._gate_log:
+                g = np.array(entry["gate"], dtype=complex)
+                target = entry["target"]
+                control = entry.get("control")
+
+                # Try to identify the gate by comparing matrices
+                gate_name = self._identify_gate(g)
+                if control is not None:
+                    gates.append({"gate": f"c{gate_name}", "qubits": [control, target]})
+                else:
+                    gates.append({"gate": gate_name, "qubits": [target]})
+
+            n = self._engine.get_num_qubits()
+            r = agent.execute(operation="build_circuit", num_qubits=n, gates=gates)
+            if r.success:
+                self._output(
+                    f"Transpiled to Qiskit circuit:\n"
+                    f"  Qubits: {r.data['num_qubits']}, Gates: {r.data['gate_count']}\n"
+                    f"  Depth: {r.data.get('depth', '?')}\n"
+                )
+            else:
+                self._output(f"transpile failed: {r.error}\n")
+        except Exception as e:
+            self._output(f"transpile error: {e}\n")
+
+    def _identify_gate(self, matrix: np.ndarray) -> str:
+        """Best-effort identification of a 2x2 gate matrix."""
+        from synthesis.engine import SynthesisEngine as SE
+        for name, ref in [("h", SE.HADAMARD), ("x", SE.PAULI_X),
+                          ("y", SE.PAULI_Y), ("z", SE.PAULI_Z),
+                          ("s", SE.S_GATE), ("t", SE.T_GATE)]:
+            if np.allclose(matrix, ref, atol=1e-8):
+                return name
+        return "u"
+
+    def _cmd_encrypt(self, args: List[str]):
+        """Encrypt text using qencrypt-local."""
+        if not args:
+            self._output("Usage: encrypt <text> [passphrase]\n")
+            return
+        try:
+            from agents.registry import get_registry
+            agent = get_registry().get("quantum_crypto")
+            if agent is None:
+                self._output("quantum_crypto agent not registered\n")
+                return
+
+            text = " ".join(args[:-1]) if len(args) > 1 else args[0]
+            passphrase = args[-1] if len(args) > 1 else "frankenstein"
+
+            r = agent.execute(
+                operation="encrypt",
+                plaintext=text, passphrase=passphrase,
+                entropy_source="local",
+            )
+            if r.success:
+                self._output(f"Encrypted ({len(str(r.data['package']))} chars)\n")
+                self._output(f"  Package stored in last result.\n")
+                self._last_crypto_package = r.data["package"]
+            else:
+                self._output(f"encrypt failed: {r.error}\n")
+        except Exception as e:
+            self._output(f"encrypt error: {e}\n")
+
+    def _cmd_decrypt(self, args: List[str]):
+        """Decrypt a qencrypt package."""
+        try:
+            from agents.registry import get_registry
+            agent = get_registry().get("quantum_crypto")
+            if agent is None:
+                self._output("quantum_crypto agent not registered\n")
+                return
+
+            pkg = getattr(self, "_last_crypto_package", None)
+            if pkg is None:
+                self._output("No encrypted package in memory. Run 'encrypt' first.\n")
+                return
+
+            passphrase = args[0] if args else "frankenstein"
+            r = agent.execute(operation="decrypt", package=pkg, passphrase=passphrase)
+            if r.success:
+                self._output(f"Decrypted: {r.data['plaintext']}\n")
+            else:
+                self._output(f"decrypt failed: {r.error}\n")
+        except Exception as e:
+            self._output(f"decrypt error: {e}\n")
+
+    def _cmd_entropy(self, args: List[str]):
+        """Compute von Neumann entropy of the current state."""
+        try:
+            from agents.registry import get_registry
+            import qutip as qt
+
+            agent = get_registry().get("quantum_dynamics")
+            if agent is None:
+                self._output("quantum_dynamics agent not registered\n")
+                return
+
+            sv = self._engine.get_state()
+            psi = qt.Qobj(sv.reshape(-1, 1))
+            rho = psi * psi.dag()
+
+            r = agent.execute(operation="entropy", state=rho, measure="von_neumann")
+            if r.success:
+                self._output(f"Von Neumann entropy: {r.data['entropy']:.6f}\n")
+            else:
+                self._output(f"entropy failed: {r.error}\n")
+        except Exception as e:
+            self._output(f"entropy error: {e}\n")
+
+    def _cmd_toolsets(self, args: List[str]):
+        """Show local toolset status."""
+        try:
+            from libs.local_toolsets import get_toolset_manager
+            mgr = get_toolset_manager()
+            status = mgr.get_loaded_status()
+            self._output("\nLocal Toolsets\n" + "-" * 45 + "\n")
+            for key, info in status.items():
+                tag = "LOADED" if info["loaded"] else "idle"
+                ram = f"{info['ram_mb']} MB" if info["loaded"] else "-"
+                self._output(f"  {key:16s}  {tag:8s}  RAM: {ram}\n")
+            self._output("-" * 45 + "\n")
+        except Exception as e:
+            self._output(f"toolsets error: {e}\n")
+
     # ==================== HELPER METHODS ====================
-    
+
     def _launch_bloch_after_measurement(self):
         """Launch Bloch sphere visualization after measurement/computation"""
         try:

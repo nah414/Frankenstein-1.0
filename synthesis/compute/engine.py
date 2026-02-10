@@ -6,7 +6,14 @@ The heart of FRANKENSTEIN's computational capabilities.
 Provides actual mathematical and physics calculations.
 """
 
-import numpy as np
+# Phase 3.5: Load numpy via integration layer, fall back to pip
+try:
+    from libs.local_toolsets import load_numpy as _load_np
+    np = _load_np()
+    if np is None:
+        import numpy as np
+except ImportError:
+    import numpy as np
 from typing import Dict, Any, Optional, List, Callable, Union
 from dataclasses import dataclass, field
 from enum import Enum

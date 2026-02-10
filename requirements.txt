@@ -1,4 +1,4 @@
-# FRANKENSTEIN 1.0 - Phase 2 Dependencies
+# FRANKENSTEIN 1.0 - Dependencies
 # Install with: pip install -r requirements.txt
 
 # Core
@@ -14,3 +14,11 @@ cryptography>=41.0.0
 
 # Data (Phase 2)
 jsonschema>=4.0.0
+
+# Phase 3.5: Local Toolset Dependencies
+numpy>=2.0.0
+scipy>=1.9.0
+qutip>=5.0.0
+qiskit>=1.0.0
+# qencrypt-local: install from local source with
+#   pip install -e C:\Users\adamn\Downloads\qencrypt-local\qencrypt-local
