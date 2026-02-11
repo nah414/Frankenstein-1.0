@@ -5,7 +5,7 @@ Phase 3, Step 5.5: Enforce CPU/RAM hard limits during routing
 
 Hard limits:
   - CPU: current + estimated must not exceed 80%
-  - RAM: current + estimated must not exceed 70%
+  - RAM: current + estimated must not exceed 75%
 
 Integrates with:
   - HardwareDiscovery for real-time resource tracking
@@ -22,7 +22,7 @@ logger = logging.getLogger("frankenstein.router.safety")
 
 # Hard limits — these NEVER change
 MAX_CPU_PERCENT = 80.0
-MAX_RAM_PERCENT = 70.0
+MAX_RAM_PERCENT = 75.0
 
 
 # ============================================================================

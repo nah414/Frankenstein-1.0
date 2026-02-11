@@ -169,6 +169,11 @@ class FrankensteinTerminal:
             'connect': self._cmd_connect,
             'disconnect': self._cmd_disconnect,
             'credentials': self._cmd_credentials,
+            # Permissions & Automation (Phase 3 Step 6)
+            'permissions': self._cmd_permissions,
+            'setup': self._cmd_setup,
+            'automation': self._cmd_automation,
+            'scheduler': self._cmd_scheduler,
             # System Diagnostics
             'diagnose': self._cmd_diagnose,
             # Quantum Mode
@@ -1713,6 +1718,48 @@ class FrankensteinTerminal:
         except ImportError as e:
             self._write_error(f"Router module not available: {e}")
 
+    # ==================== PERMISSIONS & AUTOMATION ====================
+
+    def _cmd_permissions(self, args: List[str]):
+        """Permission management commands"""
+        try:
+            from permissions.commands import handle_permissions_command
+            handle_permissions_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Permissions module not available: {e}")
+        except Exception as e:
+            self._write_error(f"Error executing permissions command: {e}")
+
+    def _cmd_setup(self, args: List[str]):
+        """Run setup wizard for permissions and automation"""
+        try:
+            from permissions.commands import handle_setup_command
+            handle_setup_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Setup wizard not available: {e}")
+        except Exception as e:
+            self._write_error(f"Error executing setup command: {e}")
+
+    def _cmd_automation(self, args: List[str]):
+        """Automation workflow management commands"""
+        try:
+            from automation.commands import handle_automation_command
+            handle_automation_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Automation module not available: {e}")
+        except Exception as e:
+            self._write_error(f"Error executing automation command: {e}")
+
+    def _cmd_scheduler(self, args: List[str]):
+        """Task scheduler management commands"""
+        try:
+            from automation.commands import handle_scheduler_command
+            handle_scheduler_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Scheduler module not available: {e}")
+        except Exception as e:
+            self._write_error(f"Error executing scheduler command: {e}")
+
     # ==================== SYSTEM DIAGNOSTICS ====================
     
     def _cmd_diagnose(self, args: List[str]):
@@ -3146,6 +3193,161 @@ RELATED COMMANDS:
                 'route-options': 'route-options --type TYPE --qubits N - Show all compatible providers ranked',
                 'route-test': 'route-test --provider NAME --qubits N - Test routing to a specific provider',
                 'route-history': 'route-history [--limit N] - Show past routing decisions',
+                # Permissions & Automation (Phase 3 Step 6)
+                'permissions': '''permissions - Permission management system
+
+PERMISSION MANAGEMENT (Phase 3 Step 6)
+
+Manage user roles, access control, and audit logging for
+all quantum and classical compute providers.
+
+USAGE:
+  permissions                     Show permission summary
+  permissions set-role ROLE       Set user role (Admin, User, Agent, ReadOnly)
+  permissions check PERMISSION    Check if permission is allowed
+  permissions providers           Show accessible providers
+  permissions audit [DAYS]        Show audit log (default: 7 days)
+  permissions reset               Reset to default settings
+
+ROLES:
+  Admin     - Full access to all 28 providers, automation control
+  User      - Submit jobs to quantum (15) and classical (13) providers
+  Agent     - Automated workflows only, no manual job submission
+  ReadOnly  - View-only access, no job submission
+
+PERMISSIONS:
+  quantum_job_submit         Submit quantum jobs
+  classical_compute_submit   Submit classical jobs
+  automation_control         Control automated workflows
+  permission_modify          Modify permission settings
+  provider_connect           Connect to providers
+  credential_modify          Modify credentials
+
+EXAMPLES:
+  permissions set-role Admin
+  permissions check quantum_job_submit
+  permissions providers
+  permissions audit 30
+
+RELATED COMMANDS:
+  setup       Run setup wizard for permissions
+  automation  Manage automated workflows
+''',
+                'setup': '''setup - Setup wizard for permissions and automation
+
+SETUP WIZARD (Phase 3 Step 6)
+
+Interactive wizard to configure user role, automation preferences,
+and workflow settings for Frankenstein 1.0.
+
+USAGE:
+  setup             Run interactive setup wizard
+  setup --default   Apply default configuration (Admin role, automation enabled)
+
+SETUP STEPS:
+  1. Select user role (Admin, User, Agent, ReadOnly)
+  2. Enable/disable automation
+  3. Configure automated workflows:
+     - Quantum queue optimization
+     - Classical queue optimization
+     - Credential expiry checking
+     - Resource report generation
+     - Provider health monitoring
+     - Hardware auto-tuning
+
+DEFAULT CONFIGURATION:
+  Role: Admin
+  Automation: Enabled
+  All workflows: Enabled (except auto_tune_hardware)
+
+EXAMPLES:
+  setup             Interactive setup
+  setup --default   Quick default setup
+''',
+                'automation': '''automation - Automation workflow management
+
+AUTOMATED WORKFLOWS (Phase 3 Step 6)
+
+Manage background automation workflows that optimize queue
+management, monitor provider health, and tune hardware.
+
+USAGE:
+  automation                      Show automation status
+  automation start                Start automation engine
+  automation stop                 Stop automation engine
+  automation status               Show workflow execution status
+  automation run WORKFLOW         Run a workflow manually
+  automation consent WORKFLOW     Grant termination consent
+  automation revoke WORKFLOW      Revoke termination consent
+
+WORKFLOWS (6 Total):
+  quantum_queue         Optimize quantum job queue (every 5 min)
+  classical_queue       Optimize classical compute queue (every 5 min)
+  credential_expiry     Check for expiring credentials (daily)
+  resource_report       Generate resource usage reports (daily)
+  provider_health       Monitor provider status (every 15 min)
+  hardware_tuning       Auto-tune hardware parameters (hourly)
+
+RESOURCE SAFETY:
+  CPU limit: 80% maximum
+  RAM limit: 75% maximum
+  Workflows paused if limits exceeded
+
+TERMINATION CONSENT:
+  Some workflows may terminate stuck/failed jobs.
+  User consent required before termination.
+
+EXAMPLES:
+  automation start
+  automation run quantum_queue
+  automation consent quantum_queue
+  automation status
+
+RELATED COMMANDS:
+  scheduler     Manage scheduled tasks
+  permissions   Configure automation permissions
+''',
+                'scheduler': '''scheduler - Task scheduler management
+
+TASK SCHEDULER (Phase 3 Step 6)
+
+Manage scheduled background tasks for automation workflows.
+Tasks run at configured intervals (every 5 min, hourly, daily).
+
+USAGE:
+  scheduler              Show scheduler status
+  scheduler tasks        List all scheduled tasks
+  scheduler pause TASK   Pause a task
+  scheduler resume TASK  Resume a paused task
+  scheduler stop         Stop the scheduler
+
+SCHEDULE TYPES:
+  Once       - Run once at specified time
+  Recurring  - Run repeatedly at interval
+  Daily      - Run once per day
+
+TASK STATUS:
+  pending   - Waiting to run
+  running   - Currently executing
+  paused    - Temporarily paused
+  stopped   - Stopped, won't run again
+  failed    - Execution failed
+
+SAFETY FEATURES:
+  - Resource monitoring (CPU < 80%, RAM < 75%)
+  - Auto-pause on high resource usage
+  - Error tracking and retry logic
+  - Graceful shutdown on stop
+
+EXAMPLES:
+  scheduler tasks
+  scheduler pause quantum_queue_task
+  scheduler resume quantum_queue_task
+
+RELATED COMMANDS:
+  automation    Manage workflows
+  permissions   Configure scheduler permissions
+''',
                 'routing': '''routing - Intelligent Router Help Topic
 
 PHASE 3 STEP 5: INTELLIGENT WORKLOAD ROUTER
@@ -3415,6 +3617,36 @@ INTELLIGENT ROUTER (Phase 3 Step 5):
   |                                                    |
   |  Safety: CPU max 80%, RAM max 70% enforced        |
   |  Details: help route  |  Topics: help routing     |
+  +----------------------------------------------------+
+
+PERMISSIONS AND AUTOMATION (Phase 3 Step 6):
+  help permissions     Manage user roles and access control
+  help setup           Setup wizard for permissions and automation
+  help automation      Manage automated workflows (6 workflows)
+  help scheduler       Task scheduler management
+
+  +----------------------------------------------------+
+  |  PERMISSIONS & AUTOMATION QUICK START:             |
+  |                                                    |
+  |  setup --default                                  |
+  |    Quick setup with Admin role and automation on   |
+  |                                                    |
+  |  permissions                                      |
+  |    View your role, permissions, and provider access|
+  |                                                    |
+  |  automation start                                 |
+  |    Start 6 background workflows (queue optimization|
+  |    credential checking, health monitoring)         |
+  |                                                    |
+  |  scheduler tasks                                  |
+  |    View all scheduled tasks and their status       |
+  |                                                    |
+  |  4 Roles: Admin, User, Agent, ReadOnly            |
+  |  28 Providers: 15 quantum + 13 classical          |
+  |  6 Workflows: Queue optimization, health checks   |
+  |  Safety Limits: CPU max 80%, RAM max 75%          |
+  |                                                    |
+  |  Details: help permissions  |  help automation    |
   +----------------------------------------------------+
 
 QUANTUM MODE:

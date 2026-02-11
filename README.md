@@ -19,11 +19,12 @@ Or double-click `RUN_FRANKENSTEIN.bat` on Windows.
 
 ## What It Does
 
-- **70+ terminal commands** - Navigation, file ops, Git, SSH, scripting, environment management
+- **74+ terminal commands** - Navigation, file ops, Git, SSH, scripting, environment management
 - **Quantum simulation** - Statevector simulation up to 16 qubits with Bloch sphere visualization
 - **Synthesis engine** - Schrodinger equation solver, Lorentz transformations, gate-based circuits
-- **29 provider adapters** - IBM Quantum, AWS Braket, Azure Quantum, IonQ, Rigetti, and more (all lazy-loaded)
+- **28 provider adapters** - IBM Quantum, AWS Braket, Azure Quantum, IonQ, Rigetti, and more (all lazy-loaded)
 - **Intelligent routing** - Auto-selects optimal provider based on workload, hardware, and cost
+- **Permissions & automation** - Role-based access control, 6 automated workflows, task scheduler
 - **5 local toolsets** - NumPy, SciPy, QuTiP, Qiskit, qencrypt integrated via lazy-loading layer
 
 ---
@@ -46,6 +47,8 @@ Frankenstein-1.0/
 |-- libs/                     # Local toolset integration layer
 |-- integration/              # Provider discovery, credentials, adapters
 |-- router/                   # Intelligent workload router
+|-- permissions/              # Role-based access control, audit logging
+|-- automation/               # Task scheduler, automated workflows
 |-- security/                 # Shield, filters, audit, monitoring
 |-- tests/                    # Unit + integration tests
 |-- scripts/                  # Verification and monitoring tools
@@ -73,8 +76,8 @@ Safety system, resource governor, memory persistence, task orchestrator, Monster
 ### Phase 2: Predictive Synthesis - COMPLETE
 Security dashboard, hardware health monitor, quantum-classical synthesis engine, Bloch sphere visualization, compute swarms, relativistic quantum integration, data pipeline, lab monitors
 
-### Phase 3: Universal Integration - COMPLETE (Steps 1-5)
-Hardware discovery, provider registry (29 providers), setup guide, provider adapters + credential management, intelligent workload router (scoring, safety, fallback)
+### Phase 3: Universal Integration - COMPLETE (Steps 1-6)
+Hardware discovery, provider registry (28 providers), setup guide, provider adapters + credential management, intelligent workload router (scoring, safety, fallback), permissions & automation system (4 roles, 6 workflows, task scheduler)
 
 ### Phase 3.5: Local Toolset Integration - COMPLETE
 Lazy-loading integration layer for 5 scientific toolsets, 4 dedicated agents (quantum dynamics, quantum hardware, quantum crypto, numerical computing), synthesis engine refactored to use integration layer, quantum mode expanded with 7 new commands, 66-test suite, resource monitor
