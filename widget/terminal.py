@@ -3392,35 +3392,136 @@ COMMANDS:
 
 ENTERING QUANTUM MODE:
   Just type 'quantum' or 'q' to enter the quantum computing sub-shell.
-  
+
 QUANTUM MODE COMMANDS (once inside):
-  qubit <n>       Initialize n qubits in |0> state
-  qubit <n>       Initialize n qubits in state |0>
-  qubit STATE     Initialize specific state (|+>, |0>, etc)
-  h <q>           Hadamard gate on qubit q
-  x/y/z <q>       Pauli gates
-  rx/ry/rz <q> θ  Rotation gates (use 'pi' for π)
-  cx <c> <t>      CNOT gate (control c, target t)
-  measure         Measure qubits and launch Bloch sphere visualization
-  bloch           Launch Bloch sphere visualization
-  bell            Quick Bell state creation
-  ghz [n]         Quick GHZ state (n qubits)
-  evolve H t      Time evolution under Hamiltonian
-  back            Return to main terminal
+
+  INITIALIZATION:
+    qubit <n>       Initialize n qubits in |0> state
+    qubit STATE     Initialize specific state (|+>, |0>, etc)
+    reset           Reset to |0> state
+
+  SINGLE-QUBIT GATES:
+    h <q>           Hadamard gate on qubit q
+    x/y/z <q>       Pauli gates
+    s/t <q>         Phase gates (S = sqrt(Z), T = 4th-root(Z))
+    rx/ry/rz <q> t  Rotation gates (use 'pi' for pi)
+
+  TWO-QUBIT GATES:
+    cx <c> <t>      CNOT gate (control c, target t)
+    cz <c> <t>      Controlled-Z gate
+
+  MULTI-CONTROLLED GATES (ENHANCED - 16 Qubit Support):
+    mcx <ctrls> <t> Multi-Controlled X (MCX)
+                    ENHANCED: numpy + scipy + qutip integration
+                    Supports up to 16 qubits (15 controls + 1 target)
+
+                    Examples:
+                      mcx 0 1              -> CNOT (1 control)
+                      mcx 0,1 2            -> Toffoli/CCNOT (2 controls)
+                      mcx 0,1,2 3          -> C³X (3 controls)
+                      mcx 0,1,2,3 4        -> C⁴X (4 controls)
+                      mcx 0,1,2,3,4,5,6 7  -> C⁷X (7 controls)
+                      mcx 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 15 -> C¹⁵X (max)
+
+                    Controls: comma-separated list (NO SPACES)
+                    Performance: 1-2: <5ms | 3-7: ~50ms | 8+: ~200ms
+                    Algorithm: Gate decomp (1-2) | NumPy (3-7) | SciPy sparse (8+)
+                    Use for: Grover search, amplitude amplification, oracle design
+
+  MEASUREMENT & VISUALIZATION:
+    measure         Measure all qubits + auto-launch 3D Bloch sphere
+    measure <shots> Specify number of shots (default: 1024)
+    bloch           Launch 3D Bloch sphere (Three.js in browser)
+    bloch2d         Matplotlib 2D Bloch sphere (X-Z projection)
+                    Uses 90% RAM limit (elevated for visualization)
+    bloch2d 3d      Matplotlib 3D interactive Bloch sphere
+                    Uses 90% RAM limit (elevated for visualization)
+
+  CIRCUITS:
+    bell            Quick Bell state creation (2 qubits)
+    ghz [n]         Quick GHZ state (n qubits, default 3)
+    qft [n]         Quantum Fourier Transform
+
+  EVOLUTION:
+    evolve H t      Time evolution under Hamiltonian H for time t
+
+  CONTROLS:
+    viz off/on      Toggle auto-visualization
+    back/exit       Return to main terminal
 
 AUTO-VISUALIZATION:
   After each 'measure' command, the 3D Bloch sphere opens in browser.
   Use 'viz off' to disable, 'viz on' to enable.
 
-EXAMPLE SESSION:
-  frankenstein> quantum
-  quantum[1q|0g]> qubit 2
-  quantum[2q|0g]> h 0
-  quantum[2q|1g]> cx 0 1
-  quantum[2q|2g]> measure
-  [3D Bloch sphere opens in browser]
-  quantum[2q|2g]> back
-  frankenstein>
+PERFORMANCE NOTES (Tier 1: Dell i3 8th Gen, 8GB RAM):
+  MCX Gates (numpy + scipy + qutip):
+    - 1-2 controls: <5ms   (gate decomposition)
+    - 3-7 controls: ~50ms  (numpy statevector)
+    - 8-15 controls: ~200ms (scipy sparse matrices)
+    - Maximum: 15 controls + 1 target = 16 qubits
+
+  Visualization:
+    - bloch (Three.js): No matplotlib, standard RAM usage
+    - bloch2d (matplotlib): 90% RAM limit (elevated for Bloch UI)
+    - General ops: 75% RAM limit (standard safety)
+
+  Tips:
+    - Use 'viz off' for batch operations with many measurements
+    - Use bloch2d when RAM is 75-90% (elevated limit)
+    - MCX with 8+ controls uses scipy for efficiency
+
+EXAMPLES:
+  # Create Bell state
+  quantum
+  qubit 2
+  h 0
+  cx 0 1
+  measure
+
+  # Create GHZ state with Toffoli
+  quantum
+  qubit 3
+  h 0
+  h 1
+  mcx 0,1 2
+  measure
+
+  # Advanced: 4-qubit entanglement
+  quantum
+  qubit 4
+  h 0
+  h 1
+  h 2
+  mcx 0,1,2 3
+  measure
+
+  # Maximum: 16-qubit entanglement (C¹⁵X gate)
+  quantum
+  qubit 16
+  h 0
+  h 1
+  h 2
+  h 3
+  h 4
+  h 5
+  h 6
+  h 7
+  h 8
+  h 9
+  h 10
+  h 11
+  h 12
+  h 13
+  h 14
+  mcx 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 15
+  measure
+
+  # Matplotlib Bloch sphere (2D/3D)
+  quantum
+  qubit 1
+  rx 0 1.2
+  bloch2d       # 2D projection with matplotlib (90% RAM limit)
+  bloch2d 3d    # 3D interactive matplotlib (90% RAM limit)
 ''',
                 'q': 'q - Shortcut to enter quantum mode (same as quantum)',
                 # Synthesis Engine
@@ -3652,15 +3753,26 @@ PERMISSIONS AND AUTOMATION (Phase 3 Step 6):
 QUANTUM MODE:
   quantum         Enter quantum computing mode (or 'q')
   qubit <n>       Quick qubit initialization
-  
+
   +----------------------------------------------------+
   |  QUANTUM MODE QUICK START:                        |
   |                                                    |
   |  1. Type 'quantum' or 'q' to enter quantum mode   |
-  |  2. Initialize: qubit 2  (creates 2 qubits)       |
-  |  3. Apply gates: h 0, cx 0 1  (Bell state)        |
-  |  4. Measure: measure  (auto-shows 3D Bloch!)      |
-  |  5. Type 'back' to return to main terminal        |
+  |  2. Initialize: qubit 3  (creates 3 qubits)       |
+  |  3. Apply gates: h 0, h 1  (superposition)        |
+  |  4. Multi-control: mcx 0,1 2  (Toffoli gate)      |
+  |  5. Measure: measure  (auto-shows 3D Bloch!)      |
+  |  6. Type 'back' to return to main terminal        |
+  |                                                    |
+  |  ENHANCED FEATURES (numpy + scipy + qutip):       |
+  |    mcx 0,1,2 3         <- C³X (3 controls)        |
+  |    mcx 0,1,2,3,4,5,6 7 <- C⁷X (7 controls, scipy) |
+  |    Max: 16 qubits (15 controls + 1 target)        |
+  |                                                    |
+  |  VISUALIZATION OPTIONS:                           |
+  |    bloch      <- 3D Three.js (browser)            |
+  |    bloch2d    <- 2D matplotlib (90% RAM)          |
+  |    bloch2d 3d <- 3D matplotlib (90% RAM)          |
   |                                                    |
   |  Shortcuts: bell, ghz, qft for common circuits    |
   |  Toggle viz: viz off (disable auto-visualization) |

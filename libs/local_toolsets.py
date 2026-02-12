@@ -43,6 +43,7 @@ LOCAL_SOURCE_PATHS = {
     "qutip": DOWNLOADS_PATH / "qutip-master" / "qutip-master",
     "qiskit": DOWNLOADS_PATH / "qiskit-main" / "qiskit-main",
     "qencrypt": DOWNLOADS_PATH / "qencrypt-local" / "qencrypt-local",
+    "matplotlib": DOWNLOADS_PATH / "matplotlib-main" / "matplotlib-main",
 }
 
 # ── Safety limits ────────────────────────────────────────────────────────────
@@ -110,6 +111,13 @@ class LocalToolsetManager:
                 estimated_ram_mb=40,
                 description="Quantum-assisted encryption (AES-256-GCM + quantum entropy)",
             ),
+            "matplotlib": ToolsetConfig(
+                name="matplotlib",
+                import_name="matplotlib",
+                local_source_dir="matplotlib-main/matplotlib-main",
+                estimated_ram_mb=150,
+                description="2D plotting and visualization (pyplot, figures, animations)",
+            ),
         }
         self._discover_sources()
 
@@ -151,12 +159,14 @@ class LocalToolsetManager:
 
     # ── Loading / unloading ──────────────────────────────────────────────
 
-    def load_toolset(self, toolset_key: str) -> Optional[Any]:
+    def load_toolset(self, toolset_key: str, ram_limit_override: Optional[float] = None) -> Optional[Any]:
         """
         Lazy-load a specific toolset.
 
         Args:
-            toolset_key: One of 'numpy', 'scipy', 'qutip', 'qiskit', 'qencrypt'
+            toolset_key: One of 'numpy', 'scipy', 'qutip', 'qiskit', 'qencrypt', 'matplotlib'
+            ram_limit_override: Optional RAM limit percentage (e.g., 90.0 for 90%)
+                               If provided, overrides the default 75% limit
 
         Returns:
             The imported module, or None if RAM constraint blocks the load.
@@ -176,15 +186,34 @@ class LocalToolsetManager:
         if config.loaded and config.module is not None:
             return config.module
 
-        # RAM gate
-        if not self._check_ram_availability(config.estimated_ram_mb):
-            msg = (
-                f"Insufficient RAM to load {config.name}. "
-                f"Estimated need: {config.estimated_ram_mb} MB."
-            )
-            logger.warning(msg)
-            config.load_error = msg
-            return None
+        # RAM gate (use override if provided)
+        if ram_limit_override is not None:
+            # Custom RAM check with override limit
+            mem = psutil.virtual_memory()
+            used_mb = mem.used / (1024 ** 2)
+            total_mb = mem.total / (1024 ** 2)
+            ceiling_mb = total_mb * (ram_limit_override / 100.0)
+            projected = used_mb + config.estimated_ram_mb
+
+            if projected > ceiling_mb:
+                msg = (
+                    f"Insufficient RAM to load {config.name} (limit override: {ram_limit_override}%). "
+                    f"Estimated need: {config.estimated_ram_mb} MB. "
+                    f"Projected: {projected:.0f} MB > Ceiling: {ceiling_mb:.0f} MB"
+                )
+                logger.warning(msg)
+                config.load_error = msg
+                return None
+        else:
+            # Standard RAM check (75% limit)
+            if not self._check_ram_availability(config.estimated_ram_mb):
+                msg = (
+                    f"Insufficient RAM to load {config.name}. "
+                    f"Estimated need: {config.estimated_ram_mb} MB."
+                )
+                logger.warning(msg)
+                config.load_error = msg
+                return None
 
         self._log_cpu_warning()
 
@@ -333,3 +362,22 @@ def load_qiskit():
 def load_qencrypt():
     """Load qencrypt_local for quantum encryption (lazy)."""
     return get_toolset_manager().load_toolset("qencrypt")
+
+
+def load_matplotlib(for_bloch_sphere: bool = False):
+    """
+    Load matplotlib for 2D plotting and visualization (lazy).
+
+    Args:
+        for_bloch_sphere: If True, use 90% RAM limit instead of 75%
+                         (Bloch Sphere UI gets elevated RAM allowance)
+
+    Returns:
+        matplotlib module or None if RAM limit exceeded
+    """
+    if for_bloch_sphere:
+        # SPECIAL CASE: Bloch Sphere UI gets 90% RAM limit
+        return get_toolset_manager().load_toolset("matplotlib", ram_limit_override=90.0)
+    else:
+        # Standard 75% RAM limit
+        return get_toolset_manager().load_toolset("matplotlib")
