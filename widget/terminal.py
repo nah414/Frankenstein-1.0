@@ -189,18 +189,29 @@ class FrankensteinTerminal:
             'route-options': self._cmd_route_options,
             'route-test': self._cmd_route_test,
             'route-history': self._cmd_route_history,
+            # Real-Time Adaptation (Phase 3 Step 7)
+            'adapt-status': self._cmd_adapt_status,
+            'adapt-patterns': self._cmd_adapt_patterns,
+            'adapt-performance': self._cmd_adapt_performance,
+            'adapt-insights': self._cmd_adapt_insights,
+            'adapt-recommend': self._cmd_adapt_recommend,
+            'adapt-history': self._cmd_adapt_history,
+            'adapt-dashboard': self._cmd_adapt_dashboard,
         }
         
         # Security monitor integration
         self._security_monitor = None
         self._security_dashboard = None
-        
+
         # Hardware monitor integration
         self._hardware_monitor = None
-        
+
         # Quantum mode integration
         self._quantum_mode = None
         self._in_quantum_mode = False
+
+        # Real-time adaptation integration (Phase 3 Step 7)
+        self._adaptation_commands = None  # Lazy-loaded
     
     def start(self) -> bool:
         """Start the terminal in a separate thread"""
@@ -1718,6 +1729,95 @@ class FrankensteinTerminal:
         except ImportError as e:
             self._write_error(f"Router module not available: {e}")
 
+    # ==================== REAL-TIME ADAPTATION ====================
+
+    def _ensure_adaptation_commands(self):
+        """Lazy-load adaptation commands on first use"""
+        if self._adaptation_commands is None:
+            try:
+                from agents.adaptation import get_adaptation_commands
+                self._adaptation_commands = get_adaptation_commands()
+            except ImportError as e:
+                self._write_error(f"⚠️ Adaptation module not available: {e}")
+                return None
+        return self._adaptation_commands
+
+    def _cmd_adapt_status(self, args: List[str]):
+        """Display current adaptation status"""
+        commands = self._ensure_adaptation_commands()
+        if commands:
+            try:
+                output = commands.cmd_adapt_status(args)
+                self._write_output(output)
+            except Exception as e:
+                self._write_error(f"Error getting adaptation status: {e}")
+
+    def _cmd_adapt_patterns(self, args: List[str]):
+        """Display learned adaptation patterns"""
+        commands = self._ensure_adaptation_commands()
+        if commands:
+            try:
+                output = commands.cmd_adapt_patterns(args)
+                self._write_output(output)
+            except Exception as e:
+                self._write_error(f"Error getting patterns: {e}")
+
+    def _cmd_adapt_performance(self, args: List[str]):
+        """Display performance metrics and rankings"""
+        commands = self._ensure_adaptation_commands()
+        if commands:
+            try:
+                output = commands.cmd_adapt_performance(args)
+                self._write_output(output)
+            except Exception as e:
+                self._write_error(f"Error getting performance metrics: {e}")
+
+    def _cmd_adapt_insights(self, args: List[str]):
+        """Display adaptation insights and analytics"""
+        commands = self._ensure_adaptation_commands()
+        if commands:
+            try:
+                output = commands.cmd_adapt_insights(args)
+                self._write_output(output)
+            except Exception as e:
+                self._write_error(f"Error getting insights: {e}")
+
+    def _cmd_adapt_recommend(self, args: List[str]):
+        """Get provider recommendation for a task type"""
+        commands = self._ensure_adaptation_commands()
+        if commands:
+            try:
+                output = commands.cmd_adapt_recommend(args)
+                self._write_output(output)
+            except Exception as e:
+                self._write_error(f"Error getting recommendation: {e}")
+
+    def _cmd_adapt_history(self, args: List[str]):
+        """Display adaptation history"""
+        commands = self._ensure_adaptation_commands()
+        if commands:
+            try:
+                output = commands.cmd_adapt_history(args)
+                self._write_output(output)
+            except Exception as e:
+                self._write_error(f"Error getting history: {e}")
+
+    def _cmd_adapt_dashboard(self, args: List[str]):
+        """Display full adaptation dashboard"""
+        commands = self._ensure_adaptation_commands()
+        if commands:
+            try:
+                from agents.adaptation import get_adaptation_engine
+                from agents.adaptation.adaptation_display import AdaptationDisplay
+
+                engine = get_adaptation_engine(initialize=True)
+                engine._initialize_components()
+
+                dashboard = AdaptationDisplay.render_dashboard(engine)
+                self._write_output(dashboard)
+            except Exception as e:
+                self._write_error(f"Error rendering dashboard: {e}")
+
     # ==================== PERMISSIONS & AUTOMATION ====================
 
     def _cmd_permissions(self, args: List[str]):
@@ -3193,6 +3293,96 @@ RELATED COMMANDS:
                 'route-options': 'route-options --type TYPE --qubits N - Show all compatible providers ranked',
                 'route-test': 'route-test --provider NAME --qubits N - Test routing to a specific provider',
                 'route-history': 'route-history [--limit N] - Show past routing decisions',
+                # Real-Time Adaptation (Phase 3 Step 7)
+                'adapt-status': '''adapt-status - Display current adaptation status
+
+REAL-TIME ADAPTATION (Phase 3 Step 7)
+
+Shows monitoring status, resource usage, safety limits, and total adaptations.
+
+EXAMPLE OUTPUT:
+  ============================================================
+  REAL-TIME ADAPTATION STATUS
+  ============================================================
+  Monitoring Active: YES
+  Total Adaptations: 5
+  Concurrent:        0
+  CPU Usage:         24.3%
+  RAM Usage:         45.1%
+
+  Safety Limits:
+    CPU:  24.3% / 80% (Safe: True)
+    RAM:  45.1% / 70% (Safe: True)
+  ============================================================
+''',
+                'adapt-patterns': '''adapt-patterns [task_type] - View learned adaptation patterns
+
+USAGE:
+  adapt-patterns              Show all patterns summary
+  adapt-patterns quantum_sim  Show patterns for specific task type
+
+Displays learned execution patterns including:
+  - Provider success rates
+  - Confidence scores
+  - Resource profiles (CPU, RAM)
+  - Execution counts
+''',
+                'adapt-performance': '''adapt-performance [provider_id] - View performance metrics
+
+USAGE:
+  adapt-performance            Show provider rankings
+  adapt-performance ibm_q      Show metrics for specific provider
+
+Displays:
+  - Provider rankings by latency
+  - Average metrics (latency, CPU, RAM)
+  - Degradation alerts if present
+  - Recent execution history
+''',
+                'adapt-insights': '''adapt-insights - Analyze adaptation patterns and effectiveness
+
+Shows advanced analytics:
+  - High-performing providers
+  - Underperforming providers
+  - Adaptation effectiveness metrics
+  - Recent adaptation reasons
+  - Success/failure patterns
+''',
+                'adapt-recommend': '''adapt-recommend <task_type> - Get provider recommendation
+
+USAGE:
+  adapt-recommend quantum_simulation
+
+Returns:
+  - Recommended provider ID
+  - Confidence score (0-100%)
+  - Expected success rate
+  - Resource estimates (CPU, RAM, duration)
+  - Reason for recommendation
+''',
+                'adapt-history': '''adapt-history [limit] - View adaptation history
+
+USAGE:
+  adapt-history      Show last 10 adaptations
+  adapt-history 25   Show last 25 adaptations
+
+Displays chronological log of:
+  - Task IDs
+  - Success/failure status
+  - Adaptation reasons
+  - Provider switches
+  - Timestamps
+''',
+                'adapt-dashboard': '''adapt-dashboard - Display full adaptation dashboard
+
+Shows complete real-time dashboard with:
+  - Status panel (monitoring, CPU, RAM, safety)
+  - Performance summary (top providers)
+  - Learning summary (patterns learned)
+  - Real-time updates
+
+ASCII box-drawing visualization for terminal display.
+''',
                 # Permissions & Automation (Phase 3 Step 6)
                 'permissions': '''permissions - Permission management system
 
@@ -3748,6 +3938,45 @@ PERMISSIONS AND AUTOMATION (Phase 3 Step 6):
   |  Safety Limits: CPU max 80%, RAM max 75%          |
   |                                                    |
   |  Details: help permissions  |  help automation    |
+  +----------------------------------------------------+
+
+REAL-TIME ADAPTATION (Phase 3 Step 7):
+  help adapt-status        View current adaptation status
+  help adapt-patterns      View learned patterns
+  help adapt-performance   View performance metrics
+  help adapt-insights      View adaptation analytics
+  help adapt-recommend     Get provider recommendations
+  help adapt-history       View adaptation history
+  help adapt-dashboard     View full adaptation dashboard
+
+  +----------------------------------------------------+
+  |  REAL-TIME ADAPTATION QUICK START:                |
+  |                                                    |
+  |  adapt-status                                     |
+  |    Show monitoring status, CPU/RAM, safety limits  |
+  |                                                    |
+  |  adapt-dashboard                                  |
+  |    Full ASCII dashboard with all panels            |
+  |                                                    |
+  |  adapt-recommend quantum_simulation               |
+  |    Get best provider for task type                 |
+  |                                                    |
+  |  adapt-performance                                |
+  |    View provider rankings by latency               |
+  |                                                    |
+  |  adapt-insights                                   |
+  |    Analyze high/low performers and effectiveness   |
+  |                                                    |
+  |  FEATURES:                                        |
+  |  • EMA learning (30% new, 70% historical)         |
+  |  • Multi-factor confidence scoring                |
+  |  • 3-tier intelligent routing                     |
+  |  • Provider health monitoring (4 states)          |
+  |  • Automatic failover & degradation detection     |
+  |  • SQLite + JSON persistence                      |
+  |  • Safety: CPU max 80%, RAM max 70%               |
+  |                                                    |
+  |  Details: help adapt-status  |  help adapt-patterns|
   +----------------------------------------------------+
 
 QUANTUM MODE:
