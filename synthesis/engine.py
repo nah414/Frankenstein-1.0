@@ -308,11 +308,27 @@ class SynthesisEngine:
     
     # Phase gates
     S_GATE = np.array([[1, 0], [0, 1j]], dtype=np.complex128)
+    S_DAG = np.array([[1, 0], [0, -1j]], dtype=np.complex128)
     T_GATE = np.array([[1, 0], [0, exp(1j * pi / 4)]], dtype=np.complex128)
-    
+    T_DAG = np.array([[1, 0], [0, exp(-1j * pi / 4)]], dtype=np.complex128)
+
+    # Fractional gates (square roots)
+    SX_GATE = np.array([[1+1j, 1-1j], [1-1j, 1+1j]], dtype=np.complex128) / 2  # sqrt(X)
+    SX_DAG = np.array([[1-1j, 1+1j], [1+1j, 1-1j]], dtype=np.complex128) / 2   # sqrt(X)†
+    SY_GATE = np.array([[1+1j, -1-1j], [1+1j, 1+1j]], dtype=np.complex128) / 2  # sqrt(Y)
+    SY_DAG = np.array([[1-1j, 1-1j], [-1+1j, 1-1j]], dtype=np.complex128) / 2   # sqrt(Y)†
+
+    # SWAP matrix (4x4)
+    SWAP_GATE = np.array([
+        [1, 0, 0, 0],
+        [0, 0, 1, 0],
+        [0, 1, 0, 0],
+        [0, 0, 0, 1]
+    ], dtype=np.complex128)
+
     # Identity
     IDENTITY = np.eye(2, dtype=np.complex128)
-    
+
     @staticmethod
     def rx(theta: float) -> np.ndarray:
         """Rotation around X axis"""
@@ -320,7 +336,7 @@ class SynthesisEngine:
             [cos(theta/2), -1j * sin(theta/2)],
             [-1j * sin(theta/2), cos(theta/2)]
         ], dtype=np.complex128)
-    
+
     @staticmethod
     def ry(theta: float) -> np.ndarray:
         """Rotation around Y axis"""
@@ -328,7 +344,7 @@ class SynthesisEngine:
             [cos(theta/2), -sin(theta/2)],
             [sin(theta/2), cos(theta/2)]
         ], dtype=np.complex128)
-    
+
     @staticmethod
     def rz(theta: float) -> np.ndarray:
         """Rotation around Z axis"""
@@ -336,11 +352,22 @@ class SynthesisEngine:
             [exp(-1j * theta/2), 0],
             [0, exp(1j * theta/2)]
         ], dtype=np.complex128)
-    
+
     @staticmethod
     def phase(phi: float) -> np.ndarray:
-        """General phase gate"""
+        """General phase gate P(phi) = diag(1, e^(i*phi))"""
         return np.array([[1, 0], [0, exp(1j * phi)]], dtype=np.complex128)
+
+    @staticmethod
+    def fractional_gate(base_gate: np.ndarray, fraction: float) -> np.ndarray:
+        """
+        Compute gate^fraction via eigendecomposition.
+        Works for any unitary: X^(1/n), Y^(1/n), Z^(1/n), etc.
+        fraction is in half-turns (1.0 = full gate, 0.5 = sqrt, etc.)
+        """
+        eigenvalues, eigenvectors = np.linalg.eig(base_gate)
+        powered = np.diag(eigenvalues ** fraction)
+        return eigenvectors @ powered @ np.linalg.inv(eigenvectors)
     
     # ==================== CONVENIENCE METHODS ====================
     
@@ -376,18 +403,166 @@ class SynthesisEngine:
         """Apply controlled-Z gate"""
         self.apply_gate(self.PAULI_Z, target, control)
     
+    def sdg(self, target: int):
+        """Apply S-dagger (inverse S) gate"""
+        self.apply_gate(self.S_DAG, target)
+
+    def tdg(self, target: int):
+        """Apply T-dagger (inverse T) gate"""
+        self.apply_gate(self.T_DAG, target)
+
+    def sx(self, target: int):
+        """Apply sqrt(X) gate"""
+        self.apply_gate(self.SX_GATE, target)
+
+    def sxdg(self, target: int):
+        """Apply sqrt(X)-dagger gate"""
+        self.apply_gate(self.SX_DAG, target)
+
+    def p(self, target: int, phi: float):
+        """Apply phase gate P(phi)"""
+        self.apply_gate(self.phase(phi), target)
+
+    def cp(self, control: int, target: int, phi: float):
+        """Apply controlled-phase gate"""
+        self.apply_gate(self.phase(phi), target, control)
+
+    def ch(self, control: int, target: int):
+        """Apply controlled-Hadamard gate"""
+        self.apply_gate(self.HADAMARD, target, control)
+
+    def cy(self, control: int, target: int):
+        """Apply controlled-Y gate"""
+        self.apply_gate(self.PAULI_Y, target, control)
+
     def rotate_x(self, target: int, theta: float):
         """Apply Rx rotation"""
         self.apply_gate(self.rx(theta), target)
-    
+
     def rotate_y(self, target: int, theta: float):
         """Apply Ry rotation"""
         self.apply_gate(self.ry(theta), target)
-    
+
     def rotate_z(self, target: int, theta: float):
         """Apply Rz rotation"""
         self.apply_gate(self.rz(theta), target)
-    
+
+    def swap(self, qubit1: int, qubit2: int):
+        """Apply SWAP gate between two qubits via statevector manipulation"""
+        if self._statevector is None:
+            raise RuntimeError("No statevector initialized")
+        state = self._statevector.copy()
+        new_state = state.copy()
+        for i in range(len(state)):
+            bit1 = (i >> qubit1) & 1
+            bit2 = (i >> qubit2) & 1
+            if bit1 != bit2:
+                j = i ^ (1 << qubit1) ^ (1 << qubit2)
+                new_state[i] = state[j]
+        self._statevector = new_state
+        self._gate_log.append({
+            "gate": "SWAP", "target": [qubit1, qubit2],
+            "control": None, "timestamp": time.time()
+        })
+        if len(self._gate_log) > self._max_gate_log:
+            self._gate_log.pop(0)
+
+    def cswap(self, control: int, qubit1: int, qubit2: int):
+        """Apply controlled-SWAP (Fredkin) gate"""
+        if self._statevector is None:
+            raise RuntimeError("No statevector initialized")
+        state = self._statevector.copy()
+        new_state = state.copy()
+        for i in range(len(state)):
+            if (i >> control) & 1:
+                bit1 = (i >> qubit1) & 1
+                bit2 = (i >> qubit2) & 1
+                if bit1 != bit2:
+                    j = i ^ (1 << qubit1) ^ (1 << qubit2)
+                    new_state[i] = state[j]
+        self._statevector = new_state
+        self._gate_log.append({
+            "gate": "CSWAP", "target": [qubit1, qubit2],
+            "control": control, "timestamp": time.time()
+        })
+        if len(self._gate_log) > self._max_gate_log:
+            self._gate_log.pop(0)
+
+    def increment(self, qubits: list):
+        """Increment a register of qubits: |n> -> |n+1 mod 2^k>"""
+        if self._statevector is None:
+            raise RuntimeError("No statevector initialized")
+        n_reg = len(qubits)
+        mod = 2 ** n_reg
+        state = self._statevector.copy()
+        new_state = np.zeros_like(state)
+        for i in range(len(state)):
+            val = 0
+            for bit_pos, q in enumerate(qubits):
+                val |= ((i >> q) & 1) << bit_pos
+            new_val = (val + 1) % mod
+            j = i
+            for bit_pos, q in enumerate(qubits):
+                old_bit = (i >> q) & 1
+                new_bit = (new_val >> bit_pos) & 1
+                if old_bit != new_bit:
+                    j ^= (1 << q)
+            new_state[j] += state[i]
+        self._statevector = new_state
+        self._gate_log.append({
+            "gate": "INC", "target": qubits,
+            "control": None, "timestamp": time.time()
+        })
+        if len(self._gate_log) > self._max_gate_log:
+            self._gate_log.pop(0)
+
+    def decrement(self, qubits: list):
+        """Decrement a register of qubits: |n> -> |n-1 mod 2^k>"""
+        if self._statevector is None:
+            raise RuntimeError("No statevector initialized")
+        n_reg = len(qubits)
+        mod = 2 ** n_reg
+        state = self._statevector.copy()
+        new_state = np.zeros_like(state)
+        for i in range(len(state)):
+            val = 0
+            for bit_pos, q in enumerate(qubits):
+                val |= ((i >> q) & 1) << bit_pos
+            new_val = (val - 1) % mod
+            j = i
+            for bit_pos, q in enumerate(qubits):
+                old_bit = (i >> q) & 1
+                new_bit = (new_val >> bit_pos) & 1
+                if old_bit != new_bit:
+                    j ^= (1 << q)
+            new_state[j] += state[i]
+        self._statevector = new_state
+        self._gate_log.append({
+            "gate": "DEC", "target": qubits,
+            "control": None, "timestamp": time.time()
+        })
+        if len(self._gate_log) > self._max_gate_log:
+            self._gate_log.pop(0)
+
+    def reverse_bits(self, qubits: list):
+        """Reverse bit order of a qubit register"""
+        n = len(qubits)
+        for i in range(n // 2):
+            self.swap(qubits[i], qubits[n - 1 - i])
+
+    def measure_x(self, qubit: int) -> int:
+        """Measure in X-basis: rotate to X eigenbasis, measure, rotate back"""
+        self.h(qubit)
+        result = self.measure_single(qubit)
+        return result
+
+    def measure_y(self, qubit: int) -> int:
+        """Measure in Y-basis: rotate to Y eigenbasis, measure"""
+        self.apply_gate(self.S_DAG, qubit)
+        self.h(qubit)
+        result = self.measure_single(qubit)
+        return result
+
     # ==================== MEASUREMENT ====================
     
     def get_probabilities(self) -> Dict[str, float]:
