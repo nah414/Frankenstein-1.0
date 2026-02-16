@@ -641,7 +641,39 @@ class SynthesisEngine:
                 probs[basis] = prob
         
         return probs
-    
+
+    def get_marginal_probabilities(self) -> List[Dict[str, float]]:
+        """
+        Get marginal probabilities for each individual qubit.
+
+        Computes P(qubit_i = |0⟩) and P(qubit_i = |1⟩) for each qubit
+        by tracing over all other qubits.
+
+        Returns:
+            List of dicts with keys 'p0' and 'p1' for each qubit
+        """
+        if self._statevector is None:
+            raise RuntimeError("No statevector initialized")
+
+        marginals = []
+        for q in range(self._num_qubits):
+            # Get reduced density matrix for this qubit
+            rho = self._partial_trace(q)
+
+            # Diagonal elements give probabilities
+            p0 = float(np.real(rho[0, 0]))
+            p1 = float(np.real(rho[1, 1]))
+
+            # Normalize (should already be normalized, but ensure it)
+            total = p0 + p1
+            if total > 0:
+                p0 /= total
+                p1 /= total
+
+            marginals.append({'p0': p0, 'p1': p1})
+
+        return marginals
+
     def measure(self, shots: int = 1024) -> Dict[str, int]:
         """
         Perform measurement simulation with optional JIT optimization.

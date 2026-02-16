@@ -104,12 +104,17 @@ class QuantumVisualizer:
         entanglement_info: Dict[str, Any],
         num_qubits: int,
         gate_count: int = 0,
-        result_id: str = "multi"
+        result_id: str = "multi",
+        theoretical_probs: Dict[str, float] = None,
+        experimental_probs: Dict[str, float] = None,
+        marginal_probs: List[Dict[str, float]] = None,
+        shots: int = 0
     ) -> bool:
         """
-        Launch multi-qubit Bloch sphere visualization.
+        Launch multi-qubit Bloch sphere visualization with probability display.
 
-        Shows all qubits in a grid layout with entanglement status.
+        Shows all qubits in a grid layout with entanglement status and
+        both theoretical and experimental probability distributions.
 
         Args:
             qubit_coords: List of (x, y, z) Bloch coordinates per qubit
@@ -117,6 +122,10 @@ class QuantumVisualizer:
             num_qubits: Number of qubits in the system
             gate_count: Number of gates applied
             result_id: Unique ID for temp file
+            theoretical_probs: Theoretical probabilities from statevector
+            experimental_probs: Experimental probabilities from measurements
+            marginal_probs: Per-qubit marginal probabilities [{p0, p1}, ...]
+            shots: Number of measurement shots (0 if no measurement)
 
         Returns:
             True if launched successfully
@@ -145,6 +154,15 @@ class QuantumVisualizer:
         except ImportError:
             backend = 'NumPy'
 
+        # Prepare probability data
+        if theoretical_probs is None:
+            theoretical_probs = {}
+        if experimental_probs is None:
+            experimental_probs = {}
+        if marginal_probs is None:
+            # Default marginal probs (equal superposition)
+            marginal_probs = [{'p0': 0.5, 'p1': 0.5} for _ in range(num_qubits)]
+
         # Inject values
         html = html.replace('{{NUM_QUBITS}}', str(num_qubits))
         html = html.replace('{{QUBIT_COORDS}}', json.dumps(qubit_coords))
@@ -154,9 +172,15 @@ class QuantumVisualizer:
         html = html.replace('{{MAX_ENTROPY}}', f"{entanglement_info.get('max_entanglement', 0.0):.1f}")
         html = html.replace('{{GATE_COUNT}}', str(gate_count))
         html = html.replace('{{BACKEND}}', backend)
+        html = html.replace('{{SHOTS}}', str(shots) if shots > 0 else 'N/A')
 
         html = html.replace('{{ENTANGLEMENT_CLASS}}', 'entangled' if is_entangled else 'separable')
         html = html.replace('{{ENTANGLEMENT_STATUS}}', '⚛️ ENTANGLED' if is_entangled else '✓ SEPARABLE')
+
+        # Inject probability data
+        html = html.replace('{{THEORETICAL_PROBS}}', json.dumps(theoretical_probs))
+        html = html.replace('{{EXPERIMENTAL_PROBS}}', json.dumps(experimental_probs))
+        html = html.replace('{{MARGINAL_PROBS}}', json.dumps(marginal_probs))
 
         # Write temp file
         output_path = self._temp_dir / f"bloch_multi_{result_id}.html"

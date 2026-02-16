@@ -1349,33 +1349,57 @@ Examples:
             except ValueError:
                 self._output("❌ Invalid shot count\n")
                 return
-        
+
+        num_qubits = self._engine.get_num_qubits()
+
+        # Perform measurement
         results = self._engine.measure(shots)
-        probs = self._engine.get_probabilities()
-        
+        theoretical_probs = self._engine.get_probabilities()
+
+        # Show terminal output
         self._output(f"\n📊 Measurement Results ({shots} shots)\n")
         self._output("─" * 40 + "\n")
-        
+
         # Sort by count
         sorted_results = sorted(results.items(), key=lambda x: -x[1])
-        
+
         for basis, count in sorted_results:
             pct = count / shots * 100
             bar_len = int(pct / 5)
             bar = "█" * bar_len + "░" * (20 - bar_len)
             self._output(f"  |{basis}⟩  {bar} {count:4d} ({pct:5.1f}%)\n")
-        
+
         self._output("─" * 40 + "\n")
-        
-        # Show Bloch coordinates for single qubit
-        if self._engine.get_num_qubits() == 1:
-            x, y, z = self._engine.get_bloch_coords(0)
-            self._output(f"\nBloch: (x={x:+.4f}, y={y:+.4f}, z={z:+.4f})\n")
-        
-        # AUTO-LAUNCH Bloch sphere visualization after measurement
-        if self._auto_visualize and self._engine.get_num_qubits() <= 4:
-            self._output("\n🌐 Auto-launching Bloch sphere visualization...\n")
-            self._launch_bloch_after_measurement()
+
+        # Launch Bloch sphere visualization with measurement data
+        if num_qubits <= 16:
+            try:
+                # Convert counts to probabilities for experimental data
+                experimental_probs = {basis: count/shots for basis, count in results.items()}
+
+                # Get all quantum state data
+                all_coords = self._engine.get_all_qubit_bloch_coords()
+                entanglement = self._engine.get_entanglement_info()
+                marginal_probs = self._engine.get_marginal_probabilities()
+
+                from synthesis.quantum import get_visualizer
+                visualizer = get_visualizer()
+
+                # Always use multi-qubit visualization (works for 1+ qubits)
+                success = visualizer.launch_multi_qubit_bloch(
+                    qubit_coords=all_coords,
+                    entanglement_info=entanglement,
+                    num_qubits=num_qubits,
+                    gate_count=len(self._engine._gate_log),
+                    theoretical_probs=theoretical_probs,
+                    experimental_probs=experimental_probs,
+                    marginal_probs=marginal_probs,
+                    shots=shots
+                )
+                if success:
+                    self._output(f"🌐 Launched visualization with measurement data\n")
+            except Exception as e:
+                self._output(f"⚠️ Visualization error: {e}\n")
 
     def _cmd_measure_x(self, args: List[str]):
         """Measure in X basis"""
@@ -1430,7 +1454,7 @@ Examples:
     # ==================== VISUALIZATION ====================
     
     def _cmd_bloch(self, args: List[str]):
-        """Launch Bloch sphere visualization for all qubits"""
+        """Launch Bloch sphere visualization with probability display"""
         num_qubits = self._engine.get_num_qubits()
 
         if num_qubits > 16:
@@ -1444,29 +1468,29 @@ Examples:
             # Get entanglement info
             entanglement = self._engine.get_entanglement_info()
 
+            # Get probability data
+            theoretical_probs = self._engine.get_probabilities()
+            marginal_probs = self._engine.get_marginal_probabilities()
+
             # Get visualizer
             from synthesis.quantum import get_visualizer
             visualizer = get_visualizer()
 
-            # Use multi-qubit visualization if more than 1 qubit
-            if num_qubits > 1:
-                success = visualizer.launch_multi_qubit_bloch(
-                    qubit_coords=all_coords,
-                    entanglement_info=entanglement,
-                    num_qubits=num_qubits,
-                    gate_count=len(self._engine._gate_log)
-                )
+            # Always use multi-qubit visualization (works for 1+ qubits)
+            success = visualizer.launch_multi_qubit_bloch(
+                qubit_coords=all_coords,
+                entanglement_info=entanglement,
+                num_qubits=num_qubits,
+                gate_count=len(self._engine._gate_log),
+                theoretical_probs=theoretical_probs,
+                marginal_probs=marginal_probs,
+                shots=0  # No measurement in bloch command
+            )
 
-                if success:
-                    self._output(f"🌐 Launched {num_qubits}-qubit Bloch visualization\n")
-                    if entanglement['is_entangled']:
-                        self._output(f"   ⚛️ ENTANGLED (Schmidt rank: {entanglement['schmidt_rank']})\n")
-            else:
-                # Single qubit - use original visualization
-                x, y, z = all_coords[0]
-                success = visualizer.launch_bloch_sphere((x, y, z))
-                if success:
-                    self._output(f"🌐 Bloch: ({x:+.4f}, {y:+.4f}, {z:+.4f})\n")
+            if success:
+                self._output(f"🌐 Launched {num_qubits}-qubit Bloch visualization\n")
+                if entanglement['is_entangled']:
+                    self._output(f"   ⚛️ ENTANGLED (Schmidt rank: {entanglement['schmidt_rank']})\n")
 
         except Exception as e:
             self._output(f"❌ Visualization error: {e}\n")
