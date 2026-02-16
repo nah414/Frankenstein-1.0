@@ -97,7 +97,77 @@ class QuantumVisualizer:
         webbrowser.open(f'file:///{output_path.as_posix()}')
         
         return True
-    
+
+    def launch_multi_qubit_bloch(
+        self,
+        qubit_coords: List[Tuple[float, float, float]],
+        entanglement_info: Dict[str, Any],
+        num_qubits: int,
+        gate_count: int = 0,
+        result_id: str = "multi"
+    ) -> bool:
+        """
+        Launch multi-qubit Bloch sphere visualization.
+
+        Shows all qubits in a grid layout with entanglement status.
+
+        Args:
+            qubit_coords: List of (x, y, z) Bloch coordinates per qubit
+            entanglement_info: Dict from get_entanglement_info()
+            num_qubits: Number of qubits in the system
+            gate_count: Number of gates applied
+            result_id: Unique ID for temp file
+
+        Returns:
+            True if launched successfully
+        """
+        widget_dir = Path(__file__).parent.parent.parent / "widget"
+        template_path = widget_dir / "bloch_sphere_multi.html"
+
+        if not template_path.exists():
+            self._output(f"⚠️ Multi-qubit template not found at {template_path}\n")
+            # Fall back to single-qubit visualization
+            if qubit_coords:
+                return self.launch_bloch_sphere(qubit_coords[0], result_id=result_id)
+            return False
+
+        # Read template
+        with open(template_path, 'r', encoding='utf-8') as f:
+            html = f.read()
+
+        # Prepare data
+        is_entangled = entanglement_info.get('is_entangled', False)
+
+        # Check if JAX is available (for backend display)
+        try:
+            import jax
+            backend = 'JAX'
+        except ImportError:
+            backend = 'NumPy'
+
+        # Inject values
+        html = html.replace('{{NUM_QUBITS}}', str(num_qubits))
+        html = html.replace('{{QUBIT_COORDS}}', json.dumps(qubit_coords))
+        html = html.replace('{{IS_ENTANGLED}}', 'true' if is_entangled else 'false')
+        html = html.replace('{{SCHMIDT_RANK}}', str(entanglement_info.get('schmidt_rank', 1)))
+        html = html.replace('{{ENTROPY}}', f"{entanglement_info.get('entanglement_entropy', 0.0):.3f}")
+        html = html.replace('{{MAX_ENTROPY}}', f"{entanglement_info.get('max_entanglement', 0.0):.1f}")
+        html = html.replace('{{GATE_COUNT}}', str(gate_count))
+        html = html.replace('{{BACKEND}}', backend)
+
+        html = html.replace('{{ENTANGLEMENT_CLASS}}', 'entangled' if is_entangled else 'separable')
+        html = html.replace('{{ENTANGLEMENT_STATUS}}', '⚛️ ENTANGLED' if is_entangled else '✓ SEPARABLE')
+
+        # Write temp file
+        output_path = self._temp_dir / f"bloch_multi_{result_id}.html"
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(html)
+
+        # Launch browser
+        webbrowser.open(f'file:///{output_path.as_posix()}')
+
+        return True
+
     def get_multi_qubit_bloch(
         self,
         statevector: np.ndarray,

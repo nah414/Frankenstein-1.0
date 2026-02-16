@@ -1430,22 +1430,46 @@ Examples:
     # ==================== VISUALIZATION ====================
     
     def _cmd_bloch(self, args: List[str]):
-        """Launch Bloch sphere visualization (3D HTML/Three.js)"""
-        from synthesis import ComputeMode
+        """Launch Bloch sphere visualization for all qubits"""
+        num_qubits = self._engine.get_num_qubits()
 
-        result = self._engine.compute(
-            mode=ComputeMode.STATEVECTOR,
-            shots=0,  # No measurement needed for Bloch
-            visualize=True
-        )
+        if num_qubits > 16:
+            self._output("⚠️ Bloch visualization limited to 16 qubits\n")
+            return
 
-        if result.success:
-            self._output("🌐 Launched 3D Bloch sphere in browser\n")
-            if result.bloch_coords:
-                x, y, z = result.bloch_coords
-                self._output(f"   Coordinates: ({x:+.4f}, {y:+.4f}, {z:+.4f})\n")
-        else:
-            self._output(f"❌ Visualization failed: {result.error}\n")
+        try:
+            # Get coordinates for ALL qubits
+            all_coords = self._engine.get_all_qubit_bloch_coords()
+
+            # Get entanglement info
+            entanglement = self._engine.get_entanglement_info()
+
+            # Get visualizer
+            from synthesis.quantum import get_visualizer
+            visualizer = get_visualizer()
+
+            # Use multi-qubit visualization if more than 1 qubit
+            if num_qubits > 1:
+                success = visualizer.launch_multi_qubit_bloch(
+                    qubit_coords=all_coords,
+                    entanglement_info=entanglement,
+                    num_qubits=num_qubits,
+                    gate_count=len(self._engine._gate_log)
+                )
+
+                if success:
+                    self._output(f"🌐 Launched {num_qubits}-qubit Bloch visualization\n")
+                    if entanglement['is_entangled']:
+                        self._output(f"   ⚛️ ENTANGLED (Schmidt rank: {entanglement['schmidt_rank']})\n")
+            else:
+                # Single qubit - use original visualization
+                x, y, z = all_coords[0]
+                success = visualizer.launch_bloch_sphere((x, y, z))
+                if success:
+                    self._output(f"🌐 Bloch: ({x:+.4f}, {y:+.4f}, {z:+.4f})\n")
+
+        except Exception as e:
+            self._output(f"❌ Visualization error: {e}\n")
 
     def _cmd_bloch_matplotlib(self, args: List[str]):
         """
