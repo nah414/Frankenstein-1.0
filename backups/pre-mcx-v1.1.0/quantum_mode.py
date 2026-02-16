@@ -1,0 +1,1270 @@
+#!/usr/bin/env python3
+"""
+FRANKENSTEIN 1.0 - Quantum Mode Handler
+Phase 2, Step 3: Quantum Computing Mode for Monster Terminal
+
+Provides a dedicated quantum computing REPL mode within the Monster Terminal.
+Implements hybrid mode switching as per Option C architecture.
+
+Commands:
+    quantum              Enter quantum mode
+    qubit [state]        Initialize qubit(s)
+    gate <name> [args]   Apply quantum gate
+    measure [shots]      Perform measurement
+    bloch               Show Bloch sphere
+    evolve              Time evolution
+    back/exit           Return to main terminal
+
+Author: Frankenstein Project
+"""
+
+import numpy as np
+from numpy import pi, sqrt
+from typing import Dict, List, Any, Optional, Callable, Tuple
+import re
+
+
+class QuantumModeHandler:
+    """
+    Handles quantum mode commands within the Monster Terminal.
+    
+    This provides a sub-REPL for quantum computing operations
+    that integrates with the main Synthesis Engine.
+    """
+    
+    def __init__(self, output_callback: Callable[[str], None] = None):
+        """
+        Initialize quantum mode handler.
+        
+        Args:
+            output_callback: Function to write output to terminal
+        """
+        self._output = output_callback or print
+        self._engine = None
+        self._active = False
+        
+        # Auto-visualization flag
+        self._auto_visualize = True
+        
+        # Command registry
+        self._commands: Dict[str, Callable] = {
+            'help': self._cmd_help,
+            '?': self._cmd_help,
+            'qubit': self._cmd_qubit,
+            'qubits': self._cmd_qubit,
+            'init': self._cmd_qubit,
+            'reset': self._cmd_reset,
+            'gate': self._cmd_gate,
+            'h': self._cmd_gate_h,
+            'x': self._cmd_gate_x,
+            'y': self._cmd_gate_y,
+            'z': self._cmd_gate_z,
+            's': self._cmd_gate_s,
+            't': self._cmd_gate_t,
+            'rx': self._cmd_gate_rx,
+            'ry': self._cmd_gate_ry,
+            'rz': self._cmd_gate_rz,
+            'cx': self._cmd_gate_cx,
+            'cnot': self._cmd_gate_cx,
+            'cz': self._cmd_gate_cz,
+            'measure': self._cmd_measure,
+            'm': self._cmd_measure,
+            'prob': self._cmd_probabilities,
+            'probs': self._cmd_probabilities,
+            'state': self._cmd_state,
+            'bloch': self._cmd_bloch,
+            'evolve': self._cmd_evolve,
+            'hamiltonian': self._cmd_hamiltonian,
+            'compute': self._cmd_compute,
+            'run': self._cmd_compute,
+            'status': self._cmd_status,
+            'history': self._cmd_history,
+            'clear': self._cmd_clear,
+            'back': self._cmd_exit,
+            'exit': self._cmd_exit,
+            'quit': self._cmd_exit,
+            # NEW: Circuit commands
+            'circuit': self._cmd_circuit,
+            'circuits': self._cmd_list_circuits,
+            'bell': self._cmd_bell,
+            'ghz': self._cmd_ghz,
+            'qft': self._cmd_qft,
+            # NEW: Visualization toggle
+            'viz': self._cmd_viz_toggle,
+            'auto': self._cmd_viz_toggle,
+            # Phase 3.5: Local toolset commands
+            'decohere': self._cmd_decohere,
+            'mesolve': self._cmd_mesolve,
+            'transpile': self._cmd_transpile,
+            'encrypt': self._cmd_encrypt,
+            'decrypt': self._cmd_decrypt,
+            'entropy': self._cmd_entropy,
+            'toolsets': self._cmd_toolsets,
+        }
+    
+    def set_output_callback(self, callback: Callable[[str], None]):
+        """Set the output callback for terminal display"""
+        self._output = callback
+    
+    def enter_mode(self) -> bool:
+        """Enter quantum mode - initialize engine"""
+        try:
+            from synthesis import get_synthesis_engine, VisualizationMode
+            self._engine = get_synthesis_engine()
+            self._engine.set_output_callback(self._output)
+            self._engine.auto_visualize = False  # Manual control in terminal
+            self._active = True
+            self._show_welcome()
+            return True
+        except ImportError as e:
+            self._output(f"❌ Failed to load synthesis engine: {e}\n")
+            return False
+    
+    def exit_mode(self):
+        """Exit quantum mode"""
+        self._active = False
+        self._output("\n🔙 Exiting quantum mode. Returning to main terminal.\n")
+    
+    def is_active(self) -> bool:
+        """Check if quantum mode is active"""
+        return self._active
+    
+    def get_prompt(self) -> str:
+        """Get the quantum mode prompt"""
+        if self._engine:
+            n = self._engine.get_num_qubits()
+            g = self._engine.get_gate_count()
+            return f"quantum[{n}q|{g}g]>"
+        return "quantum>"
+    
+    def handle_command(self, command_line: str) -> bool:
+        """
+        Handle a command in quantum mode.
+        
+        Args:
+            command_line: Raw command string
+            
+        Returns:
+            True if should stay in quantum mode, False to exit
+        """
+        if not self._active:
+            return False
+        
+        parts = command_line.strip().split()
+        if not parts:
+            return True
+        
+        cmd = parts[0].lower()
+        args = parts[1:]
+        
+        if cmd in self._commands:
+            try:
+                result = self._commands[cmd](args)
+                if result is False:  # Explicit exit
+                    return False
+            except Exception as e:
+                self._output(f"❌ Error: {e}\n")
+        else:
+            self._output(f"❌ Unknown quantum command: '{cmd}'. Type 'help' for commands.\n")
+        
+        return True
+    
+    def _show_welcome(self):
+        """Display quantum mode welcome with detailed instructions"""
+        welcome = """
+╔═══════════════════════════════════════════════════════════════════╗
+║                                                                   ║
+║   ⚛️  FRANKENSTEIN QUANTUM MODE                                   ║
+║                                                                   ║
+║   Local quantum simulation using NumPy/SciPy                     ║
+║   Tier 1 Hardware: Max 16 qubits (statevector)                   ║
+║                                                                   ║
+╠═══════════════════════════════════════════════════════════════════╣
+║                                                                   ║
+║   🚀 QUICK START (Copy these commands):                          ║
+║                                                                   ║
+║     qubit 2            ← Initialize 2 qubits in |00⟩             ║
+║     h 0                ← Hadamard on qubit 0 (superposition)     ║
+║     cx 0 1             ← CNOT creates entanglement               ║
+║     measure            ← Measure + AUTO-LAUNCH 3D Bloch!         ║
+║                                                                   ║
+╠═══════════════════════════════════════════════════════════════════╣
+║                                                                   ║
+║   📦 CIRCUIT SHORTCUTS:                                          ║
+║     bell               ← Instant Bell state (2 qubits)           ║
+║     ghz 3              ← Instant GHZ state (3 qubits)            ║
+║     qft                ← Quantum Fourier Transform               ║
+║                                                                   ║
+║   🔧 CONTROLS:                                                   ║
+║     viz off            ← Turn off auto 3D visualization          ║
+║     viz on             ← Turn on auto 3D visualization           ║
+║     help               ← Full command reference                  ║
+║     back               ← Return to main terminal                 ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
+"""
+        self._output(welcome)
+    
+    # ==================== COMMAND HANDLERS ====================
+    
+    def _cmd_help(self, args: List[str]):
+        """Show quantum mode help"""
+        if args:
+            # Specific command help
+            cmd = args[0].lower()
+            help_details = self._get_detailed_help(cmd)
+            if help_details:
+                self._output(f"\n{help_details}\n")
+            else:
+                self._output(f"❌ No detailed help for '{cmd}'\n")
+            return
+        
+        help_text = """
+╔═══════════════════════════════════════════════════════════════════╗
+║                    QUANTUM MODE - COMMAND REFERENCE               ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+────────────────────── INITIALIZATION ──────────────────────
+  qubit <n>           Initialize n qubits in |0...0⟩ state
+                      Example: qubit 2  → Creates 2-qubit register
+  
+  qubit |state>       Initialize specific state
+                      Example: qubit |+>  → |+⟩ = (|0⟩+|1⟩)/√2
+                      Example: qubit |01> → |01⟩ state
+  
+  reset               Reset to |0⟩ state (keeps qubit count)
+
+────────────────────── SINGLE-QUBIT GATES ──────────────────────
+  h <target>          Hadamard gate - creates superposition
+                      Example: h 0  → Apply H to qubit 0
+  
+  x <target>          Pauli-X (NOT) gate - bit flip
+  y <target>          Pauli-Y gate
+  z <target>          Pauli-Z gate - phase flip
+  s <target>          S gate (√Z) - π/2 phase
+  t <target>          T gate - π/4 phase
+
+────────────────────── ROTATION GATES ──────────────────────
+  rx <target> <θ>     Rotate around X axis by θ radians
+                      Example: rx 0 pi/2  → 90° X rotation
+  
+  ry <target> <θ>     Rotate around Y axis
+                      Example: ry 0 0.5   → Arbitrary Y rotation
+  
+  rz <target> <θ>     Rotate around Z axis
+                      Supports: pi, pi/2, pi/4, or decimal
+
+────────────────────── TWO-QUBIT GATES ──────────────────────
+  cx <ctrl> <tgt>     CNOT (Controlled-X) gate
+                      Example: cx 0 1  → Control=0, Target=1
+  
+  cz <ctrl> <tgt>     Controlled-Z gate
+
+────────────────────── MEASUREMENT ──────────────────────
+  measure             Measure all qubits (1024 shots)
+  measure <shots>     Specify number of shots
+                      Example: measure 4096
+  
+  prob                Show probability distribution
+  state               Display current statevector
+
+────────────────────── VISUALIZATION ──────────────────────
+  bloch               Launch 3D Bloch sphere in browser
+                      Shows state on interactive sphere
+  
+  compute             Run computation + auto-visualization
+
+────────────────────── TIME EVOLUTION ──────────────────────
+  evolve <H> <t>      Evolve state under Hamiltonian H for time t
+                      Example: evolve pauli_x 3.14
+                      Hamiltonians: pauli_x, pauli_z, precession
+
+  hamiltonian         List available Hamiltonians
+
+────────────────────── UTILITY ──────────────────────
+  status              Show engine status and resources
+  history             Show computation history
+  clear               Clear terminal output
+  back / exit         Return to main terminal mode
+
+────────────────────── PREDEFINED CIRCUITS ──────────────────────
+  circuits            List all available circuits
+  circuit <n>      Apply predefined circuit by name
+                      Example: circuit bell
+  
+  bell                Create Bell state (2 qubits)
+  ghz [n]             Create GHZ state (default 3 qubits)
+  qft [n]             Apply Quantum Fourier Transform
+
+────────────────────── AUTO-VISUALIZATION ──────────────────────
+  viz [on|off]        Toggle auto Bloch sphere after measure
+  auto [on|off]       Same as viz
+                      (Default: ON - launches after every calculation)
+
+────────────────────── TOOLSET COMMANDS (Phase 3.5) ──────────────────────
+  decohere [type] [gamma]  Model decoherence on current state
+                           Types: amplitude_damping, dephasing, depolarizing
+  mesolve <H> <t>     Solve Lindblad master equation (requires QuTiP)
+  transpile [backend]  Transpile current gate log to Qiskit circuit
+  encrypt <text>       Quantum-assisted encryption (qencrypt)
+  decrypt <pkg>        Decrypt a qencrypt package
+  entropy              Compute von Neumann entropy of current state
+  toolsets             Show loaded/available local toolsets
+
+────────────────────── TIPS ──────────────────────
+  • Qubit indices are 0-based (rightmost = qubit 0)
+  • Use 'pi' in angle expressions: rx 0 pi/4
+  • Chain gates: h 0 → cx 0 1 → measure (Bell state!)
+  • Type 'help <command>' for detailed help on any command
+
+────────────────────── EXAMPLES ──────────────────────
+
+  🔹 Bell State (Entanglement):
+     qubit 2
+     h 0
+     cx 0 1
+     measure
+  
+  🔹 Superposition:
+     qubit 1
+     h 0
+     measure
+  
+  🔹 GHZ State (3-qubit entanglement):
+     ghz 3
+     measure
+  
+  🔹 Time Evolution:
+     qubit 1
+     h 0
+     evolve pauli_z pi
+     measure
+  
+  🔹 Rotation Gates:
+     qubit 1
+     ry 0 pi/4
+     measure
+
+"""
+        self._output(help_text)
+    
+    def _get_detailed_help(self, cmd: str) -> Optional[str]:
+        """Get detailed help for specific command"""
+        details = {
+            'qubit': """
+QUBIT - Initialize Quantum Register
+═══════════════════════════════════════════════════════════════
+
+Usage:
+  qubit <n>           Initialize n qubits in |0...0⟩
+  qubit |state>       Initialize specific computational basis state
+  qubit |+>           Initialize |+⟩ state
+  qubit |->           Initialize |−⟩ state
+
+Examples:
+  qubit 1             → Single qubit |0⟩
+  qubit 3             → Three qubits |000⟩
+  qubit |1>           → Single qubit |1⟩
+  qubit |01>          → Two qubits |01⟩
+  qubit |+>           → Superposition (|0⟩+|1⟩)/√2
+
+Notes:
+  - Maximum 16 qubits for Tier 1 hardware
+  - Qubit 0 is rightmost (LSB convention)
+""",
+            'h': """
+H - Hadamard Gate
+═══════════════════════════════════════════════════════════════
+
+Usage:
+  h <target>          Apply Hadamard to target qubit
+
+Matrix:
+       1  [ 1   1 ]
+  H = ─── [       ]
+      √2  [ 1  -1 ]
+
+Effect:
+  |0⟩ → |+⟩ = (|0⟩ + |1⟩)/√2
+  |1⟩ → |−⟩ = (|0⟩ − |1⟩)/√2
+
+Examples:
+  h 0                 → Superposition on qubit 0
+  qubit 1 → h 0       → Creates |+⟩ state
+""",
+            'cx': """
+CX / CNOT - Controlled-NOT Gate
+═══════════════════════════════════════════════════════════════
+
+Usage:
+  cx <control> <target>
+  cnot <control> <target>
+
+Effect:
+  Flips target qubit if control qubit is |1⟩
+
+Truth Table:
+  |00⟩ → |00⟩
+  |01⟩ → |01⟩
+  |10⟩ → |11⟩  (flipped!)
+  |11⟩ → |10⟩  (flipped!)
+
+Examples:
+  cx 0 1              → Control=0, Target=1
+  
+  Bell State Creation:
+    qubit 2
+    h 0
+    cx 0 1
+    measure           → 50% |00⟩, 50% |11⟩
+""",
+            'evolve': """
+EVOLVE - Time Evolution
+═══════════════════════════════════════════════════════════════
+
+Usage:
+  evolve <hamiltonian> <time>
+
+Solves the Schrödinger equation:
+  iℏ ∂|ψ⟩/∂t = H|ψ⟩
+
+Available Hamiltonians:
+  pauli_x     H = σx/2      (Rabi oscillations)
+  pauli_z     H = σz/2      (Larmor precession)
+  precession  H = σz/2 + 0.1·σx/2  (Combined)
+
+Examples:
+  qubit |+>
+  evolve pauli_z 3.14        → Full Larmor cycle
+  
+  qubit 1
+  h 0
+  evolve pauli_x 1.57        → π/2 Rabi pulse
+"""
+        }
+        return details.get(cmd)
+    
+    def _cmd_qubit(self, args: List[str]):
+        """Initialize qubit(s)"""
+        if not args:
+            self._output("Usage: qubit <n> or qubit |state>\n")
+            self._output("Examples: qubit 2, qubit |+>, qubit |01>\n")
+            return
+        
+        arg = args[0]
+        
+        # Check for ket notation
+        if arg.startswith('|') and arg.endswith('>'):
+            state_str = arg[1:-1]
+            self._init_from_ket(state_str)
+        else:
+            # Numeric - number of qubits
+            try:
+                n = int(arg)
+                if n < 1 or n > 16:
+                    self._output("❌ Qubit count must be 1-16 for Tier 1 hardware\n")
+                    return
+                
+                self._engine.reset(n)
+                self._output(f"✅ Initialized {n} qubit(s) in |{'0'*n}⟩ state\n")
+            except ValueError:
+                self._output(f"❌ Invalid argument: '{arg}'. Use number or |ket⟩\n")
+    
+    def _init_from_ket(self, state_str: str):
+        """Initialize from ket notation like |0>, |+>, |01>"""
+        state_str = state_str.lower()
+        
+        if state_str == '+':
+            # |+⟩ = (|0⟩ + |1⟩)/√2
+            self._engine.reset(1)
+            self._engine.h(0)
+            self._output("✅ Initialized |+⟩ = (|0⟩ + |1⟩)/√2\n")
+        
+        elif state_str == '-':
+            # |−⟩ = (|0⟩ − |1⟩)/√2
+            self._engine.reset(1)
+            self._engine.x(0)
+            self._engine.h(0)
+            self._output("✅ Initialized |−⟩ = (|0⟩ − |1⟩)/√2\n")
+        
+        elif all(c in '01' for c in state_str):
+            # Computational basis state like |01⟩
+            n = len(state_str)
+            self._engine.reset(n)
+            
+            # Apply X gates to flip to desired state
+            for i, bit in enumerate(reversed(state_str)):
+                if bit == '1':
+                    self._engine.x(i)
+            
+            self._output(f"✅ Initialized |{state_str}⟩\n")
+        
+        else:
+            self._output(f"❌ Unknown state: |{state_str}⟩\n")
+            self._output("   Supported: |0⟩, |1⟩, |+⟩, |−⟩, |01⟩, etc.\n")
+    
+    def _cmd_reset(self, args: List[str]):
+        """Reset to |0⟩ state"""
+        n = self._engine.get_num_qubits()
+        self._engine.reset(n)
+        self._output(f"✅ Reset to |{'0'*n}⟩ state\n")
+    
+    def _parse_angle(self, angle_str: str) -> float:
+        """Parse angle string, supporting 'pi' notation"""
+        angle_str = angle_str.lower().replace(' ', '')
+        
+        # Replace pi with numpy value
+        angle_str = angle_str.replace('pi', str(pi))
+        
+        try:
+            return float(eval(angle_str))
+        except:
+            raise ValueError(f"Cannot parse angle: '{angle_str}'")
+    
+    # ==================== SINGLE-QUBIT GATES ====================
+    
+    def _cmd_gate_h(self, args: List[str]):
+        """Hadamard gate"""
+        if not args:
+            self._output("Usage: h <target_qubit>\n")
+            return
+        target = int(args[0])
+        self._engine.h(target)
+        self._output(f"✅ H gate applied to qubit {target}\n")
+    
+    def _cmd_gate_x(self, args: List[str]):
+        """Pauli-X gate"""
+        if not args:
+            self._output("Usage: x <target_qubit>\n")
+            return
+        target = int(args[0])
+        self._engine.x(target)
+        self._output(f"✅ X gate applied to qubit {target}\n")
+    
+    def _cmd_gate_y(self, args: List[str]):
+        """Pauli-Y gate"""
+        if not args:
+            self._output("Usage: y <target_qubit>\n")
+            return
+        target = int(args[0])
+        self._engine.y(target)
+        self._output(f"✅ Y gate applied to qubit {target}\n")
+    
+    def _cmd_gate_z(self, args: List[str]):
+        """Pauli-Z gate"""
+        if not args:
+            self._output("Usage: z <target_qubit>\n")
+            return
+        target = int(args[0])
+        self._engine.z(target)
+        self._output(f"✅ Z gate applied to qubit {target}\n")
+    
+    def _cmd_gate_s(self, args: List[str]):
+        """S gate"""
+        if not args:
+            self._output("Usage: s <target_qubit>\n")
+            return
+        target = int(args[0])
+        self._engine.s(target)
+        self._output(f"✅ S gate applied to qubit {target}\n")
+    
+    def _cmd_gate_t(self, args: List[str]):
+        """T gate"""
+        if not args:
+            self._output("Usage: t <target_qubit>\n")
+            return
+        target = int(args[0])
+        self._engine.t(target)
+        self._output(f"✅ T gate applied to qubit {target}\n")
+    
+    def _cmd_gate_rx(self, args: List[str]):
+        """Rx rotation gate"""
+        if len(args) < 2:
+            self._output("Usage: rx <target_qubit> <angle>\n")
+            self._output("Example: rx 0 pi/2\n")
+            return
+        target = int(args[0])
+        theta = self._parse_angle(args[1])
+        self._engine.rotate_x(target, theta)
+        self._output(f"✅ Rx({theta:.4f}) applied to qubit {target}\n")
+    
+    def _cmd_gate_ry(self, args: List[str]):
+        """Ry rotation gate"""
+        if len(args) < 2:
+            self._output("Usage: ry <target_qubit> <angle>\n")
+            return
+        target = int(args[0])
+        theta = self._parse_angle(args[1])
+        self._engine.rotate_y(target, theta)
+        self._output(f"✅ Ry({theta:.4f}) applied to qubit {target}\n")
+    
+    def _cmd_gate_rz(self, args: List[str]):
+        """Rz rotation gate"""
+        if len(args) < 2:
+            self._output("Usage: rz <target_qubit> <angle>\n")
+            return
+        target = int(args[0])
+        theta = self._parse_angle(args[1])
+        self._engine.rotate_z(target, theta)
+        self._output(f"✅ Rz({theta:.4f}) applied to qubit {target}\n")
+    
+    # ==================== TWO-QUBIT GATES ====================
+    
+    def _cmd_gate_cx(self, args: List[str]):
+        """CNOT gate"""
+        if len(args) < 2:
+            self._output("Usage: cx <control> <target>\n")
+            self._output("Example: cx 0 1\n")
+            return
+        control = int(args[0])
+        target = int(args[1])
+        self._engine.cx(control, target)
+        self._output(f"✅ CNOT applied: control={control}, target={target}\n")
+    
+    def _cmd_gate_cz(self, args: List[str]):
+        """Controlled-Z gate"""
+        if len(args) < 2:
+            self._output("Usage: cz <control> <target>\n")
+            return
+        control = int(args[0])
+        target = int(args[1])
+        self._engine.cz(control, target)
+        self._output(f"✅ CZ applied: control={control}, target={target}\n")
+    
+    def _cmd_gate(self, args: List[str]):
+        """Generic gate command"""
+        if not args:
+            self._output("Usage: gate <name> <target> [args]\n")
+            self._output("Gates: h, x, y, z, s, t, rx, ry, rz, cx, cz\n")
+            return
+        
+        gate_name = args[0].lower()
+        gate_args = args[1:]
+        
+        gate_map = {
+            'h': self._cmd_gate_h,
+            'x': self._cmd_gate_x,
+            'y': self._cmd_gate_y,
+            'z': self._cmd_gate_z,
+            's': self._cmd_gate_s,
+            't': self._cmd_gate_t,
+            'rx': self._cmd_gate_rx,
+            'ry': self._cmd_gate_ry,
+            'rz': self._cmd_gate_rz,
+            'cx': self._cmd_gate_cx,
+            'cnot': self._cmd_gate_cx,
+            'cz': self._cmd_gate_cz,
+        }
+        
+        if gate_name in gate_map:
+            gate_map[gate_name](gate_args)
+        else:
+            self._output(f"❌ Unknown gate: '{gate_name}'\n")
+    
+    # ==================== MEASUREMENT ====================
+    
+    def _cmd_measure(self, args: List[str]):
+        """Perform measurement with auto-visualization"""
+        shots = 1024
+        if args:
+            try:
+                shots = int(args[0])
+            except ValueError:
+                self._output("❌ Invalid shot count\n")
+                return
+        
+        results = self._engine.measure(shots)
+        probs = self._engine.get_probabilities()
+        
+        self._output(f"\n📊 Measurement Results ({shots} shots)\n")
+        self._output("─" * 40 + "\n")
+        
+        # Sort by count
+        sorted_results = sorted(results.items(), key=lambda x: -x[1])
+        
+        for basis, count in sorted_results:
+            pct = count / shots * 100
+            bar_len = int(pct / 5)
+            bar = "█" * bar_len + "░" * (20 - bar_len)
+            self._output(f"  |{basis}⟩  {bar} {count:4d} ({pct:5.1f}%)\n")
+        
+        self._output("─" * 40 + "\n")
+        
+        # Show Bloch coordinates for single qubit
+        if self._engine.get_num_qubits() == 1:
+            x, y, z = self._engine.get_bloch_coords(0)
+            self._output(f"\nBloch: (x={x:+.4f}, y={y:+.4f}, z={z:+.4f})\n")
+        
+        # AUTO-LAUNCH Bloch sphere visualization after measurement
+        if self._auto_visualize and self._engine.get_num_qubits() <= 4:
+            self._output("\n🌐 Auto-launching Bloch sphere visualization...\n")
+            self._launch_bloch_after_measurement()
+    
+    def _cmd_probabilities(self, args: List[str]):
+        """Show probability distribution"""
+        probs = self._engine.get_probabilities()
+        
+        self._output(f"\n🎲 Probability Distribution\n")
+        self._output("─" * 35 + "\n")
+        
+        for basis, prob in sorted(probs.items()):
+            pct = prob * 100
+            bar_len = int(pct / 5)
+            bar = "▓" * bar_len + "░" * (20 - bar_len)
+            self._output(f"  |{basis}⟩  {bar} {pct:6.2f}%\n")
+        
+        self._output("─" * 35 + "\n\n")
+    
+    def _cmd_state(self, args: List[str]):
+        """Display current statevector"""
+        self._engine.print_state()
+        
+        # Also show Bloch coordinates for single qubit
+        if self._engine.get_num_qubits() == 1:
+            x, y, z = self._engine.get_bloch_coords(0)
+            self._output(f"Bloch: (x={x:+.4f}, y={y:+.4f}, z={z:+.4f})\n\n")
+    
+    # ==================== VISUALIZATION ====================
+    
+    def _cmd_bloch(self, args: List[str]):
+        """Launch Bloch sphere visualization"""
+        from synthesis import ComputeMode
+        
+        result = self._engine.compute(
+            mode=ComputeMode.STATEVECTOR,
+            shots=0,  # No measurement needed for Bloch
+            visualize=True
+        )
+        
+        if result.success:
+            self._output("🌐 Launched 3D Bloch sphere in browser\n")
+            if result.bloch_coords:
+                x, y, z = result.bloch_coords
+                self._output(f"   Coordinates: ({x:+.4f}, {y:+.4f}, {z:+.4f})\n")
+        else:
+            self._output(f"❌ Visualization failed: {result.error}\n")
+    
+    def _cmd_compute(self, args: List[str]):
+        """Run full computation with visualization"""
+        from synthesis import ComputeMode
+        
+        shots = 1024
+        if args:
+            try:
+                shots = int(args[0])
+            except ValueError:
+                pass
+        
+        self._output("\n⚡ Running computation...\n")
+        
+        result = self._engine.compute(
+            mode=ComputeMode.STATEVECTOR,
+            shots=shots,
+            visualize=True
+        )
+        
+        if result.success:
+            self._output(f"✅ Computation complete in {result.compute_time_ms:.2f}ms\n")
+            self._output(f"   Qubits: {result.num_qubits}, Gates: {result.gate_count}\n")
+            
+            if result.measurements:
+                top_result = max(result.measurements.items(), key=lambda x: x[1])
+                self._output(f"   Most likely: |{top_result[0]}⟩ ({top_result[1]}/{shots})\n")
+            
+            self._output("\n")
+        else:
+            self._output(f"❌ Computation failed: {result.error}\n")
+    
+    # ==================== TIME EVOLUTION ====================
+    
+    def _cmd_hamiltonian(self, args: List[str]):
+        """List available Hamiltonians"""
+        self._output("""
+🔬 Available Hamiltonians
+─────────────────────────────────────────
+  pauli_x      H = ω·σx/2    (Rabi oscillations)
+  pauli_z      H = ω·σz/2    (Larmor precession)
+  precession   H = ω₀·σz/2 + ω₁·σx/2  (Combined)
+
+Usage: evolve <hamiltonian> <time> [omega]
+Example: evolve pauli_x 3.14159
+
+""")
+    
+    def _cmd_evolve(self, args: List[str]):
+        """Time evolution under Hamiltonian"""
+        if len(args) < 2:
+            self._output("Usage: evolve <hamiltonian> <time> [omega]\n")
+            self._output("Example: evolve pauli_x pi\n")
+            self._output("Type 'hamiltonian' to see available options\n")
+            return
+        
+        from synthesis import hamiltonian_pauli_x, hamiltonian_pauli_z, hamiltonian_free_precession
+        
+        h_name = args[0].lower()
+        time = self._parse_angle(args[1])  # Reuse angle parser for time
+        omega = float(args[2]) if len(args) > 2 else 1.0
+        
+        hamiltonians = {
+            'pauli_x': lambda: hamiltonian_pauli_x(omega),
+            'pauli_z': lambda: hamiltonian_pauli_z(omega),
+            'precession': lambda: hamiltonian_free_precession(omega, 0.1 * omega),
+        }
+        
+        if h_name not in hamiltonians:
+            self._output(f"❌ Unknown Hamiltonian: '{h_name}'\n")
+            self._output("   Available: pauli_x, pauli_z, precession\n")
+            return
+        
+        H = hamiltonians[h_name]()
+        
+        self._output(f"⏱️  Evolving under H={h_name} for t={time:.4f}...\n")
+        
+        self._engine.evolve_unitary(time, H)
+        
+        self._output("✅ Evolution complete\n")
+        self._engine.print_state()
+        
+        # Show Bloch for single qubit
+        if self._engine.get_num_qubits() == 1:
+            x, y, z = self._engine.get_bloch_coords(0)
+            self._output(f"Bloch: ({x:+.4f}, {y:+.4f}, {z:+.4f})\n\n")
+    
+    # ==================== UTILITY ====================
+    
+    def _cmd_status(self, args: List[str]):
+        """Show engine status"""
+        n = self._engine.get_num_qubits()
+        g = self._engine.get_gate_count()
+        history = self._engine.get_result_history()
+        
+        self._output(f"""
+⚛️  Quantum Engine Status
+───────────────────────────────────
+  Qubits:           {n}
+  Gates Applied:    {g}
+  Computations:     {len(history)}
+  State Dimension:  {2**n}
+  Memory Est.:      {(2**n * 16) / 1024:.1f} KB
+───────────────────────────────────
+""")
+    
+    def _cmd_history(self, args: List[str]):
+        """Show computation history"""
+        history = self._engine.get_result_history()
+        
+        if not history:
+            self._output("No computations yet.\n")
+            return
+        
+        self._output(f"\n📜 Computation History ({len(history)} results)\n")
+        self._output("─" * 50 + "\n")
+        
+        for i, r in enumerate(history[-10:], 1):  # Last 10
+            status = "✅" if r.success else "❌"
+            self._output(f"  {i}. {status} {r.result_id} | {r.num_qubits}q | {r.gate_count}g | {r.compute_time_ms:.1f}ms\n")
+        
+        self._output("─" * 50 + "\n\n")
+    
+    def _cmd_clear(self, args: List[str]):
+        """Clear terminal (delegates to main terminal)"""
+        self._output("\033[2J\033[H")  # ANSI clear
+        self._show_welcome()
+    
+    def _cmd_exit(self, args: List[str]):
+        """Exit quantum mode"""
+        self.exit_mode()
+        return False
+    
+    # ==================== CIRCUIT COMMANDS ====================
+    
+    def _cmd_list_circuits(self, args: List[str]):
+        """List available predefined circuits"""
+        try:
+            from synthesis.quantum import CIRCUIT_REGISTRY
+            
+            self._output("\n📦 Available Predefined Circuits\n")
+            self._output("─" * 50 + "\n")
+            
+            for name, info in CIRCUIT_REGISTRY.items():
+                qubits = info.get('qubits', '?')
+                desc = info.get('description', '')
+                self._output(f"  {name:12s}  {qubits:>8} qubits  {desc}\n")
+            
+            self._output("─" * 50 + "\n")
+            self._output("\nUsage: circuit <name> or use shortcut (bell, ghz, qft)\n\n")
+            
+        except ImportError:
+            self._output("❌ Circuit library not available\n")
+    
+    def _cmd_circuit(self, args: List[str]):
+        """Apply a predefined circuit"""
+        if not args:
+            self._cmd_list_circuits([])
+            return
+        
+        circuit_name = args[0].lower()
+        
+        try:
+            from synthesis.quantum import get_circuit, QuantumCircuitLibrary
+            
+            circuit_info = get_circuit(circuit_name)
+            if not circuit_info:
+                self._output(f"❌ Unknown circuit: '{circuit_name}'\n")
+                self._output("   Type 'circuits' to see available circuits\n")
+                return
+            
+            # Get required qubits
+            required_qubits = circuit_info.get('qubits', 2)
+            if isinstance(required_qubits, int):
+                if self._engine.get_num_qubits() < required_qubits:
+                    self._engine.reset(required_qubits)
+                    self._output(f"📐 Initialized {required_qubits} qubits for {circuit_name}\n")
+            
+            # Apply circuit
+            func = circuit_info['function']
+            if circuit_name in ['ghz', 'w', 'qft', 'grover']:
+                n = int(args[1]) if len(args) > 1 else self._engine.get_num_qubits()
+                func(self._engine, n)
+            else:
+                func(self._engine)
+            
+            self._output(f"✅ Applied {circuit_info['name']} circuit\n")
+            self._engine.print_state()
+            
+            # Auto-visualize
+            if self._auto_visualize:
+                self._launch_bloch_after_measurement()
+                
+        except ImportError as e:
+            self._output(f"❌ Circuit library error: {e}\n")
+    
+    def _cmd_bell(self, args: List[str]):
+        """Create Bell state shortcut"""
+        self._engine.reset(2)
+        self._engine.h(0)
+        self._engine.cx(0, 1)
+        self._output("✅ Created Bell state |Φ+⟩ = (|00⟩ + |11⟩)/√2\n")
+        self._engine.print_state()
+        
+        if self._auto_visualize:
+            self._launch_bloch_after_measurement()
+    
+    def _cmd_ghz(self, args: List[str]):
+        """Create GHZ state shortcut"""
+        n = int(args[0]) if args else 3
+        if n < 2 or n > 16:
+            self._output("❌ GHZ state requires 2-16 qubits\n")
+            return
+        
+        self._engine.reset(n)
+        self._engine.h(0)
+        for i in range(1, n):
+            self._engine.cx(0, i)
+        
+        self._output(f"✅ Created {n}-qubit GHZ state\n")
+        self._engine.print_state()
+        
+        if self._auto_visualize:
+            self._launch_bloch_after_measurement()
+    
+    def _cmd_qft(self, args: List[str]):
+        """Apply Quantum Fourier Transform"""
+        try:
+            from synthesis.quantum import QuantumCircuitLibrary
+            
+            n = int(args[0]) if args else self._engine.get_num_qubits()
+            if n > self._engine.get_num_qubits():
+                self._engine.reset(n)
+            
+            QuantumCircuitLibrary.qft(self._engine, n)
+            self._output(f"✅ Applied {n}-qubit QFT\n")
+            self._engine.print_state()
+            
+        except ImportError:
+            self._output("❌ QFT circuit not available\n")
+    
+    # ==================== VISUALIZATION TOGGLE ====================
+    
+    def _cmd_viz_toggle(self, args: List[str]):
+        """Toggle auto-visualization on/off"""
+        if args and args[0].lower() in ['off', 'false', '0', 'no']:
+            self._auto_visualize = False
+            self._output("🔴 Auto-visualization OFF\n")
+        elif args and args[0].lower() in ['on', 'true', '1', 'yes']:
+            self._auto_visualize = True
+            self._output("🟢 Auto-visualization ON\n")
+        else:
+            self._auto_visualize = not self._auto_visualize
+            status = "ON" if self._auto_visualize else "OFF"
+            icon = "🟢" if self._auto_visualize else "🔴"
+            self._output(f"{icon} Auto-visualization {status}\n")
+    
+    # ==================== PHASE 3.5: TOOLSET COMMANDS ====================
+
+    def _cmd_decohere(self, args: List[str]):
+        """Model decoherence on the current state using QuTiP."""
+        dec_type = args[0] if args else "amplitude_damping"
+        gamma = float(args[1]) if len(args) > 1 else 0.1
+        try:
+            from agents.registry import get_registry
+            agent = get_registry().get("quantum_dynamics")
+            if agent is None:
+                self._output("quantum_dynamics agent not registered\n")
+                return
+
+            import qutip as qt
+            n = self._engine.get_num_qubits()
+            if n != 1:
+                self._output("decohere currently supports 1-qubit states\n")
+                return
+
+            sv = self._engine.get_state()
+            psi0 = qt.Qobj(sv.reshape(-1, 1))
+            tlist = np.linspace(0, 5.0 / max(gamma, 1e-6), 50)
+
+            r = agent.execute(
+                operation="decoherence",
+                state=psi0, gamma=gamma, tlist=tlist,
+                decoherence_type=dec_type,
+            )
+            if r.success:
+                final_purity = r.data["purities"][-1]
+                self._output(
+                    f"Decoherence ({dec_type}, gamma={gamma})\n"
+                    f"  Initial purity: {r.data['purities'][0]:.4f}\n"
+                    f"  Final purity:   {final_purity:.4f}  (t={tlist[-1]:.2f})\n"
+                )
+            else:
+                self._output(f"decohere failed: {r.error}\n")
+        except Exception as e:
+            self._output(f"decohere error: {e}\n")
+
+    def _cmd_mesolve(self, args: List[str]):
+        """Solve the Lindblad master equation via QuTiP mesolve."""
+        if len(args) < 2:
+            self._output("Usage: mesolve <hamiltonian> <time>\n")
+            self._output("  hamiltonian: pauli_x, pauli_z, precession\n")
+            return
+        try:
+            from agents.registry import get_registry
+            import qutip as qt
+
+            agent = get_registry().get("quantum_dynamics")
+            if agent is None:
+                self._output("quantum_dynamics agent not registered\n")
+                return
+
+            h_name = args[0].lower()
+            t_end = self._parse_angle(args[1])
+
+            from synthesis import hamiltonian_pauli_x, hamiltonian_pauli_z, hamiltonian_free_precession
+            h_map = {
+                "pauli_x": hamiltonian_pauli_x(),
+                "pauli_z": hamiltonian_pauli_z(),
+                "precession": hamiltonian_free_precession(),
+            }
+            H_np = h_map.get(h_name)
+            if H_np is None:
+                self._output(f"Unknown Hamiltonian: {h_name}\n")
+                return
+
+            H = qt.Qobj(H_np)
+            sv = self._engine.get_state()
+            rho0 = qt.Qobj(sv.reshape(-1, 1))
+            tlist = np.linspace(0, t_end, 50)
+
+            r = agent.execute(
+                operation="mesolve",
+                hamiltonian=H, rho0=rho0, tlist=tlist,
+                e_ops=[qt.sigmax(), qt.sigmay(), qt.sigmaz()],
+            )
+            if r.success:
+                ex = r.data["expect"]
+                self._output(
+                    f"mesolve complete (t=0..{t_end:.2f})\n"
+                    f"  <X>(final)={ex[0][-1]:.4f}  "
+                    f"<Y>(final)={ex[1][-1]:.4f}  "
+                    f"<Z>(final)={ex[2][-1]:.4f}\n"
+                )
+            else:
+                self._output(f"mesolve failed: {r.error}\n")
+        except Exception as e:
+            self._output(f"mesolve error: {e}\n")
+
+    def _cmd_transpile(self, args: List[str]):
+        """Transpile the current gate log to a Qiskit circuit."""
+        try:
+            from agents.registry import get_registry
+            agent = get_registry().get("quantum_hardware")
+            if agent is None:
+                self._output("quantum_hardware agent not registered\n")
+                return
+
+            # Build gate list from gate log
+            gates = []
+            for entry in self._engine._gate_log:
+                g = np.array(entry["gate"], dtype=complex)
+                target = entry["target"]
+                control = entry.get("control")
+
+                # Try to identify the gate by comparing matrices
+                gate_name = self._identify_gate(g)
+                if control is not None:
+                    gates.append({"gate": f"c{gate_name}", "qubits": [control, target]})
+                else:
+                    gates.append({"gate": gate_name, "qubits": [target]})
+
+            n = self._engine.get_num_qubits()
+            r = agent.execute(operation="build_circuit", num_qubits=n, gates=gates)
+            if r.success:
+                self._output(
+                    f"Transpiled to Qiskit circuit:\n"
+                    f"  Qubits: {r.data['num_qubits']}, Gates: {r.data['gate_count']}\n"
+                    f"  Depth: {r.data.get('depth', '?')}\n"
+                )
+            else:
+                self._output(f"transpile failed: {r.error}\n")
+        except Exception as e:
+            self._output(f"transpile error: {e}\n")
+
+    def _identify_gate(self, matrix: np.ndarray) -> str:
+        """Best-effort identification of a 2x2 gate matrix."""
+        from synthesis.engine import SynthesisEngine as SE
+        for name, ref in [("h", SE.HADAMARD), ("x", SE.PAULI_X),
+                          ("y", SE.PAULI_Y), ("z", SE.PAULI_Z),
+                          ("s", SE.S_GATE), ("t", SE.T_GATE)]:
+            if np.allclose(matrix, ref, atol=1e-8):
+                return name
+        return "u"
+
+    def _cmd_encrypt(self, args: List[str]):
+        """Encrypt text using qencrypt-local."""
+        if not args:
+            self._output("Usage: encrypt <text> [passphrase]\n")
+            return
+        try:
+            from agents.registry import get_registry
+            agent = get_registry().get("quantum_crypto")
+            if agent is None:
+                self._output("quantum_crypto agent not registered\n")
+                return
+
+            text = " ".join(args[:-1]) if len(args) > 1 else args[0]
+            passphrase = args[-1] if len(args) > 1 else "frankenstein"
+
+            r = agent.execute(
+                operation="encrypt",
+                plaintext=text, passphrase=passphrase,
+                entropy_source="local",
+            )
+            if r.success:
+                self._output(f"Encrypted ({len(str(r.data['package']))} chars)\n")
+                self._output(f"  Package stored in last result.\n")
+                self._last_crypto_package = r.data["package"]
+            else:
+                self._output(f"encrypt failed: {r.error}\n")
+        except Exception as e:
+            self._output(f"encrypt error: {e}\n")
+
+    def _cmd_decrypt(self, args: List[str]):
+        """Decrypt a qencrypt package."""
+        try:
+            from agents.registry import get_registry
+            agent = get_registry().get("quantum_crypto")
+            if agent is None:
+                self._output("quantum_crypto agent not registered\n")
+                return
+
+            pkg = getattr(self, "_last_crypto_package", None)
+            if pkg is None:
+                self._output("No encrypted package in memory. Run 'encrypt' first.\n")
+                return
+
+            passphrase = args[0] if args else "frankenstein"
+            r = agent.execute(operation="decrypt", package=pkg, passphrase=passphrase)
+            if r.success:
+                self._output(f"Decrypted: {r.data['plaintext']}\n")
+            else:
+                self._output(f"decrypt failed: {r.error}\n")
+        except Exception as e:
+            self._output(f"decrypt error: {e}\n")
+
+    def _cmd_entropy(self, args: List[str]):
+        """Compute von Neumann entropy of the current state."""
+        try:
+            from agents.registry import get_registry
+            import qutip as qt
+
+            agent = get_registry().get("quantum_dynamics")
+            if agent is None:
+                self._output("quantum_dynamics agent not registered\n")
+                return
+
+            sv = self._engine.get_state()
+            psi = qt.Qobj(sv.reshape(-1, 1))
+            rho = psi * psi.dag()
+
+            r = agent.execute(operation="entropy", state=rho, measure="von_neumann")
+            if r.success:
+                self._output(f"Von Neumann entropy: {r.data['entropy']:.6f}\n")
+            else:
+                self._output(f"entropy failed: {r.error}\n")
+        except Exception as e:
+            self._output(f"entropy error: {e}\n")
+
+    def _cmd_toolsets(self, args: List[str]):
+        """Show local toolset status."""
+        try:
+            from libs.local_toolsets import get_toolset_manager
+            mgr = get_toolset_manager()
+            status = mgr.get_loaded_status()
+            self._output("\nLocal Toolsets\n" + "-" * 45 + "\n")
+            for key, info in status.items():
+                tag = "LOADED" if info["loaded"] else "idle"
+                ram = f"{info['ram_mb']} MB" if info["loaded"] else "-"
+                self._output(f"  {key:16s}  {tag:8s}  RAM: {ram}\n")
+            self._output("-" * 45 + "\n")
+        except Exception as e:
+            self._output(f"toolsets error: {e}\n")
+
+    # ==================== HELPER METHODS ====================
+
+    def _launch_bloch_after_measurement(self):
+        """Launch Bloch sphere visualization after measurement/computation"""
+        try:
+            from synthesis import ComputeMode
+            
+            # Get current state data
+            bloch = self._engine.get_bloch_coords(0) if self._engine.get_num_qubits() <= 4 else None
+            
+            if bloch is None:
+                self._output("⚠️  Bloch visualization only for ≤4 qubits\n")
+                return
+            
+            result = self._engine.compute(
+                mode=ComputeMode.STATEVECTOR,
+                shots=0,
+                visualize=True
+            )
+            
+            if result.success and result.bloch_coords:
+                x, y, z = result.bloch_coords
+                self._output(f"🌐 Bloch: ({x:+.4f}, {y:+.4f}, {z:+.4f})\n\n")
+            else:
+                self._output("⚠️  Visualization skipped\n")
+                
+        except Exception as e:
+            self._output(f"⚠️  Visualization error: {e}\n")
+
+
+# ==================== GLOBAL INSTANCE ====================
+
+_quantum_mode: Optional[QuantumModeHandler] = None
+
+def get_quantum_mode() -> QuantumModeHandler:
+    """Get or create the global quantum mode handler"""
+    global _quantum_mode
+    if _quantum_mode is None:
+        _quantum_mode = QuantumModeHandler()
+    return _quantum_mode
