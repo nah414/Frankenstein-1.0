@@ -9,647 +9,634 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            background: radial-gradient(ellipse at center, #0a1628 0%, #000000 100%);
+            background: #0d1117;
             overflow: hidden;
-            font-family: 'Courier New', monospace;
-            color: #00ff00;
+            font-family: 'Consolas', 'Courier New', monospace;
+            color: #00ff88;
         }
 
-        #container { width: 100vw; height: 100vh; }
+        /* ── 3-column layout ──────────────────────────────────── */
+        #layout {
+            display: grid;
+            grid-template-columns: 260px 1fr 290px;
+            grid-template-rows: 100vh;
+            width: 100vw;
+            height: 100vh;
+        }
 
-        /* Info Panels */
-        .info-panel {
-            position: absolute;
-            background: rgba(0, 20, 0, 0.85);
-            border: 2px solid rgba(0, 255, 0, 0.5);
-            border-radius: 10px;
-            padding: 15px;
-            box-shadow: 0 0 30px rgba(0, 255, 0, 0.2);
-            backdrop-filter: blur(10px);
-            max-height: 85vh;
+        /* ── LEFT PANEL ───────────────────────────────────────── */
+        #left-panel {
+            background: #161b22;
+            border-right: 2px solid #00ff88;
+            padding: 12px;
             overflow-y: auto;
-        }
-
-        .info-panel h3 {
-            color: #00ff88;
-            font-size: 1.1em;
-            margin-bottom: 10px;
-            text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
-            border-bottom: 1px solid rgba(0, 255, 0, 0.3);
-            padding-bottom: 8px;
-        }
-
-        /* System Status Panel (Top Left) */
-        #system-panel {
-            top: 20px;
-            left: 20px;
-            min-width: 250px;
-        }
-
-        /* Probability Panel (Bottom Left) */
-        #probability-panel {
-            bottom: 20px;
-            left: 20px;
-            min-width: 320px;
-            max-width: 400px;
-            background: rgba(0, 20, 40, 0.9);
-            border-color: rgba(0, 191, 255, 0.6);
-        }
-
-        #probability-panel h3 {
-            color: #00bfff;
-        }
-
-        /* Entanglement Panel (Top Right) */
-        #entanglement-panel {
-            top: 20px;
-            right: 20px;
-            min-width: 280px;
-            background: rgba(40, 0, 60, 0.85);
-            border-color: rgba(138, 43, 226, 0.6);
-        }
-
-        #entanglement-panel h3 {
-            color: #da70d6;
-        }
-
-        /* Qubit Grid (Bottom Right) */
-        #qubit-grid {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
             display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-            max-width: 400px;
+            flex-direction: column;
+            gap: 0;
         }
 
-        .qubit-card {
-            background: rgba(0, 30, 40, 0.9);
-            border: 2px solid rgba(0, 191, 255, 0.5);
-            border-radius: 8px;
-            padding: 10px;
-            min-width: 90px;
-            text-align: center;
-            transition: all 0.3s ease;
-        }
+        #left-panel::-webkit-scrollbar { width: 5px; }
+        #left-panel::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
 
-        .qubit-card.entangled {
-            border-color: #ff4081;
-            box-shadow: 0 0 15px rgba(255, 64, 129, 0.5);
-            animation: pulse-entangled 2s infinite;
-        }
-
-        .qubit-card .qubit-id {
-            font-size: 0.9em;
-            color: #00ffff;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-
-        .qubit-card .prob-label {
-            font-size: 0.7em;
-            color: #888;
-            margin-top: 3px;
-        }
-
-        .qubit-card .prob-value {
-            font-size: 0.85em;
+        .panel-title {
             color: #00ff88;
+            font-size: 14px;
             font-weight: bold;
+            text-align: center;
+            padding: 6px 0 8px;
+            text-shadow: 0 0 8px #00ff8866;
+            border-bottom: 1px solid #30363d;
+            margin-bottom: 8px;
         }
 
-        .qubit-card .coords {
-            font-size: 0.7em;
-            color: #666;
-            margin-top: 5px;
+        .section-hdr {
+            color: #58a6ff;
+            font-size: 11px;
+            font-weight: bold;
+            margin: 8px 0 4px;
+            padding-bottom: 3px;
+            border-bottom: 1px solid #30363d;
         }
 
-        /* Stats Row */
         .stat-row {
             display: flex;
             justify-content: space-between;
-            padding: 5px 0;
-            border-bottom: 1px solid rgba(0, 255, 0, 0.1);
+            padding: 3px 0;
+            font-size: 10px;
         }
+        .stat-label { color: #8b949e; }
+        .stat-value { color: #00ff88; font-weight: bold; }
 
-        .stat-row:last-child { border-bottom: none; }
-
-        .stat-label { color: rgba(0, 255, 0, 0.7); font-size: 0.9em; }
-        .stat-value {
-            color: #00ff00;
-            font-weight: bold;
-            text-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
-            font-size: 0.9em;
-        }
-
-        /* Probability Bars */
-        .prob-bar-container {
-            margin: 8px 0;
-        }
-
-        .prob-bar-label {
+        /* Probability bars */
+        .prob-bar-wrap { margin: 3px 0; }
+        .prob-bar-hdr {
             display: flex;
             justify-content: space-between;
-            font-size: 0.85em;
-            margin-bottom: 3px;
+            font-size: 9px;
+            margin-bottom: 1px;
         }
-
-        .prob-bar-label .basis-state {
-            color: #00ffff;
-            font-family: monospace;
-        }
-
-        .prob-bar-label .prob-percent {
-            color: #00ff88;
-        }
-
+        .basis-state { color: #00ffff; font-family: monospace; }
+        .prob-pct { color: #00ff88; }
         .prob-bar-outer {
             width: 100%;
-            height: 18px;
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid rgba(0, 255, 255, 0.3);
-            border-radius: 4px;
+            height: 13px;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(0,255,255,0.2);
+            border-radius: 3px;
             overflow: hidden;
-            position: relative;
         }
-
         .prob-bar-fill {
             height: 100%;
-            background: linear-gradient(90deg, #0088ff 0%, #00ffff 100%);
-            transition: width 0.5s ease;
-            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+            background: linear-gradient(90deg, #0088ff, #00ffff);
+            box-shadow: 0 0 6px rgba(0,255,255,0.4);
+        }
+        .prob-bar-fill.exp {
+            background: linear-gradient(90deg, #ff6600, #ffaa00);
+            box-shadow: 0 0 6px rgba(255,170,0,0.4);
         }
 
-        .prob-bar-fill.experimental {
-            background: linear-gradient(90deg, #ff6600 0%, #ffaa00 100%);
-            box-shadow: 0 0 10px rgba(255, 170, 0, 0.5);
+        /* Marginal rows */
+        .marginal-row {
+            display: flex; align-items: center;
+            font-size: 9px; margin: 2px 0; gap: 3px;
+        }
+        .m-qid { color: #8b949e; width: 22px; flex-shrink: 0; }
+        .m-bar { flex: 1; height: 9px; background: #21262d; border-radius: 2px; overflow: hidden; }
+        .m-fill { height: 100%; background: linear-gradient(90deg, #00ccff, #0088aa); }
+        .m-text { color: #00ff88; width: 110px; flex-shrink: 0; text-align: right; font-size: 8px; }
+
+        /* ── CENTER: 3D scene ──────────────────────────────────── */
+        #center-panel {
+            position: relative;
+            overflow: hidden;
+        }
+        #three-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #controls-hint {
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: rgba(0,255,136,0.5);
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        #phase-badge {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: #58a6ff;
+            background: #161b22cc;
+            padding: 3px 10px;
+            border-radius: 4px;
+            border: 1px solid #30363d;
         }
 
-        .prob-section-header {
-            font-size: 0.9em;
-            color: #00bfff;
-            margin-top: 12px;
-            margin-bottom: 6px;
-            font-weight: bold;
-            border-bottom: 1px solid rgba(0, 191, 255, 0.3);
-            padding-bottom: 4px;
+        /* ── RIGHT PANEL ──────────────────────────────────────── */
+        #right-panel {
+            background: #161b22;
+            border-left: 2px solid #00ff88;
+            padding: 12px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
         }
 
-        /* Entanglement Badge */
-        .badge {
+        #right-panel::-webkit-scrollbar { width: 5px; }
+        #right-panel::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+        /* Entanglement badge */
+        .ent-badge {
             display: inline-block;
-            padding: 8px 20px;
-            border-radius: 25px;
+            padding: 5px 14px;
+            border-radius: 20px;
             font-weight: bold;
-            text-transform: uppercase;
+            font-size: 11px;
             letter-spacing: 1px;
-            margin-top: 10px;
-            font-size: 0.9em;
+            margin: 6px 0;
+            text-align: center;
         }
-
-        .badge.entangled {
-            background: rgba(255, 0, 100, 0.3);
+        .ent-badge.entangled {
+            background: rgba(255,0,100,0.2);
             color: #ff4081;
             border: 2px solid #ff4081;
-            animation: pulse-entangled 2s infinite;
+            animation: pulse-ent 2s infinite;
         }
-
-        .badge.separable {
-            background: rgba(0, 255, 100, 0.3);
+        .ent-badge.separable {
+            background: rgba(0,255,100,0.15);
             color: #00ff88;
             border: 2px solid #00ff88;
         }
-
-        @keyframes pulse-entangled {
-            0%, 100% { box-shadow: 0 0 15px rgba(255, 64, 129, 0.5); }
-            50% { box-shadow: 0 0 30px rgba(255, 64, 129, 0.8); }
+        @keyframes pulse-ent {
+            0%,100% { box-shadow: 0 0 10px rgba(255,64,129,0.4); }
+            50%      { box-shadow: 0 0 22px rgba(255,64,129,0.8); }
         }
 
-        /* Loading */
-        #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 1.5em;
-            color: #00ff00;
-            text-shadow: 0 0 20px #00ff00;
+        /* Q-cards grid */
+        #q-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 5px;
+            margin-top: 6px;
         }
-
-        /* Controls hint */
-        #controls-hint {
-            position: absolute;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 0.8em;
-            color: rgba(0, 255, 0, 0.5);
+        .q-card {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 5px;
+            padding: 6px;
             text-align: center;
         }
+        .q-card.entangled { border-color: #ff4081; }
+        .q-id { color: #00ffff; font-weight: bold; font-size: 11px; margin-bottom: 2px; }
+        .q-prob-label { color: #8b949e; font-size: 7px; }
+        .q-prob { color: #00ff88; font-size: 9px; margin: 1px 0; }
+        .q-xyz { color: #8b949e; font-size: 7px; line-height: 1.3; }
 
-        /* Scrollbar styling */
-        .info-panel::-webkit-scrollbar { width: 8px; }
-        .info-panel::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); }
-        .info-panel::-webkit-scrollbar-thumb {
-            background: rgba(0, 255, 0, 0.3);
+        /* Phase toggle button */
+        #phase-btn {
+            background: #21262d;
+            color: #58a6ff;
+            border: 1px solid #58a6ff;
+            padding: 5px 12px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 10px;
             border-radius: 4px;
+            margin-top: 8px;
+            width: 100%;
+            transition: all 0.2s;
         }
+        #phase-btn:hover { background: #58a6ff; color: #0d1117; }
     </style>
 </head>
 <body>
-    <div id="loading">⚛️ Initializing Quantum Visualization...</div>
-    <div id="container"></div>
+<div id="layout">
 
-    <!-- System Status Panel -->
-    <div id="system-panel" class="info-panel">
-        <h3>⚡ System Status</h3>
-        <div class="stat-row">
-            <span class="stat-label">Qubits:</span>
-            <span class="stat-value" id="num-qubits">{{NUM_QUBITS}}</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">Gates Applied:</span>
-            <span class="stat-value" id="gate-count">{{GATE_COUNT}}</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">Tensor Backend:</span>
-            <span class="stat-value" id="backend">{{BACKEND}}</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">Measurement Shots:</span>
-            <span class="stat-value" id="shots">{{SHOTS}}</span>
-        </div>
-    </div>
+    <!-- LEFT PANEL -->
+    <div id="left-panel">
+        <div class="panel-title">&#x1F9DF; FRANKENSTEIN<br>Bloch Sphere</div>
 
-    <!-- Probability Panel -->
-    <div id="probability-panel" class="info-panel">
-        <h3>📊 Probability Distribution</h3>
+        <div class="section-hdr">&#x26A1; System Status</div>
+        <div class="stat-row"><span class="stat-label">Qubits:</span><span class="stat-value">{{NUM_QUBITS}}</span></div>
+        <div class="stat-row"><span class="stat-label">Gates Applied:</span><span class="stat-value">{{GATE_COUNT}}</span></div>
+        <div class="stat-row"><span class="stat-label">Tensor Backend:</span><span class="stat-value">{{BACKEND}}</span></div>
+        <div class="stat-row"><span class="stat-label">Shots:</span><span class="stat-value">{{SHOTS}}</span></div>
 
-        <div class="prob-section-header">🎯 Theoretical (Statevector)</div>
+        <div class="section-hdr">&#x1F4CA; Probability Distribution</div>
+        <div style="font-size:9px;color:#00bfff;margin:3px 0 2px;">&#x1F3AF; Theoretical (Statevector)</div>
         <div id="theoretical-probs"></div>
-
-        <div class="prob-section-header" id="experimental-header" style="display:none;">🔬 Experimental (Measured)</div>
+        <div id="exp-header" style="font-size:9px;color:#ff8800;margin:5px 0 2px;display:none;">&#x1F52C; Experimental (Measured)</div>
         <div id="experimental-probs"></div>
 
-        <div class="prob-section-header">🔢 Individual Qubit Marginals</div>
+        <div class="section-hdr">&#x1F4CB; Individual Qubit Marginals</div>
         <div id="marginal-probs"></div>
     </div>
 
-    <!-- Entanglement Panel -->
-    <div id="entanglement-panel" class="info-panel">
-        <h3>⚛️ Entanglement Analysis</h3>
-        <div class="stat-row">
-            <span class="stat-label">Schmidt Rank:</span>
-            <span class="stat-value" id="schmidt-rank">{{SCHMIDT_RANK}}</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">Entropy (bits):</span>
-            <span class="stat-value" id="entropy">{{ENTROPY}}</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">Max Entropy:</span>
-            <span class="stat-value" id="max-entropy">{{MAX_ENTROPY}}</span>
-        </div>
-        <div style="text-align: center;">
-            <span id="entanglement-badge" class="badge {{ENTANGLEMENT_CLASS}}">
-                {{ENTANGLEMENT_STATUS}}
-            </span>
-        </div>
+    <!-- CENTER: Three.js canvas -->
+    <div id="center-panel">
+        <canvas id="three-canvas"></canvas>
+        <div id="controls-hint">&#x1F5B1;&#xFE0F; Drag to rotate | Scroll to zoom | Double-click to reset</div>
+        <div id="phase-badge">&#x21BB; Global phase animating</div>
     </div>
 
-    <!-- Qubit Cards -->
-    <div id="qubit-grid"></div>
+    <!-- RIGHT PANEL -->
+    <div id="right-panel">
+        <div class="panel-title">&#x269B;&#xFE0F; Entanglement<br>Analysis</div>
 
-    <!-- Controls Hint -->
-    <div id="controls-hint">
-        🖱️ Drag to rotate | Scroll to zoom | Double-click to reset
+        <div style="text-align:center;">
+            <span id="ent-badge" class="ent-badge separable">&#x2713; SEPARABLE</span>
+        </div>
+        <div class="stat-row"><span class="stat-label">Schmidt Rank:</span><span class="stat-value">{{SCHMIDT_RANK}}</span></div>
+        <div class="stat-row"><span class="stat-label">Entropy (bits):</span><span class="stat-value">{{ENTROPY}}</span></div>
+        <div class="stat-row"><span class="stat-label">Max Entropy:</span><span class="stat-value">{{MAX_ENTROPY}}</span></div>
+
+        <div class="section-hdr" style="margin-top:10px;">&#x1F4CB; Qubit States</div>
+        <div id="q-cards-grid"></div>
+
+        <button id="phase-btn" onclick="togglePhase()">&#x1F300; Pause Phase Animation</button>
     </div>
+</div>
 
-    <script>
-        // ==================== DATA FROM PYTHON ====================
-        const NUM_QUBITS = {{NUM_QUBITS}};
-        const QUBIT_COORDS = {{QUBIT_COORDS}};
-        const IS_ENTANGLED = {{IS_ENTANGLED}};
-        const SCHMIDT_RANK = {{SCHMIDT_RANK}};
-        const ENTROPY = {{ENTROPY}};
-        const THEORETICAL_PROBS = {{THEORETICAL_PROBS}};
-        const EXPERIMENTAL_PROBS = {{EXPERIMENTAL_PROBS}};
-        const MARGINAL_PROBS = {{MARGINAL_PROBS}};
-        const SHOTS = {{SHOTS}};
+<script>
+// ── DATA FROM PYTHON ──────────────────────────────────────────
+var NUM_QUBITS       = {{NUM_QUBITS}};
+var QUBIT_COORDS     = {{QUBIT_COORDS}};
+var IS_ENTANGLED     = {{IS_ENTANGLED}};
+var THEORETICAL_PROBS  = {{THEORETICAL_PROBS}};
+var EXPERIMENTAL_PROBS = {{EXPERIMENTAL_PROBS}};
+var MARGINAL_PROBS     = {{MARGINAL_PROBS}};
 
-        // ==================== THREE.JS SETUP ====================
-        let scene, camera, renderer;
-        let spheres = [];
-        let stateArrows = [];
-        let isDragging = false;
-        let previousMousePosition = { x: 0, y: 0 };
-        let sphereGroup;
+// ── THREE.JS GLOBALS ──────────────────────────────────────────
+var scene, camera, renderer, sphereGroup;
+var isDragging = false, prevMouse = {x:0, y:0};
+var phaseActive = true;
+var phaseOffset = 0.0;
+var PHASE_SPEED = 0.022;
 
-        const COLORS = {
-            sphere: 0x003300,
-            wireframe: 0x00ff00,
-            axes: { x: 0xff0000, y: 0x00ff00, z: 0x0088ff },
-            stateVector: 0x00ffff,
-            entangled: 0xff4081,
-            separable: 0x00ff88
-        };
+// Per-qubit live objects for phase animation
+var qubitRefs = []; // {arrowHelper, dot, glowDot, center, coord}
 
-        function init() {
-            // Scene
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x000a14);
+// ── INIT ──────────────────────────────────────────────────────
+function init() {
+    var canvas = document.getElementById('three-canvas');
+    var cp = document.getElementById('center-panel');
 
-            // Camera
-            const aspect = window.innerWidth / window.innerHeight;
-            camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000a14);
 
-            // Position camera based on qubit count
-            const gridSize = Math.ceil(Math.sqrt(NUM_QUBITS));
-            camera.position.set(gridSize * 2, gridSize * 1.5, gridSize * 3);
-            camera.lookAt(0, 0, 0);
+    var aspect = cp.clientWidth / cp.clientHeight;
+    camera = new THREE.PerspectiveCamera(55, aspect, 0.1, 1000);
 
-            // Renderer
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            document.getElementById('container').appendChild(renderer.domElement);
-            document.getElementById('loading').style.display = 'none';
+    renderer = new THREE.WebGLRenderer({canvas: canvas, antialias: true});
+    renderer.setSize(cp.clientWidth, cp.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
 
-            // Create sphere group
-            sphereGroup = new THREE.Group();
-            scene.add(sphereGroup);
+    // Lights
+    scene.add(new THREE.AmbientLight(0x404040, 0.6));
+    var pl = new THREE.PointLight(0x00ff88, 0.8);
+    pl.position.set(10, 10, 10);
+    scene.add(pl);
 
-            // Create Bloch spheres in grid
-            createBlochSphereGrid();
+    // Grid layout for spheres
+    var cols = Math.ceil(Math.sqrt(NUM_QUBITS));
+    var rows = Math.ceil(NUM_QUBITS / cols);
+    var spacing = 3.2;
+    var R = Math.max(0.45, 1.15 - 0.055 * (NUM_QUBITS - 1));
 
-            // Create qubit cards
-            createQubitCards();
+    // Camera position
+    var camDist = Math.max(cols, rows) * spacing * 0.9;
+    camera.position.set(camDist * 0.55, camDist * 0.45, camDist);
+    camera.lookAt((cols - 1) * spacing / 2, 0, (rows - 1) * spacing / 2);
 
-            // Create probability displays
-            createProbabilityDisplays();
+    sphereGroup = new THREE.Group();
+    scene.add(sphereGroup);
 
-            // Lighting
-            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
-            scene.add(ambientLight);
+    // Build spheres
+    qubitRefs = [];
+    for (var qi = 0; qi < NUM_QUBITS; qi++) {
+        var col = qi % cols;
+        var row = Math.floor(qi / cols);
+        var cx = col * spacing;
+        var cz = row * spacing;
+        var center = new THREE.Vector3(cx, 0, cz);
+        buildBlochSphere(qi, center, R);
+    }
 
-            const pointLight = new THREE.PointLight(0x00ff00, 0.8);
-            pointLight.position.set(10, 10, 10);
-            scene.add(pointLight);
-
-            // Controls
-            setupControls();
-
-            // Start animation
-            animate();
+    // Entanglement connecting lines
+    if (IS_ENTANGLED) {
+        for (var i = 1; i < NUM_QUBITS; i++) {
+            var a = qubitRefs[i-1].center;
+            var b = qubitRefs[i].center;
+            var pts = [a.clone(), b.clone()];
+            var geo = new THREE.BufferGeometry().setFromPoints(pts);
+            var mat = new THREE.LineBasicMaterial({color: 0xff4081, transparent: true, opacity: 0.35});
+            sphereGroup.add(new THREE.Line(geo, mat));
         }
+    }
 
-        function createBlochSphereGrid() {
-            const gridCols = Math.min(NUM_QUBITS, 4);
-            const gridRows = Math.ceil(NUM_QUBITS / gridCols);
-            const spacing = 3.0;
+    // Entanglement badge
+    if (IS_ENTANGLED) {
+        var badge = document.getElementById('ent-badge');
+        badge.className = 'ent-badge entangled';
+        badge.textContent = 'ENTANGLED';
+    }
 
-            for (let i = 0; i < NUM_QUBITS; i++) {
-                const col = i % gridCols;
-                const row = Math.floor(i / gridCols);
+    // UI panels
+    buildQCards(R);
+    buildProbBars();
+    buildMarginals();
 
-                const x = (col - (gridCols - 1) / 2) * spacing;
-                const y = ((gridRows - 1) / 2 - row) * spacing;
-                const z = 0;
+    setupControls(canvas, cp);
+    animate();
+}
 
-                createSingleBlochSphere(i, x, y, z);
-            }
-        }
+// ── BUILD ONE 3D BLOCH SPHERE ─────────────────────────────────
+function buildBlochSphere(qi, center, R) {
+    var coord = QUBIT_COORDS[qi] || [0, 0, 1];
+    var bx = coord[0], by = coord[1], bz = coord[2];
 
-        function createSingleBlochSphere(qubitIndex, posX, posY, posZ) {
-            const group = new THREE.Group();
-            group.position.set(posX, posY, posZ);
+    // Wireframe sphere
+    var wf = new THREE.Mesh(
+        new THREE.SphereGeometry(R, 24, 18),
+        new THREE.MeshBasicMaterial({color: 0x00ff00, wireframe: true, transparent: true, opacity: 0.14})
+    );
+    wf.position.copy(center);
+    sphereGroup.add(wf);
 
-            // Wireframe sphere
-            const sphereGeom = new THREE.SphereGeometry(1, 24, 16);
-            const wireframeMat = new THREE.MeshBasicMaterial({
-                color: COLORS.wireframe,
-                wireframe: true,
-                transparent: true,
-                opacity: 0.15
-            });
-            const sphere = new THREE.Mesh(sphereGeom, wireframeMat);
-            group.add(sphere);
-            spheres.push(sphere);
+    // Inner solid
+    var inner = new THREE.Mesh(
+        new THREE.SphereGeometry(R * 0.97, 20, 16),
+        new THREE.MeshPhongMaterial({color: 0x0a1628, transparent: true, opacity: 0.25, side: THREE.DoubleSide})
+    );
+    inner.position.copy(center);
+    sphereGroup.add(inner);
 
-            // Axes
-            const axisLength = 1.3;
-            const axisColors = [COLORS.axes.x, COLORS.axes.y, COLORS.axes.z];
-            const axisDirections = [
-                new THREE.Vector3(1, 0, 0),
-                new THREE.Vector3(0, 1, 0),
-                new THREE.Vector3(0, 0, 1)
-            ];
+    // Equator ring
+    var eq = new THREE.Mesh(
+        new THREE.RingGeometry(R * 0.99, R * 1.015, 64),
+        new THREE.MeshBasicMaterial({color: 0x4ecdc4, side: THREE.DoubleSide, transparent: true, opacity: 0.4})
+    );
+    eq.position.copy(center);
+    eq.rotation.x = Math.PI / 2;
+    sphereGroup.add(eq);
 
-            axisDirections.forEach((dir, idx) => {
-                const points = [
-                    dir.clone().multiplyScalar(-axisLength),
-                    dir.clone().multiplyScalar(axisLength)
-                ];
-                const geometry = new THREE.BufferGeometry().setFromPoints(points);
-                const material = new THREE.LineBasicMaterial({
-                    color: axisColors[idx],
-                    transparent: true,
-                    opacity: 0.5
-                });
-                const line = new THREE.Line(geometry, material);
-                group.add(line);
-            });
+    // Meridian ring
+    var mer = new THREE.Mesh(
+        new THREE.RingGeometry(R * 0.99, R * 1.015, 64),
+        new THREE.MeshBasicMaterial({color: 0x58a6ff, side: THREE.DoubleSide, transparent: true, opacity: 0.2})
+    );
+    mer.position.copy(center);
+    sphereGroup.add(mer);
 
-            // State vector arrow
-            const coords = QUBIT_COORDS[qubitIndex] || [0, 0, 1];
-            const [bx, by, bz] = coords;
+    // Axis lines
+    var zMat = new THREE.LineBasicMaterial({color: 0xffe66d, transparent: true, opacity: 0.2});
+    sphereGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(center.x, center.y - R*1.2, center.z),
+            new THREE.Vector3(center.x, center.y + R*1.2, center.z)
+        ]), zMat
+    ));
+    var xMat = new THREE.LineBasicMaterial({color: 0xff6b6b, transparent: true, opacity: 0.15});
+    sphereGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(center.x - R*1.2, center.y, center.z),
+            new THREE.Vector3(center.x + R*1.2, center.y, center.z)
+        ]), xMat
+    ));
 
-            const arrowColor = IS_ENTANGLED ? COLORS.entangled : COLORS.stateVector;
-            const arrowDir = new THREE.Vector3(bx, bz, by).normalize();
-            const arrowLength = Math.sqrt(bx*bx + by*by + bz*bz);
-            const arrowHelper = new THREE.ArrowHelper(
-                arrowDir,
-                new THREE.Vector3(0, 0, 0),
-                arrowLength,
-                arrowColor,
-                0.2,
-                0.1
-            );
-            group.add(arrowHelper);
-            stateArrows.push(arrowHelper);
+    // Phase orbit ring at height bz (shows rotation path)
+    var r_xy = Math.sqrt(bx*bx + by*by);
+    if (r_xy > 0.02) {
+        var orbitRing = new THREE.Mesh(
+            new THREE.RingGeometry(r_xy*R*0.97, r_xy*R*1.03, 64),
+            new THREE.MeshBasicMaterial({color: 0x58a6ff, side: THREE.DoubleSide, transparent: true, opacity: 0.3})
+        );
+        orbitRing.position.set(center.x, center.y + bz*R, center.z);
+        orbitRing.rotation.x = Math.PI / 2;
+        sphereGroup.add(orbitRing);
+    }
 
-            // State point (glowing sphere at tip)
-            const pointGeom = new THREE.SphereGeometry(0.08, 16, 16);
-            const pointMat = new THREE.MeshBasicMaterial({
-                color: arrowColor,
-                transparent: true,
-                opacity: 0.9
-            });
-            const statePoint = new THREE.Mesh(pointGeom, pointMat);
-            statePoint.position.set(bx, bz, by);
-            group.add(statePoint);
+    // |0> / |1> labels
+    var lbl0 = makeSprite('|0>', 0xffe66d);
+    lbl0.position.set(center.x, center.y + R + 0.18, center.z);
+    lbl0.scale.set(0.28, 0.14, 1);
+    sphereGroup.add(lbl0);
+    var lbl1 = makeSprite('|1>', 0xffe66d);
+    lbl1.position.set(center.x, center.y - R - 0.18, center.z);
+    lbl1.scale.set(0.28, 0.14, 1);
+    sphereGroup.add(lbl1);
 
-            sphereGroup.add(group);
-        }
+    // Qubit label
+    var qlbl = makeSprite('Q' + qi, IS_ENTANGLED ? 0xff4081 : 0x8b949e);
+    qlbl.position.set(center.x, center.y - R - 0.38, center.z);
+    qlbl.scale.set(0.32, 0.16, 1);
+    sphereGroup.add(qlbl);
 
-        function createQubitCards() {
-            const grid = document.getElementById('qubit-grid');
+    // State vector arrow
+    var arrowColor = IS_ENTANGLED ? 0xff4081 : 0x00ffff;
+    var dir = new THREE.Vector3(bx*R, bz*R, by*R);
+    var len = dir.length();
+    dir.normalize();
+    var arrow = new THREE.ArrowHelper(dir, center, len, arrowColor, 0.14*R, 0.07*R);
+    sphereGroup.add(arrow);
 
-            for (let i = 0; i < NUM_QUBITS; i++) {
-                const coords = QUBIT_COORDS[i] || [0, 0, 1];
-                const [x, y, z] = coords;
+    // State dot at tip
+    var dot = new THREE.Mesh(
+        new THREE.SphereGeometry(0.07*R, 14, 14),
+        new THREE.MeshBasicMaterial({color: arrowColor, transparent: true, opacity: 0.95})
+    );
+    dot.position.set(center.x + bx*R, center.y + bz*R, center.z + by*R);
+    sphereGroup.add(dot);
 
-                // Get marginal probability for this qubit
-                const margProb = MARGINAL_PROBS[i] || { p0: 0.5, p1: 0.5 };
+    // Glow
+    var glow = new THREE.Mesh(
+        new THREE.SphereGeometry(0.12*R, 12, 12),
+        new THREE.MeshBasicMaterial({color: arrowColor, transparent: true, opacity: 0.25})
+    );
+    glow.position.copy(dot.position);
+    sphereGroup.add(glow);
 
-                const card = document.createElement('div');
-                card.className = 'qubit-card' + (IS_ENTANGLED ? ' entangled' : '');
-                card.innerHTML = `
-                    <div class="qubit-id">Q${i}</div>
-                    <div class="prob-label">P(|0⟩) / P(|1⟩)</div>
-                    <div class="prob-value">${(margProb.p0 * 100).toFixed(1)}% / ${(margProb.p1 * 100).toFixed(1)}%</div>
-                    <div class="coords">
-                        x: ${x.toFixed(2)}<br>
-                        y: ${y.toFixed(2)}<br>
-                        z: ${z.toFixed(2)}
-                    </div>
-                `;
-                grid.appendChild(card);
-            }
-        }
+    qubitRefs.push({arrow: arrow, dot: dot, glowDot: glow, center: center.clone(), coord: coord, R: R});
+}
 
-        function createProbabilityDisplays() {
-            // Theoretical probabilities
-            const theoreticalDiv = document.getElementById('theoretical-probs');
-            const sortedTheoretical = Object.entries(THEORETICAL_PROBS)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10); // Show top 10
+function makeSprite(text, color) {
+    var c = document.createElement('canvas');
+    c.width = 128; c.height = 64;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+    ctx.font = 'bold 26px Consolas';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 64, 32);
+    return new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(c)}));
+}
 
-            sortedTheoretical.forEach(([basis, prob]) => {
-                const barDiv = document.createElement('div');
-                barDiv.className = 'prob-bar-container';
-                barDiv.innerHTML = `
-                    <div class="prob-bar-label">
-                        <span class="basis-state">|${basis}⟩</span>
-                        <span class="prob-percent">${(prob * 100).toFixed(2)}%</span>
-                    </div>
-                    <div class="prob-bar-outer">
-                        <div class="prob-bar-fill" style="width: ${prob * 100}%"></div>
-                    </div>
-                `;
-                theoreticalDiv.appendChild(barDiv);
-            });
+// ── BUILD RIGHT PANEL Q-CARDS ─────────────────────────────────
+function buildQCards() {
+    var grid = document.getElementById('q-cards-grid');
+    var n = NUM_QUBITS;
+    var cols = n <= 8 ? 2 : 3;
+    grid.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
+    var fId = Math.max(8, Math.round(11 - 0.22 * n)) + 'px';
+    var fSm = Math.max(6, Math.round(8  - 0.13 * n)) + 'px';
 
-            // Experimental probabilities (if measurements were taken)
-            if (EXPERIMENTAL_PROBS && Object.keys(EXPERIMENTAL_PROBS).length > 0) {
-                document.getElementById('experimental-header').style.display = 'block';
-                const experimentalDiv = document.getElementById('experimental-probs');
-                const sortedExperimental = Object.entries(EXPERIMENTAL_PROBS)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 10);
+    for (var i = 0; i < n; i++) {
+        var coord = QUBIT_COORDS[i] || [0, 0, 1];
+        var bz = coord[2];
+        var p0 = ((1 + bz) / 2 * 100).toFixed(1);
+        var p1 = ((1 - bz) / 2 * 100).toFixed(1);
+        var card = document.createElement('div');
+        card.className = 'q-card' + (IS_ENTANGLED ? ' entangled' : '');
+        card.innerHTML =
+            '<div class="q-id" style="font-size:' + fId + '">Q' + i + '</div>' +
+            '<div class="q-prob-label" style="font-size:' + fSm + '">P(|0>) / P(|1>)</div>' +
+            '<div class="q-prob" style="font-size:' + fId + '">' + p0 + '% / ' + p1 + '%</div>' +
+            '<div class="q-xyz" style="font-size:' + fSm + '">' +
+            'x: ' + coord[0].toFixed(2) + '<br>y: ' + coord[1].toFixed(2) + '<br>z: ' + coord[2].toFixed(2) + '</div>';
+        grid.appendChild(card);
+    }
+}
 
-                sortedExperimental.forEach(([basis, prob]) => {
-                    const barDiv = document.createElement('div');
-                    barDiv.className = 'prob-bar-container';
-                    barDiv.innerHTML = `
-                        <div class="prob-bar-label">
-                            <span class="basis-state">|${basis}⟩</span>
-                            <span class="prob-percent">${(prob * 100).toFixed(2)}%</span>
-                        </div>
-                        <div class="prob-bar-outer">
-                            <div class="prob-bar-fill experimental" style="width: ${prob * 100}%"></div>
-                        </div>
-                    `;
-                    experimentalDiv.appendChild(barDiv);
-                });
-            }
+// ── BUILD LEFT PANEL PROBABILITY BARS ─────────────────────────
+function buildProbBars() {
+    // Theoretical
+    var theoDiv = document.getElementById('theoretical-probs');
+    var tEntries = Object.entries(THEORETICAL_PROBS).sort(function(a,b){return b[1]-a[1];}).slice(0, 16);
+    tEntries.forEach(function(e) {
+        var wrap = document.createElement('div');
+        wrap.className = 'prob-bar-wrap';
+        wrap.innerHTML =
+            '<div class="prob-bar-hdr"><span class="basis-state">|' + e[0] + '></span><span class="prob-pct">' + (e[1]*100).toFixed(2) + '%</span></div>' +
+            '<div class="prob-bar-outer"><div class="prob-bar-fill" style="width:' + (e[1]*100) + '%"></div></div>';
+        theoDiv.appendChild(wrap);
+    });
 
-            // Marginal probabilities
-            const marginalDiv = document.getElementById('marginal-probs');
-            MARGINAL_PROBS.forEach((margProb, i) => {
-                const barDiv = document.createElement('div');
-                barDiv.className = 'prob-bar-container';
-                barDiv.innerHTML = `
-                    <div class="prob-bar-label">
-                        <span class="basis-state">Q${i}</span>
-                        <span class="prob-percent">|0⟩: ${(margProb.p0 * 100).toFixed(1)}%  |1⟩: ${(margProb.p1 * 100).toFixed(1)}%</span>
-                    </div>
-                    <div class="prob-bar-outer">
-                        <div class="prob-bar-fill" style="width: ${margProb.p0 * 100}%"></div>
-                    </div>
-                `;
-                marginalDiv.appendChild(barDiv);
-            });
-        }
-
-        function setupControls() {
-            const canvas = renderer.domElement;
-
-            canvas.addEventListener('mousedown', (e) => {
-                isDragging = true;
-                previousMousePosition = { x: e.clientX, y: e.clientY };
-            });
-
-            canvas.addEventListener('mousemove', (e) => {
-                if (!isDragging) return;
-
-                const deltaX = e.clientX - previousMousePosition.x;
-                const deltaY = e.clientY - previousMousePosition.y;
-
-                sphereGroup.rotation.y += deltaX * 0.01;
-                sphereGroup.rotation.x += deltaY * 0.01;
-
-                previousMousePosition = { x: e.clientX, y: e.clientY };
-            });
-
-            canvas.addEventListener('mouseup', () => { isDragging = false; });
-            canvas.addEventListener('mouseleave', () => { isDragging = false; });
-
-            canvas.addEventListener('wheel', (e) => {
-                camera.position.z += e.deltaY * 0.01;
-                camera.position.z = Math.max(3, Math.min(20, camera.position.z));
-            });
-
-            canvas.addEventListener('dblclick', () => {
-                sphereGroup.rotation.set(0, 0, 0);
-                camera.position.set(
-                    Math.ceil(Math.sqrt(NUM_QUBITS)) * 2,
-                    Math.ceil(Math.sqrt(NUM_QUBITS)) * 1.5,
-                    Math.ceil(Math.sqrt(NUM_QUBITS)) * 3
-                );
-            });
-        }
-
-        function animate() {
-            requestAnimationFrame(animate);
-
-            // Gentle rotation when not dragging
-            if (!isDragging) {
-                sphereGroup.rotation.y += 0.002;
-            }
-
-            // Pulse entangled spheres
-            if (IS_ENTANGLED) {
-                const scale = 1 + 0.02 * Math.sin(Date.now() * 0.003);
-                stateArrows.forEach(arrow => {
-                    arrow.scale.setScalar(scale);
-                });
-            }
-
-            renderer.render(scene, camera);
-        }
-
-        // Handle resize
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+    // Experimental
+    if (EXPERIMENTAL_PROBS && Object.keys(EXPERIMENTAL_PROBS).length > 0) {
+        document.getElementById('exp-header').style.display = 'block';
+        var expDiv = document.getElementById('experimental-probs');
+        var eEntries = Object.entries(EXPERIMENTAL_PROBS).sort(function(a,b){return b[1]-a[1];}).slice(0, 16);
+        eEntries.forEach(function(e) {
+            var wrap = document.createElement('div');
+            wrap.className = 'prob-bar-wrap';
+            wrap.innerHTML =
+                '<div class="prob-bar-hdr"><span class="basis-state">|' + e[0] + '></span><span class="prob-pct">' + (e[1]*100).toFixed(2) + '%</span></div>' +
+                '<div class="prob-bar-outer"><div class="prob-bar-fill exp" style="width:' + (e[1]*100) + '%"></div></div>';
+            expDiv.appendChild(wrap);
         });
+    }
+}
 
-        // Initialize
-        init();
-    </script>
+// ── BUILD MARGINALS ───────────────────────────────────────────
+function buildMarginals() {
+    var div = document.getElementById('marginal-probs');
+    MARGINAL_PROBS.forEach(function(m, i) {
+        var row = document.createElement('div');
+        row.className = 'marginal-row';
+        row.innerHTML =
+            '<span class="m-qid">Q' + i + '</span>' +
+            '<span class="m-bar"><span class="m-fill" style="width:' + (m.p0*100) + '%"></span></span>' +
+            '<span class="m-text">|0>: ' + (m.p0*100).toFixed(1) + '%  |1>: ' + (m.p1*100).toFixed(1) + '%</span>';
+        div.appendChild(row);
+    });
+}
+
+// ── MOUSE CONTROLS ────────────────────────────────────────────
+function setupControls(canvas, cp) {
+    canvas.addEventListener('mousedown', function(e) {
+        isDragging = true;
+        prevMouse = {x: e.clientX, y: e.clientY};
+    });
+    canvas.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        sphereGroup.rotation.y += (e.clientX - prevMouse.x) * 0.008;
+        sphereGroup.rotation.x += (e.clientY - prevMouse.y) * 0.008;
+        prevMouse = {x: e.clientX, y: e.clientY};
+    });
+    canvas.addEventListener('mouseup', function() { isDragging = false; });
+    canvas.addEventListener('mouseleave', function() { isDragging = false; });
+    canvas.addEventListener('wheel', function(e) {
+        camera.position.z += e.deltaY * 0.01;
+        camera.position.z = Math.max(3, Math.min(40, camera.position.z));
+    });
+    canvas.addEventListener('dblclick', function() {
+        sphereGroup.rotation.set(0, 0, 0);
+        var cols = Math.ceil(Math.sqrt(NUM_QUBITS));
+        var rows = Math.ceil(NUM_QUBITS / cols);
+        var spacing = 3.2;
+        var d = Math.max(cols, rows) * spacing * 0.9;
+        camera.position.set(d*0.55, d*0.45, d);
+        camera.lookAt((cols-1)*spacing/2, 0, (rows-1)*spacing/2);
+    });
+    window.addEventListener('resize', function() {
+        camera.aspect = cp.clientWidth / cp.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(cp.clientWidth, cp.clientHeight);
+    });
+}
+
+// ── ANIMATION LOOP with PHASE ROTATION ───────────────────────
+function animate() {
+    requestAnimationFrame(animate);
+
+    if (phaseActive) {
+        phaseOffset += PHASE_SPEED;
+        if (phaseOffset > Math.PI * 2) phaseOffset -= Math.PI * 2;
+
+        for (var i = 0; i < qubitRefs.length; i++) {
+            var qr = qubitRefs[i];
+            var bx = qr.coord[0], by = qr.coord[1], bz = qr.coord[2];
+            var r_xy = Math.sqrt(bx*bx + by*by);
+
+            if (r_xy > 0.02) {
+                // Rotate state point around Z-axis
+                var phi0 = Math.atan2(by, bx);
+                var phiA = phi0 + phaseOffset;
+                var newBx = r_xy * Math.cos(phiA);
+                var newBy = r_xy * Math.sin(phiA);
+                var R = qr.R;
+                var cx = qr.center.x, cy = qr.center.y, cz = qr.center.z;
+
+                // Move dot + glow
+                qr.dot.position.set(cx + newBx*R, cy + bz*R, cz + newBy*R);
+                qr.glowDot.position.copy(qr.dot.position);
+
+                // Rebuild arrow pointing to new position
+                sphereGroup.remove(qr.arrow);
+                var dir = new THREE.Vector3(newBx*R, bz*R, newBy*R);
+                var len = dir.length();
+                dir.normalize();
+                var arrowColor = IS_ENTANGLED ? 0xff4081 : 0x00ffff;
+                qr.arrow = new THREE.ArrowHelper(dir, qr.center, len, arrowColor, 0.14*R, 0.07*R);
+                sphereGroup.add(qr.arrow);
+            }
+
+            // Pulse glow
+            var pulse = 1 + 0.1 * Math.sin(Date.now() * 0.003 + i * 0.5);
+            qr.glowDot.scale.setScalar(pulse);
+        }
+    }
+
+    renderer.render(scene, camera);
+}
+
+// ── PHASE TOGGLE ──────────────────────────────────────────────
+function togglePhase() {
+    phaseActive = !phaseActive;
+    var btn = document.getElementById('phase-btn');
+    var badge = document.getElementById('phase-badge');
+    btn.textContent = phaseActive ? '\u21BB Pause Phase Animation' : '\u25B6 Resume Phase Animation';
+    badge.style.opacity = phaseActive ? '1' : '0.3';
+}
+
+// ── START ─────────────────────────────────────────────────────
+init();
+</script>
 </body>
 </html>
