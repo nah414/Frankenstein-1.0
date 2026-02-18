@@ -39,6 +39,19 @@ import numpy as np
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("frankenstein.synthesis")
 
+# TENSOR ACCELERATOR — lazy-loaded, activates only when first gate is applied.
+# Falls back to NumPy automatically if JAX/Numba not installed.
+# Import path is relative to the project root (synthesis/ package).
+try:
+    from synthesis.accelerator import (
+        apply_single_qubit_gate as _accel_single,
+        apply_controlled_gate   as _accel_controlled,
+        apply_mcx_gate          as _accel_mcx,
+    )
+    _ACCEL_AVAILABLE = True
+except ImportError:
+    _ACCEL_AVAILABLE = False
+
 # Physical constants (natural units where ℏ = c = 1, plus SI)
 HBAR = 1.054571817e-34  # J·s (SI)
 C = 299792458.0          # m/s
@@ -332,52 +345,107 @@ class TrueSynthesisEngine:
     # ==================== QUANTUM GATES ====================
     
     def _apply_single_qubit_gate(self, gate: np.ndarray, target: int):
-        """Apply single-qubit gate using efficient tensor product"""
+        """
+        Apply single-qubit gate using tensor-indexed MSB convention.
+        step = 2^(n-1-target)  — qubit 0 is most significant bit.
+
+        Delegates to the accelerator (JAX -> Numba -> NumPy) when available.
+        Falls back to the original in-place loop which is already correct.
+        """
         if self._state is None:
             raise RuntimeError("No quantum state initialized")
-        
-        n = self._state.n_qubits
-        dim = self._state.dim
-        
-        # Build full operator via Kronecker products
-        # More memory efficient: operate on pairs of amplitudes
-        step = 2 ** (n - target - 1)
-        for i in range(0, dim, 2 * step):
-            for j in range(step):
-                idx0 = i + j
-                idx1 = i + j + step
-                a0 = self._state.amplitudes[idx0]
-                a1 = self._state.amplitudes[idx1]
-                self._state.amplitudes[idx0] = gate[0, 0] * a0 + gate[0, 1] * a1
-                self._state.amplitudes[idx1] = gate[1, 0] * a0 + gate[1, 1] * a1
+
+        sv = self._state.amplitudes
+        n  = self._state.n_qubits
+
+        if _ACCEL_AVAILABLE:
+            _accel_single(sv, gate, target, n)
+        else:
+            # Original implementation — MSB convention, correct as-is.
+            # step = 2^(n-1-target) identical to 2^(n - target - 1)
+            dim  = self._state.dim
+            step = 2 ** (n - target - 1)
+            for i in range(0, dim, 2 * step):
+                for j in range(step):
+                    idx0 = i + j
+                    idx1 = i + j + step
+                    a0 = sv[idx0]
+                    a1 = sv[idx1]
+                    sv[idx0] = gate[0, 0] * a0 + gate[0, 1] * a1
+                    sv[idx1] = gate[1, 0] * a0 + gate[1, 1] * a1
     
     def _apply_two_qubit_gate(self, gate: np.ndarray, control: int, target: int):
-        """Apply two-qubit controlled gate"""
+        """
+        Apply controlled gate using tensor-indexed MSB convention.
+        ctrl_bit = n-1-control, tgt_bit = n-1-target.
+
+        Delegates to the accelerator when available.
+        Falls back to the original in-place loop which is already MSB-correct.
+        """
         if self._state is None:
             raise RuntimeError("No quantum state initialized")
-        
-        n = self._state.n_qubits
-        dim = self._state.dim
-        
-        # Efficient two-qubit gate application
-        ctrl_step = 2 ** (n - control - 1)
-        tgt_step = 2 ** (n - target - 1)
-        
-        for i in range(dim):
-            # Check if control qubit is |1⟩
-            if (i >> (n - control - 1)) & 1:
-                # Get target qubit state
-                tgt_bit = (i >> (n - target - 1)) & 1
-                if tgt_bit == 0:
-                    # Pair indices for target = |0⟩ and |1⟩
-                    idx0 = i
-                    idx1 = i ^ (1 << (n - target - 1))
-                    if idx1 > idx0:  # Avoid double processing
-                        a0 = self._state.amplitudes[idx0]
-                        a1 = self._state.amplitudes[idx1]
-                        # Apply gate to target qubit subspace
-                        self._state.amplitudes[idx0] = gate[0, 0] * a0 + gate[0, 1] * a1
-                        self._state.amplitudes[idx1] = gate[1, 0] * a0 + gate[1, 1] * a1
+
+        sv = self._state.amplitudes
+        n  = self._state.n_qubits
+
+        if _ACCEL_AVAILABLE:
+            _accel_controlled(sv, gate, control, target, n)
+        else:
+            # Original implementation — MSB convention, correct as-is.
+            # n-control-1 == n-1-control, n-target-1 == n-1-target
+            dim = self._state.dim
+            for i in range(dim):
+                if (i >> (n - control - 1)) & 1:
+                    tgt_bit = (i >> (n - target - 1)) & 1
+                    if tgt_bit == 0:
+                        idx0 = i
+                        idx1 = i ^ (1 << (n - target - 1))
+                        if idx1 > idx0:  # Process each pair exactly once
+                            a0 = sv[idx0]
+                            a1 = sv[idx1]
+                            sv[idx0] = gate[0, 0] * a0 + gate[0, 1] * a1
+                            sv[idx1] = gate[1, 0] * a0 + gate[1, 1] * a1
+
+    def mcx(self, controls: list, target: int):
+        """
+        Multi-Controlled X gate — tensor-indexed sparse swap.
+
+        MSB convention: qubit k at bit position (n-1-k).
+        No matrix built. Memory: O(2^n) = ~1 MB for 16 qubits.
+
+        Args:
+            controls: List of control qubit indices (all must be |1> to fire)
+            target:   Target qubit index (X applied when all controls = |1>)
+        """
+        if self._state is None:
+            raise RuntimeError("No quantum state initialized")
+
+        sv = self._state.amplitudes
+        n  = self._state.n_qubits
+
+        all_q = set(controls) | {target}
+        if len(all_q) != len(controls) + 1:
+            raise ValueError("Control qubits and target must all be distinct.")
+        if any(q < 0 or q >= n for q in all_q):
+            raise ValueError(f"All qubit indices must be in [0, {n - 1}].")
+
+        if _ACCEL_AVAILABLE:
+            _accel_mcx(sv, list(controls), target, n)
+        else:
+            # MSB tensor-indexed sparse swap (fallback)
+            tgt_bit   = n - 1 - target
+            tgt_mask  = 1 << tgt_bit
+            ctrl_mask = sum(1 << (n - 1 - c) for c in controls)
+            dim = 1 << n
+            for i in range(dim):
+                if (i & ctrl_mask) == ctrl_mask and not (i & tgt_mask):
+                    j = i | tgt_mask
+                    sv[i], sv[j] = sv[j], sv[i]
+
+        self._gate_log.append({
+            "gate": "MCX", "controls": list(controls), "target": target
+        })
+        self._trim_gate_log()
 
     # Standard quantum gates
     

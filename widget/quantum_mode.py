@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 FRANKENSTEIN 1.0 - Quantum Mode Handler
-Phase 2, Step 3: Quantum Computing Mode for Monster Terminal
+Quantum Computing Mode for Monster Terminal
 
 Provides a dedicated quantum computing REPL mode within the Monster Terminal.
 Implements hybrid mode switching as per Option C architecture.
@@ -223,7 +223,7 @@ class QuantumModeHandler:
             # NEW: Visualization toggle
             'viz': self._cmd_viz_toggle,
             'auto': self._cmd_viz_toggle,
-            # Phase 3.5: Local toolset commands
+            # Local toolset commands
             'decohere': self._cmd_decohere,
             'mesolve': self._cmd_mesolve,
             'transpile': self._cmd_transpile,
@@ -305,9 +305,9 @@ class QuantumModeHandler:
         welcome = """
 ╔═══════════════════════════════════════════════════════════════════╗
 ║                                                                   ║
-║   ⚛️  FRANKENSTEIN QUANTUM MODE v1.2.0 (Phase 2 Enhanced)        ║
+║   ⚛️  FRANKENSTEIN QUANTUM MODE v1.2.0                           ║
 ║                                                                   ║
-║   Local quantum simulation: NumPy 2.3.5 + SciPy 1.16.3           ║
+║   Tensor-MSB engine: NumPy 2.3.5 + SciPy 1.16.3 (JAX/Numba-ready)║
 ║   Tier 1 Hardware: Max 16 qubits (15 controls + 1 target)        ║
 ║                                                                   ║
 ╠═══════════════════════════════════════════════════════════════════╣
@@ -351,7 +351,7 @@ class QuantumModeHandler:
 ║     swap <q1> <q2>  SWAP two qubits                              ║
 ║     cswap <c> <q1> <q2>  Controlled-SWAP (Fredkin)               ║
 ║                                                                   ║
-║   ⚡ MULTI-CONTROLLED GATES (ENHANCED - Phase 2):                ║
+║   ⚡ MULTI-CONTROLLED GATES (ENHANCED):                          ║
 ║     mcx <c1,c2,...> <t>  Multi-Controlled X (up to 16 qubits!)   ║
 ║       • mcx 0 1              CNOT (1 control)                    ║
 ║       • mcx 0,1 2            Toffoli/CCNOT (2 controls)          ║
@@ -503,7 +503,7 @@ class QuantumModeHandler:
   auto [on|off]       Same as viz
                       (Default: ON - launches after every calculation)
 
-────────────────────── TOOLSET COMMANDS (Phase 3.5) ──────────────────────
+────────────────────── TOOLSET COMMANDS ──────────────────────────────────
   decohere [type] [gamma]  Model decoherence on current state
                            Types: amplitude_damping, dephasing, depolarizing
   mesolve <H> <t>     Solve Lindblad master equation (requires QuTiP)
@@ -554,12 +554,10 @@ class QuantumModeHandler:
      mcx 0,1 2
      measure
 
-  🔹 Advanced: 4-qubit entanglement (C3X):
-     qubit 4
+  🔹 Advanced: 16-qubit entanglement (C15X — Tier 1 max):
+     qubit 16
      h 0
-     h 1
-     h 2
-     mcx 0,1,2 3
+     mcx 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 15
      measure
 
 """

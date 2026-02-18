@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 FRANKENSTEIN 1.0 - Terminal Launcher
-Phase 1: Core Engine
 
 Double-click this file or run: python launch_terminal.py
 
