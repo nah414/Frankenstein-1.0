@@ -112,7 +112,9 @@ class DataPipeline:
             'bytes_processed': 0,
             'avg_latency_ms': 0
         }
-        self._latencies: List[float] = []
+        # CRITICAL BUGFIX: Was unbounded list causing memory leaks
+        from collections import deque
+        self._latencies: deque = deque(maxlen=100)  # Keep last 100 latency samples
         
         # Callbacks
         self._on_complete: List[Callable[[DataPacket], None]] = []

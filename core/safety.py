@@ -21,7 +21,7 @@ class SafetyConstraints:
     MAX_STORAGE_USE_GB: int = 20       # 117GB total, keep lean
 
     # Thread Limits (4-core CPU)
-    MAX_WORKER_THREADS: int = 3        # Leave 1 core for OS
+    MAX_WORKER_THREADS: int = 2        # Optimized for tier1: 2 workers + monitors
 
     # Quantum Budget (cloud API protection)
     MAX_QUANTUM_SHOTS: int = 10000     # Cost protection
@@ -111,7 +111,7 @@ def is_within_tier1_limits() -> Dict[str, bool]:
     return {
         "cpu_limit_appropriate": SAFETY.MAX_CPU_PERCENT <= 80,
         "memory_limit_appropriate": SAFETY.MAX_MEMORY_PERCENT <= 70,
-        "thread_limit_appropriate": SAFETY.MAX_WORKER_THREADS <= 3,
+        "thread_limit_appropriate": SAFETY.MAX_WORKER_THREADS <= 2,
         "storage_limit_appropriate": SAFETY.MAX_STORAGE_USE_GB <= 30,
         "tier1_compliant": True
     }

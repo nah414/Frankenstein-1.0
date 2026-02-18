@@ -88,6 +88,7 @@ class TaskOrchestrator:
         self._task_queue: Queue = Queue()
         self._active_tasks: Dict[str, Task] = {}
         self._completed_tasks: Dict[str, Task] = {}
+        self._max_completed_tasks = 100  # OPTIMIZED: Limit completed task history to prevent RAM buildup
 
         # Thread pool for execution
         self._executor: Optional[ThreadPoolExecutor] = None
@@ -261,6 +262,11 @@ class TaskOrchestrator:
             if task.task_id in self._active_tasks:
                 del self._active_tasks[task.task_id]
             self._completed_tasks[task.task_id] = task
+            # Trim completed tasks to prevent unbounded RAM growth
+            if len(self._completed_tasks) > self._max_completed_tasks:
+                # Remove oldest task (first item in dict)
+                oldest_task_id = next(iter(self._completed_tasks))
+                del self._completed_tasks[oldest_task_id]
 
         # Record in memory
         get_memory().record_task_complete(

@@ -92,7 +92,7 @@ class SecurityMonitor:
     - Notify subscribers of security events
     """
 
-    def __init__(self, max_events: int = 500, alert_window_minutes: int = 15):
+    def __init__(self, max_events: int = 200, alert_window_minutes: int = 15):  # OPTIMIZED for tier1
         """
         Initialize the security monitor.
 
