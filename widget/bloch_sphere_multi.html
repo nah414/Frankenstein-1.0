@@ -411,16 +411,16 @@ function buildBlochSphere(qi, center, R) {
     ));
 
     // Phase orbit ring at height bz (shows rotation path)
+    // For pure/collapsed states (bx=by≈0), use a small synthetic radius so ring is always visible
     var r_xy = Math.sqrt(bx*bx + by*by);
-    if (r_xy > 0.02) {
-        var orbitRing = new THREE.Mesh(
-            new THREE.RingGeometry(r_xy*R*0.97, r_xy*R*1.03, 64),
-            new THREE.MeshBasicMaterial({color: 0x58a6ff, side: THREE.DoubleSide, transparent: true, opacity: 0.3})
-        );
-        orbitRing.position.set(center.x, center.y + bz*R, center.z);
-        orbitRing.rotation.x = Math.PI / 2;
-        sphereGroup.add(orbitRing);
-    }
+    var orbitR = r_xy > 0.02 ? r_xy : 0.15;
+    var orbitRing = new THREE.Mesh(
+        new THREE.RingGeometry(orbitR*R*0.97, orbitR*R*1.03, 64),
+        new THREE.MeshBasicMaterial({color: 0x58a6ff, side: THREE.DoubleSide, transparent: true, opacity: r_xy > 0.02 ? 0.3 : 0.18})
+    );
+    orbitRing.position.set(center.x, center.y + bz*R, center.z);
+    orbitRing.rotation.x = Math.PI / 2;
+    sphereGroup.add(orbitRing);
 
     // |0> / |1> labels
     var lbl0 = makeSprite('|0>', 0xffe66d);
@@ -594,28 +594,29 @@ function animate() {
             var bx = qr.coord[0], by = qr.coord[1], bz = qr.coord[2];
             var r_xy = Math.sqrt(bx*bx + by*by);
 
-            if (r_xy > 0.02) {
-                // Rotate state point around Z-axis
-                var phi0 = Math.atan2(by, bx);
-                var phiA = phi0 + phaseOffset;
-                var newBx = r_xy * Math.cos(phiA);
-                var newBy = r_xy * Math.sin(phiA);
-                var R = qr.R;
-                var cx = qr.center.x, cy = qr.center.y, cz = qr.center.z;
+            // Always animate — for pure/collapsed states (bx=by≈0, e.g. |0> or |1>),
+            // use a small synthetic orbit radius so the arrow visibly rotates around the pole.
+            var animR = r_xy > 0.02 ? r_xy : 0.15;
+            var phi0 = r_xy > 0.02 ? Math.atan2(by, bx) : 0;
+            var phiA = phi0 + phaseOffset;
+            var newBx = animR * Math.cos(phiA);
+            var newBy = animR * Math.sin(phiA);
+            var R = qr.R;
+            var cx = qr.center.x, cy = qr.center.y, cz = qr.center.z;
 
-                // Move dot + glow
-                qr.dot.position.set(cx + newBx*R, cy + bz*R, cz + newBy*R);
-                qr.glowDot.position.copy(qr.dot.position);
+            // Move dot + glow to animated tip position
+            qr.dot.position.set(cx + newBx*R, cy + bz*R, cz + newBy*R);
+            qr.glowDot.position.copy(qr.dot.position);
 
-                // Rebuild arrow pointing to new position
-                sphereGroup.remove(qr.arrow);
-                var dir = new THREE.Vector3(newBx*R, bz*R, newBy*R);
-                var len = dir.length();
-                dir.normalize();
-                var arrowColor = IS_ENTANGLED ? 0xff4081 : 0x00ffff;
-                qr.arrow = new THREE.ArrowHelper(dir, qr.center, len, arrowColor, 0.14*R, 0.07*R);
-                sphereGroup.add(qr.arrow);
-            }
+            // Rebuild arrow pointing from center to animated tip
+            sphereGroup.remove(qr.arrow);
+            var dir = new THREE.Vector3(newBx*R, bz*R, newBy*R);
+            var len = dir.length();
+            if (len < 0.001) len = 0.001; // safety: never zero-length
+            dir.normalize();
+            var arrowColor = IS_ENTANGLED ? 0xff4081 : 0x00ffff;
+            qr.arrow = new THREE.ArrowHelper(dir, qr.center, len, arrowColor, 0.14*R, 0.07*R);
+            sphereGroup.add(qr.arrow);
 
             // Pulse glow
             var pulse = 1 + 0.1 * Math.sin(Date.now() * 0.003 + i * 0.5);
