@@ -42,43 +42,54 @@ class QuantumVisualizer:
         coords: Tuple[float, float, float],
         probabilities: Dict[str, float] = None,
         statevector: np.ndarray = None,
-        result_id: str = "quantum"
+        result_id: str = "quantum",
+        n_qubits: int = None,
+        multi_qubit_data: Dict[str, Any] = None,
     ) -> bool:
         """
         Launch interactive 3D Bloch sphere in browser.
-        
+
+        Step 8 fix: now injects N_QUBITS and MULTI_QUBIT_DATA so the
+        HTML template can switch between single-sphere and CSS Grid
+        multi-sphere layouts (up to 16 qubits, no 4-qubit limit).
+
         Args:
-            coords: (x, y, z) Bloch coordinates
-            probabilities: Measurement probabilities
-            statevector: Full statevector
-            result_id: Unique identifier for temp file
-            
+            coords:           (x, y, z) Bloch coordinates for qubit 0
+            probabilities:    Measurement probabilities
+            statevector:      Full statevector (all qubits)
+            result_id:        Unique identifier for temp file
+            n_qubits:         Total number of qubits in the system
+            multi_qubit_data: Dict with keys:
+                                'qubit_coords'   — List[(x,y,z)] per qubit
+                                'entanglement'   — Dict from get_entanglement_info()
+                              Enables CSS Grid multi-sphere view in the HTML.
+
         Returns:
             True if launched successfully
         """
         widget_dir = Path(__file__).parent.parent.parent / "widget"
         template_path = widget_dir / "bloch_sphere.html"
-        
+
         if not template_path.exists():
             self._output(f"⚠️  Bloch sphere template not found at {template_path}\n")
             return False
-        
+
         x, y, z = coords
-        
+
         # Read template
         with open(template_path, 'r', encoding='utf-8') as f:
             html = f.read()
-        
-        # Inject data
+
+        # ── Inject single-qubit coordinates ──────────────────────────
         html = html.replace('{{BLOCH_X}}', str(x))
         html = html.replace('{{BLOCH_Y}}', str(y))
         html = html.replace('{{BLOCH_Z}}', str(z))
-        
+
         if probabilities:
             html = html.replace('{{PROBABILITIES}}', json.dumps(probabilities))
         else:
             html = html.replace('{{PROBABILITIES}}', '{}')
-        
+
         if statevector is not None:
             sv_data = {
                 'real': statevector.real.tolist(),
@@ -87,17 +98,120 @@ class QuantumVisualizer:
             html = html.replace('{{STATEVECTOR}}', json.dumps(sv_data))
         else:
             html = html.replace('{{STATEVECTOR}}', '{"real":[1,0],"imag":[0,0]}')
-        
+
+        # ── Step 8: inject N_QUBITS and MULTI_QUBIT_DATA ─────────────
+        _n = n_qubits if n_qubits is not None else 1
+        html = html.replace('{{N_QUBITS}}', str(_n))
+
+        if multi_qubit_data is not None:
+            html = html.replace('{{MULTI_QUBIT_DATA}}', json.dumps(multi_qubit_data))
+        else:
+            html = html.replace('{{MULTI_QUBIT_DATA}}', 'null')
+
         # Write temp file
         output_path = self._temp_dir / f"bloch_{result_id}.html"
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html)
-        
+
         # Launch browser
         webbrowser.open(f'file:///{output_path.as_posix()}')
-        
+
         return True
-    
+
+    def launch_multi_qubit_bloch(
+        self,
+        qubit_coords: List[Tuple[float, float, float]],
+        entanglement_info: Dict[str, Any],
+        num_qubits: int,
+        gate_count: int = 0,
+        result_id: str = "multi",
+        theoretical_probs: Dict[str, float] = None,
+        experimental_probs: Dict[str, float] = None,
+        marginal_probs: List[Dict[str, float]] = None,
+        shots: int = 0
+    ) -> bool:
+        """
+        Launch multi-qubit Bloch sphere visualization with probability display.
+
+        Shows all qubits in a grid layout with entanglement status and
+        both theoretical and experimental probability distributions.
+
+        Args:
+            qubit_coords: List of (x, y, z) Bloch coordinates per qubit
+            entanglement_info: Dict from get_entanglement_info()
+            num_qubits: Number of qubits in the system
+            gate_count: Number of gates applied
+            result_id: Unique ID for temp file
+            theoretical_probs: Theoretical probabilities from statevector
+            experimental_probs: Experimental probabilities from measurements
+            marginal_probs: Per-qubit marginal probabilities [{p0, p1}, ...]
+            shots: Number of measurement shots (0 if no measurement)
+
+        Returns:
+            True if launched successfully
+        """
+        widget_dir = Path(__file__).parent.parent.parent / "widget"
+        template_path = widget_dir / "bloch_sphere_multi.html"
+
+        if not template_path.exists():
+            self._output(f"⚠️ Multi-qubit template not found at {template_path}\n")
+            # Fall back to single-qubit visualization
+            if qubit_coords:
+                return self.launch_bloch_sphere(qubit_coords[0], result_id=result_id)
+            return False
+
+        # Read template
+        with open(template_path, 'r', encoding='utf-8') as f:
+            html = f.read()
+
+        # Prepare data
+        is_entangled = entanglement_info.get('is_entangled', False)
+
+        # Check if JAX is available (for backend display)
+        try:
+            import jax
+            backend = 'JAX'
+        except ImportError:
+            backend = 'NumPy'
+
+        # Prepare probability data
+        if theoretical_probs is None:
+            theoretical_probs = {}
+        if experimental_probs is None:
+            experimental_probs = {}
+        if marginal_probs is None:
+            # Default marginal probs (equal superposition)
+            marginal_probs = [{'p0': 0.5, 'p1': 0.5} for _ in range(num_qubits)]
+
+        # Inject values
+        html = html.replace('{{NUM_QUBITS}}', str(num_qubits))
+        html = html.replace('{{QUBIT_COORDS}}', json.dumps(qubit_coords))
+        html = html.replace('{{IS_ENTANGLED}}', 'true' if is_entangled else 'false')
+        html = html.replace('{{SCHMIDT_RANK}}', str(entanglement_info.get('schmidt_rank', 1)))
+        html = html.replace('{{ENTROPY}}', f"{entanglement_info.get('entanglement_entropy', 0.0):.3f}")
+        html = html.replace('{{MAX_ENTROPY}}', f"{entanglement_info.get('max_entanglement', 0.0):.1f}")
+        html = html.replace('{{GATE_COUNT}}', str(gate_count))
+        html = html.replace('{{BACKEND}}', backend)
+        html = html.replace('{{SHOTS}}', str(shots) if shots > 0 else 'N/A')
+
+        html = html.replace('{{ENTANGLEMENT_CLASS}}', 'entangled' if is_entangled else 'separable')
+        html = html.replace('{{ENTANGLEMENT_STATUS}}', '⚛️ ENTANGLED' if is_entangled else '✓ SEPARABLE')
+
+        # Inject probability data
+        html = html.replace('{{THEORETICAL_PROBS}}', json.dumps(theoretical_probs))
+        html = html.replace('{{EXPERIMENTAL_PROBS}}', json.dumps(experimental_probs))
+        html = html.replace('{{MARGINAL_PROBS}}', json.dumps(marginal_probs))
+
+        # Write temp file
+        output_path = self._temp_dir / f"bloch_multi_{result_id}.html"
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(html)
+
+        # Launch browser
+        webbrowser.open(f'file:///{output_path.as_posix()}')
+
+        return True
+
     def get_multi_qubit_bloch(
         self,
         statevector: np.ndarray,

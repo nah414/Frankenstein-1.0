@@ -21,6 +21,33 @@ from datetime import datetime
 import logging
 import asyncio
 
+# ---------------------------------------------------------------------------
+# Accelerator import — tensor MSB gate ops (Step 5 fix)
+# Replaces kron-based _tensor_gate and _controlled_gate in QuantumSimAgent
+# ---------------------------------------------------------------------------
+try:
+    from synthesis.accelerator import (
+        apply_single_qubit_gate as _accel_single,
+        apply_controlled_gate   as _accel_controlled,
+        apply_mcx_gate          as _accel_mcx,
+        get_backend_name        as _accel_backend,
+    )
+    _ACCEL_AVAILABLE = True
+except ImportError:
+    _ACCEL_AVAILABLE = False
+
+# ---------------------------------------------------------------------------
+# Priority integration bridges — lazy imports (loaded only when first called)
+# ---------------------------------------------------------------------------
+# Priority 1 — VQE: QuantumCompute.vqe() is already the closed-loop runner;
+#              ComputeSwarm.run_vqe() delegates to it with physics Hamiltonians.
+# Priority 2 — Density matrix: QuantumState.to_density_matrix() added to
+#              quantum_compute.py; ComputeSwarm.apply_circuit_decoherence() wraps it.
+# Priority 3 — Hamiltonian from physics: ComputeSwarm.hamiltonian_from_physics()
+#              translates PhysicsCompute params → QuantumCompute Hamiltonian matrix.
+# Priority 4 — Lorentz-boosted gates: ComputeSwarm.apply_lorentz_circuit()
+#              wraps QuantumCompute.lorentz_boosted_rotation().
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -601,10 +628,48 @@ class QuantumSimAgent(BaseComputeAgent):
             "norm": float(np.linalg.norm(state))
         }
     
-    def _apply_gate(self, state, n_qubits, gate_name, target, control=None, angle=None):
-        """Apply a quantum gate to the state."""
-        dim = 2 ** n_qubits
-        
+    def _apply_gate_to_state(self, state: np.ndarray, n_qubits: int,
+                             gate: np.ndarray, target: int,
+                             control: Optional[int] = None) -> np.ndarray:
+        """
+        Apply a 2×2 gate matrix in-place via tensor MSB indexing.
+
+        Step 5 fix: replaces kron-based _tensor_gate and full-matrix
+        _controlled_gate. Memory: O(2^n) not O(4^n).
+
+        Uses accelerator (JAX/Numba/NumPy) when available, otherwise
+        falls back to pure-NumPy tensor MSB loop.
+        """
+        if _ACCEL_AVAILABLE:
+            if control is None:
+                return _accel_single(state, gate, target, n_qubits)
+            else:
+                return _accel_controlled(state, gate, control, target, n_qubits)
+
+        # NumPy tensor MSB fallback
+        sv = state.copy()
+        if control is None:
+            step = 1 << (n_qubits - 1 - target)
+            for i in range(0, len(sv), step * 2):
+                for j in range(i, i + step):
+                    a, b = sv[j], sv[j + step]
+                    sv[j]        = gate[0, 0] * a + gate[0, 1] * b
+                    sv[j + step] = gate[1, 0] * a + gate[1, 1] * b
+        else:
+            c_step = 1 << (n_qubits - 1 - control)
+            t_step = 1 << (n_qubits - 1 - target)
+            for i in range(len(sv)):
+                if (i & c_step) and not (i & t_step):
+                    j = i | t_step
+                    a, b = sv[i], sv[j]
+                    sv[i] = gate[0, 0] * a + gate[0, 1] * b
+                    sv[j] = gate[1, 0] * a + gate[1, 1] * b
+        return sv
+
+    def _apply_gate(self, state: np.ndarray, n_qubits: int, gate_name: str,
+                    target: int, control: Optional[int] = None,
+                    angle: Optional[float] = None) -> np.ndarray:
+        """Apply a named quantum gate to state — tensor MSB, no kron."""
         # Get single-qubit gate matrix
         if gate_name == "H":
             gate = self.H
@@ -631,49 +696,19 @@ class QuantumSimAgent(BaseComputeAgent):
             ], dtype=complex)
         else:
             gate = self.I
-        
-        if control is None:
-            # Single qubit gate
-            full_gate = self._tensor_gate(gate, target, n_qubits)
-        else:
-            # Controlled gate (CNOT, etc.)
-            full_gate = self._controlled_gate(gate, control, target, n_qubits)
-        
-        return full_gate @ state
-    
+
+        return self._apply_gate_to_state(state, n_qubits, gate, target, control)
+
+    # Legacy stubs — raise immediately so OOM kron is never hit
     def _tensor_gate(self, gate, target, n_qubits):
-        """Construct full gate matrix for single-qubit gate."""
-        result = np.array([[1.0]], dtype=complex)
-        for i in range(n_qubits):
-            if i == target:
-                result = np.kron(result, gate)
-            else:
-                result = np.kron(result, self.I)
-        return result
-    
+        raise RuntimeError(
+            "_tensor_gate() removed (was OOM kron builder). "
+            "Use _apply_gate_to_state() via tensor MSB accelerator.")
+
     def _controlled_gate(self, gate, control, target, n_qubits):
-        """Construct controlled gate matrix."""
-        dim = 2 ** n_qubits
-        result = np.eye(dim, dtype=complex)
-        
-        for i in range(dim):
-            # Check if control qubit is |1⟩
-            if (i >> (n_qubits - 1 - control)) & 1:
-                # Find the state with target qubit flipped
-                for j in range(dim):
-                    if (j >> (n_qubits - 1 - control)) & 1:
-                        # Apply gate
-                        t_bit = (i >> (n_qubits - 1 - target)) & 1
-                        other_t_bit = (j >> (n_qubits - 1 - target)) & 1
-                        
-                        # Check if only target bit differs
-                        i_no_target = i ^ (t_bit << (n_qubits - 1 - target))
-                        j_no_target = j ^ (other_t_bit << (n_qubits - 1 - target))
-                        
-                        if i_no_target == j_no_target:
-                            result[i, j] = gate[t_bit, other_t_bit]
-        
-        return result
+        raise RuntimeError(
+            "_controlled_gate() removed (was OOM full-matrix builder). "
+            "Use _apply_gate_to_state() with control= via tensor MSB accelerator.")
     
     def _measure(self, data: Dict) -> Dict[str, Any]:
         """Simulate quantum measurement."""
@@ -770,13 +805,416 @@ class ComputeSwarm:
     """
     
     def __init__(self):
-        self.physics = PhysicsAgent()
-        self.math = MathAgent()
-        self.quantum = QuantumSimAgent()
-        self._agents = {
-            "physics": self.physics,
-            "math": self.math,
-            "quantum": self.quantum
-        }
+        # Lazy-load agents on first access to save memory at startup
+        self._agents_cache = {}
         self._task_history: List[ComputeResult] = []
-        logger.info("ComputeSwarm initialized with 3 agents")
+        logger.info("ComputeSwarm initialized with lazy agent loading (optimized)")
+
+    @property
+    def physics(self):
+        """Lazy-load PhysicsAgent on first access"""
+        if 'physics' not in self._agents_cache:
+            logger.info("Loading PhysicsAgent on-demand...")
+            self._agents_cache['physics'] = PhysicsAgent()
+        return self._agents_cache['physics']
+
+    @property
+    def math(self):
+        """Lazy-load MathAgent on first access"""
+        if 'math' not in self._agents_cache:
+            logger.info("Loading MathAgent on-demand...")
+            self._agents_cache['math'] = MathAgent()
+        return self._agents_cache['math']
+
+    @property
+    def quantum(self):
+        """Lazy-load QuantumSimAgent on first access"""
+        if 'quantum' not in self._agents_cache:
+            logger.info("Loading QuantumSimAgent on-demand...")
+            self._agents_cache['quantum'] = QuantumSimAgent()
+        return self._agents_cache['quantum']
+
+    @property
+    def _agents(self):
+        """Backward compatibility: return dict of loaded agents"""
+        return {
+            "physics": self.physics,   # Will lazy-load if accessed
+            "math": self.math,         # Will lazy-load if accessed
+            "quantum": self.quantum    # Will lazy-load if accessed
+        }
+
+    # ======================================================================
+    # PRIORITY INTEGRATION BRIDGES
+    # Connects Physics / Math / Relativistic engines to circuit operations
+    # ======================================================================
+
+    # ------------------------------------------------------------------
+    # Priority 3 — Hamiltonian from Physics
+    # ------------------------------------------------------------------
+
+    def hamiltonian_from_physics(self, physics_type: str,
+                                 params: Dict[str, Any],
+                                 n_qubits: int) -> np.ndarray:
+        """
+        Translate PhysicsCompute parameters into a qubit-space Hamiltonian.
+
+        This is the bridge between PhysicsCompute (classical/relativistic
+        physics engine) and QuantumCompute.evolve() / .vqe().
+
+        Supported physics_type values:
+            'harmonic'  — quantum harmonic oscillator: H = ℏω(a†a + ½)
+                          params: {'m': mass, 'k': spring_const}
+                          or directly {'omega': angular_frequency}
+            'coulomb'   — hydrogen-like atom: E_n = -Z²Ry/n²
+                          params: {'Z': nuclear_charge}
+            'ising'     — transverse-field Ising model: H = -J Σ ZZ - h Σ X
+                          params: {'J': coupling, 'h': transverse_field}
+            'free'      — free particle momentum eigenstates (kinetic only)
+                          params: {'mass': m}
+
+        Integration flow:
+            PhysicsCompute.harmonic_oscillator(m, k, x0, v0) → omega = √(k/m)
+                ↓
+            ComputeSwarm.hamiltonian_from_physics('harmonic', {'m': m, 'k': k}, n)
+                ↓
+            ComputeSwarm.run_vqe(H, n_qubits)  →  ground state energy
+
+        Args:
+            physics_type: one of 'harmonic', 'coulomb', 'ising', 'free'
+            params:       physical parameters (see above)
+            n_qubits:     number of qubits / Hilbert space dimension = 2^n
+
+        Returns:
+            np.ndarray: (2^n, 2^n) Hamiltonian matrix suitable for
+                        QuantumCompute.evolve() or .vqe()
+        """
+        from synthesis.compute.quantum_compute import get_quantum_compute
+        qc = get_quantum_compute()
+        qc.initialize(n_qubits, "zero")
+
+        if physics_type == 'harmonic':
+            omega = params.get('omega')
+            if omega is None:
+                m = params.get('m', 1.0)
+                k = params.get('k', 1.0)
+                omega = float(np.sqrt(k / m))
+            m = params.get('m', 1.0)
+            return qc.hamiltonian_from_harmonic_oscillator(m, omega)
+
+        elif physics_type == 'coulomb':
+            Z = params.get('Z', 1.0)
+            epsilon = params.get('epsilon', 0.1)
+            return qc.hamiltonian_from_coulomb(Z=Z, epsilon=epsilon)
+
+        elif physics_type == 'ising':
+            dim = 2 ** n_qubits
+            J = params.get('J', 1.0)
+            h = params.get('h', 0.5)
+            H = np.zeros((dim, dim), dtype=complex)
+            sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
+            sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
+            I2 = np.eye(2, dtype=complex)
+
+            # ZZ coupling terms
+            for q in range(n_qubits - 1):
+                # Build I⊗...⊗Z⊗Z⊗...⊗I (qubits q and q+1)
+                ops = [I2] * n_qubits
+                ops[q] = sigma_z
+                ops[q + 1] = sigma_z
+                M = ops[0]
+                for op in ops[1:]:
+                    M = np.kron(M, op)
+                H -= J * M
+
+            # Transverse X field
+            for q in range(n_qubits):
+                ops = [I2] * n_qubits
+                ops[q] = sigma_x
+                M = ops[0]
+                for op in ops[1:]:
+                    M = np.kron(M, op)
+                H -= h * M
+
+            return H
+
+        elif physics_type == 'free':
+            m = params.get('mass', 1.0)
+            dim = 2 ** n_qubits
+            # Kinetic energy in momentum basis: T_k = (ℏk)²/2m
+            # Using discrete momentum levels k = 2πn/L, L=1, ℏ=1
+            energies = np.array(
+                [(2 * np.pi * (i - dim // 2)) ** 2 / (2 * m)
+                 for i in range(dim)])
+            return np.diag(energies).astype(complex)
+
+        else:
+            raise ValueError(
+                f"Unknown physics_type '{physics_type}'. "
+                "Choose: 'harmonic', 'coulomb', 'ising', 'free'")
+
+    # ------------------------------------------------------------------
+    # Priority 1 — VQE closed loop
+    # ------------------------------------------------------------------
+
+    def run_vqe(self, hamiltonian: np.ndarray, n_qubits: int,
+                n_layers: int = 2, max_iterations: int = 200,
+                tol: float = 1e-6) -> Dict[str, Any]:
+        """
+        Run Variational Quantum Eigensolver via QuantumCompute.vqe().
+
+        Combines:
+            - QuantumCircuitLibrary.variational_ansatz_ry_cnot() ansatz
+            - QuantumCompute.expectation(H) energy evaluation
+            - SciPy COBYLA or NumPy finite-diff optimization
+            - Hamiltonian built by hamiltonian_from_physics()
+
+        Example — ground state of H₂ molecule (simplified Ising encoding):
+            H = swarm.hamiltonian_from_physics('ising', {'J': 1.0, 'h': 0.5}, 4)
+            result = swarm.run_vqe(H, n_qubits=4, n_layers=3)
+            print(result['ground_state_energy'])
+
+        Args:
+            hamiltonian:    (2^n × 2^n) Hermitian operator
+            n_qubits:       number of qubits
+            n_layers:       VQE ansatz depth
+            max_iterations: optimizer budget
+            tol:            convergence tolerance
+
+        Returns:
+            dict from QuantumCompute.vqe() with:
+                'ground_state_energy', 'optimal_params', 'final_state',
+                'energy_history', 'converged', 'n_iterations', 'backend'
+        """
+        from synthesis.compute.quantum_compute import get_quantum_compute
+        qc = get_quantum_compute()
+        qc.initialize(n_qubits, "zero")
+        return qc.vqe(hamiltonian, n_layers=n_layers,
+                      max_iterations=max_iterations, tol=tol)
+
+    def run_vqe_from_physics(self, physics_type: str, params: Dict[str, Any],
+                              n_qubits: int, n_layers: int = 2,
+                              max_iterations: int = 200) -> Dict[str, Any]:
+        """
+        One-call VQE: physics parameters → Hamiltonian → ground state.
+
+        Chains hamiltonian_from_physics() → run_vqe().
+
+        Example:
+            result = swarm.run_vqe_from_physics(
+                'harmonic', {'m': 1.0, 'k': 4.0}, n_qubits=4)
+            # Returns ground state energy of quantum harmonic oscillator
+            # at ω = √(k/m) = 2.0, E_ground ≈ ω/2 = 1.0
+        """
+        H = self.hamiltonian_from_physics(physics_type, params, n_qubits)
+        return self.run_vqe(H, n_qubits, n_layers=n_layers,
+                            max_iterations=max_iterations)
+
+    # ------------------------------------------------------------------
+    # Priority 2 — Statevector → Density matrix → Decoherence bridge
+    # ------------------------------------------------------------------
+
+    def apply_circuit_decoherence(self, circuit_gates: List[Dict[str, Any]],
+                                   n_qubits: int,
+                                   t1: float = 1e-4, t2: float = 5e-5,
+                                   gate_time: float = 1e-7) -> Dict[str, Any]:
+        """
+        Run a gate circuit then apply realistic T1/T2 decoherence.
+
+        Bridges QuantumCompute gate circuits and QuantumState.to_density_matrix()
+        for NISQ noise model simulation.
+
+        Args:
+            circuit_gates: list of gate specs, e.g.
+                [{'gate': 'H', 'target': 0},
+                 {'gate': 'X', 'target': 1, 'control': 0},
+                 {'gate': 'RY', 'target': 2, 'angle': 1.57}]
+            n_qubits:   number of qubits
+            t1:         amplitude damping time (T1 relaxation)
+            t2:         dephasing time (T2 coherence)
+            gate_time:  effective gate duration
+
+        Returns:
+            dict with:
+                'state_before': QuantumState (ideal, no noise)
+                'state_after':  QuantumState (with decoherence applied)
+                'density_matrix': np.ndarray (rho after noise)
+                'fidelity': float  (|⟨ideal|noisy⟩|²)
+                'gate_history': List[str]
+        """
+        from synthesis.compute.quantum_compute import get_quantum_compute
+        qc = get_quantum_compute()
+        qc.initialize(n_qubits, "zero")
+
+        sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
+        sigma_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
+        sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
+        hadamard = np.array([[1, 1], [1, -1]], dtype=complex) / np.sqrt(2)
+        I2 = np.eye(2, dtype=complex)
+
+        gate_map = {
+            'H': hadamard, 'X': sigma_x, 'Y': sigma_y, 'Z': sigma_z, 'I': I2
+        }
+
+        for spec in circuit_gates:
+            gname = spec.get('gate', 'I')
+            target = spec.get('target', 0)
+            control = spec.get('control', None)
+            angle = spec.get('angle', None)
+
+            if gname in gate_map:
+                gate_mat = gate_map[gname]
+            elif gname == 'RX' and angle is not None:
+                c, s = np.cos(angle/2), np.sin(angle/2)
+                gate_mat = np.array([[c, -1j*s], [-1j*s, c]], dtype=complex)
+            elif gname == 'RY' and angle is not None:
+                c, s = np.cos(angle/2), np.sin(angle/2)
+                gate_mat = np.array([[c, -s], [s, c]], dtype=complex)
+            elif gname == 'RZ' and angle is not None:
+                gate_mat = np.array([[np.exp(-1j*angle/2), 0],
+                                     [0, np.exp(1j*angle/2)]], dtype=complex)
+            else:
+                gate_mat = I2
+
+            qc.apply_gate(gate_mat, target, control)
+
+        ideal_state = qc.get_state()
+        ideal_amplitudes = ideal_state.amplitudes.copy()
+
+        # Apply decoherence
+        noisy_state = qc.apply_decoherence(t1, t2, gate_time)
+        density_matrix = noisy_state.to_density_matrix()
+
+        # Fidelity: |⟨ideal|noisy⟩|²
+        fidelity = float(abs(np.conj(ideal_amplitudes) @ noisy_state.amplitudes) ** 2)
+
+        return {
+            'state_before':   ideal_state,
+            'state_after':    noisy_state,
+            'density_matrix': density_matrix,
+            'fidelity':       fidelity,
+            'gate_history':   qc.get_history(),
+        }
+
+    # ------------------------------------------------------------------
+    # Priority 4 — Lorentz-boosted gate circuit
+    # ------------------------------------------------------------------
+
+    def apply_lorentz_circuit(self, rotation_gates: List[Dict[str, Any]],
+                               n_qubits: int,
+                               velocity: float = 0.0) -> Dict[str, Any]:
+        """
+        Apply a rotation circuit with Lorentz-boosted gate angles.
+
+        Models how relativistic motion (satellite qubit platforms, high-velocity
+        ion traps, or theoretical relativistic QC architectures) modifies gate
+        fidelity via time dilation of control pulses.
+
+        Physics:
+            θ_boosted = γ · θ_lab,  γ = 1/√(1 - v²/c²)
+
+        Args:
+            rotation_gates: list of rotation specs, e.g.
+                [{'axis': 'y', 'angle': 1.57, 'target': 0},
+                 {'axis': 'x', 'angle': 0.78, 'target': 1}]
+            n_qubits:  number of qubits
+            velocity:  v/c (0.0 = no boost, 0.9 = 0.9c)
+
+        Returns:
+            dict with:
+                'lab_angles':    List[float]  (original angles)
+                'boosted_angles': List[float] (γ·θ angles applied)
+                'gamma':         float        (Lorentz factor)
+                'final_state':   QuantumState
+                'gate_history':  List[str]
+        """
+        if abs(velocity) >= 1.0:
+            raise ValueError("velocity must be |v/c| < 1")
+
+        gamma = 1.0 / np.sqrt(1.0 - velocity ** 2) if abs(velocity) > 0 else 1.0
+
+        from synthesis.compute.quantum_compute import get_quantum_compute
+        qc = get_quantum_compute()
+        qc.initialize(n_qubits, "zero")
+
+        lab_angles: List[float] = []
+        boosted_angles: List[float] = []
+
+        for spec in rotation_gates:
+            axis   = spec.get('axis', 'y')
+            angle  = float(spec.get('angle', 0.0))
+            target = spec.get('target', 0)
+
+            lab_angles.append(angle)
+            if abs(velocity) > 1e-6:
+                qc.lorentz_boosted_rotation(axis, angle, target, velocity)
+                boosted_angles.append(gamma * angle)
+            else:
+                qc.rotation(axis, angle, target)
+                boosted_angles.append(angle)
+
+        return {
+            'lab_angles':     lab_angles,
+            'boosted_angles': boosted_angles,
+            'gamma':          gamma,
+            'final_state':    qc.get_state(),
+            'gate_history':   qc.get_history(),
+        }
+
+    # ------------------------------------------------------------------
+    # Relativistic Quantum Simulation convenience wrapper
+    # ------------------------------------------------------------------
+
+    def run_relativistic_simulation(self, potential: str = 'harmonic',
+                                     velocity: float = 0.0,
+                                     n_points: int = 256,
+                                     t_max: float = 10.0) -> Dict[str, Any]:
+        """
+        Run a full Schrödinger + Lorentz simulation via RelativisticQuantumEngine.
+
+        Bridges synthesis/relativistic_quantum.py into the swarm API so the
+        same workflow that builds gate circuits can also run PDE-based quantum
+        dynamics (split-step Fourier, arbitrary potentials).
+
+        Available potentials:
+            'free'        — free particle Gaussian spreading
+            'harmonic'    — quantum harmonic oscillator (coherent state)
+            'square_well' — particle in a square well
+            'double_well' — double-well tunneling
+            'coulomb'     — Coulomb/hydrogen-like potential
+            'tunneling'   — custom barrier tunneling demo
+
+        Args:
+            potential: one of the above
+            velocity:  Lorentz boost v/c (0.0 = no boost)
+            n_points:  spatial grid resolution (max 512 on Tier 1)
+            t_max:     simulation time
+
+        Returns:
+            dict from RelativisticQuantumEngine.get_visualization_data()
+            plus 'summary' and 'engine' handle for further queries
+        """
+        from synthesis.relativistic_quantum import create_schrodinger_lorentz_simulation
+
+        engine = create_schrodinger_lorentz_simulation(
+            velocity=velocity,
+            potential=potential,
+            n_points=n_points,
+            t_max=t_max,
+        )
+
+        if potential == 'harmonic':
+            result = engine.simulate_harmonic_oscillator()
+        elif potential == 'tunneling':
+            result = engine.simulate_tunneling()
+        elif abs(velocity) > 0.001:
+            result = engine.simulate_relativistic_comparison(velocity=velocity)
+        else:
+            result = engine.simulate_gaussian_spreading()
+
+        vis_data = engine.get_visualization_data(result)
+        vis_data['engine'] = engine
+        vis_data['success'] = result.success
+        vis_data['warnings'] = result.warnings
+        vis_data['computation_time'] = result.computation_time
+
+        return vis_data

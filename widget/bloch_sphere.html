@@ -3,183 +3,228 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚡ FRANKENSTEIN - Bloch Sphere Visualization</title>
+    <title>FRANKENSTEIN - Bloch Sphere Visualization</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             background: #0d1117;
             color: #00ff88;
             font-family: 'Consolas', 'Monaco', monospace;
             overflow: hidden;
         }
-        
+
+        /* ── Main grid ─────────────────────────────────────────── */
         #container {
             width: 100vw;
             height: 100vh;
-            display: flex;
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            grid-template-rows: 1fr;
         }
-        
-        #canvas-container {
-            flex: 1;
-            position: relative;
-        }
-        
-        #info-panel {
-            width: 320px;
+
+        /* ── Left panel (multi-qubit only) ─────────────────────── */
+        #left-panel {
+            display: none;
             background: #161b22;
-            border-left: 2px solid #00ff88;
-            padding: 20px;
+            border-right: 2px solid #00ff88;
+            padding: 12px;
             overflow-y: auto;
+            flex-direction: column;
         }
-        
-        h1 {
-            color: #00ff88;
-            font-size: 18px;
-            margin-bottom: 20px;
-            text-shadow: 0 0 10px #00ff8866;
-        }
-        
-        h2 {
+
+        #left-panel .section-hdr {
             color: #58a6ff;
-            font-size: 14px;
-            margin: 15px 0 10px 0;
-            border-bottom: 1px solid #30363d;
-            padding-bottom: 5px;
-        }
-        
-        .data-row {
-            display: flex;
-            justify-content: space-between;
-            margin: 5px 0;
             font-size: 12px;
-        }
-        
-        .label {
-            color: #8b949e;
-        }
-        
-        .value {
-            color: #00ff88;
             font-weight: bold;
+            margin: 10px 0 5px;
+            padding-bottom: 3px;
+            border-bottom: 1px solid #30363d;
         }
-        
-        .state-display {
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 4px;
-            padding: 10px;
-            margin: 10px 0;
-            font-size: 14px;
-            text-align: center;
-        }
-        
+        #left-panel .section-hdr:first-child { margin-top: 0; }
+
         .prob-bar {
             background: #21262d;
             border-radius: 3px;
-            height: 20px;
-            margin: 5px 0;
+            height: 18px;
+            margin: 3px 0;
             position: relative;
             overflow: hidden;
         }
-        
         .prob-fill {
             background: linear-gradient(90deg, #00ff88, #00aa55);
             height: 100%;
             transition: width 0.3s ease;
         }
-        
+        .prob-fill.exp {
+            background: linear-gradient(90deg, #ff8800, #cc6600);
+        }
         .prob-label {
             position: absolute;
-            left: 8px;
-            top: 2px;
-            font-size: 11px;
+            left: 6px; top: 1px;
+            font-size: 10px;
             color: #fff;
             text-shadow: 1px 1px 2px #000;
+            white-space: nowrap;
         }
-        
-        .controls {
-            margin-top: 20px;
-            padding-top: 15px;
-            border-top: 1px solid #30363d;
+
+        .marginal-row {
+            display: flex; align-items: center;
+            font-size: 9px; margin: 2px 0; gap: 4px;
         }
-        
-        button {
-            background: #21262d;
-            color: #00ff88;
-            border: 1px solid #00ff88;
-            padding: 8px 16px;
-            margin: 5px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 12px;
+        .marginal-row .m-qid { color: #8b949e; width: 22px; flex-shrink: 0; }
+        .marginal-row .m-bar {
+            flex: 1; height: 10px; background: #21262d;
+            border-radius: 2px; overflow: hidden;
+        }
+        .marginal-row .m-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ccff, #0088aa);
+        }
+        .marginal-row .m-text {
+            color: #00ff88; width: 105px; flex-shrink: 0;
+            text-align: right; font-size: 8px;
+        }
+
+        /* ── Center: 3D canvas area ────────────────────────────── */
+        #canvas-container {
+            position: relative;
+            overflow: hidden;
+        }
+        #bloch-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #status {
+            position: absolute;
+            bottom: 8px; left: 8px;
+            background: #161b22ee;
+            padding: 6px 10px;
             border-radius: 4px;
-            transition: all 0.2s ease;
+            font-size: 10px;
+            border: 1px solid #30363d;
+            z-index: 10;
         }
-        
-        button:hover {
-            background: #00ff88;
-            color: #0d1117;
+
+        /* ── Right info panel ──────────────────────────────────── */
+        #info-panel {
+            background: #161b22;
+            border-left: 2px solid #00ff88;
+            padding: 14px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
         }
-        
-        #coordinates {
-            font-size: 13px;
-            line-height: 1.8;
+        h1 { color: #00ff88; font-size: 16px; margin-bottom: 10px; text-shadow: 0 0 10px #00ff8866; }
+        h2 { color: #58a6ff; font-size: 13px; margin: 10px 0 5px; border-bottom: 1px solid #30363d; padding-bottom: 3px; }
+
+        .data-row { display: flex; justify-content: space-between; margin: 3px 0; font-size: 11px; }
+        .label { color: #8b949e; }
+        .value { color: #00ff88; font-weight: bold; }
+
+        .state-display {
+            background: #0d1117; border: 1px solid #30363d;
+            border-radius: 4px; padding: 6px; margin: 4px 0;
+            font-size: 12px; text-align: center;
         }
-        
-        .coord-value {
-            display: inline-block;
-            width: 100px;
-            text-align: right;
+
+        .frank-banner {
+            text-align: center; padding: 6px; margin-bottom: 8px;
+            background: linear-gradient(180deg, #1a1a2e 0%, #0d1117 100%);
+            border-radius: 6px; border: 1px solid #00ff8844;
         }
-        
+        .frank-banner .emoji { font-size: 20px; }
+        .frank-banner h1 { font-size: 14px; margin-bottom: 4px; }
+
+        #coordinates { font-size: 12px; line-height: 1.6; }
+        .coord-value { display: inline-block; width: 90px; text-align: right; }
         .axis-x { color: #ff6b6b; }
         .axis-y { color: #4ecdc4; }
         .axis-z { color: #ffe66d; }
-        
-        #status {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            background: #161b22ee;
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-size: 11px;
-            border: 1px solid #30363d;
+
+        /* ── Entanglement panel ────────────────────────────────── */
+        #entanglement-panel { display: none; }
+        .ent-badge {
+            display: inline-block; padding: 3px 8px; border-radius: 3px;
+            font-size: 11px; font-weight: bold; margin-bottom: 6px;
         }
-        
-        .frank-banner {
-            text-align: center;
-            padding: 10px;
-            margin-bottom: 15px;
-            background: linear-gradient(180deg, #1a1a2e 0%, #0d1117 100%);
-            border-radius: 6px;
-            border: 1px solid #00ff8844;
+        .ent-badge.entangled { background: #1f3d6e; color: #58a6ff; border: 1px solid #58a6ff; }
+        .ent-badge.separable { background: #1a3320; color: #00ff88; border: 1px solid #00ff88; }
+
+        /* Per-qubit Q-cards grid */
+        #q-cards-grid {
+            display: grid; gap: 5px;
+            grid-template-columns: repeat(2, 1fr);
+            margin-top: 6px;
         }
-        
-        .frank-banner .emoji {
-            font-size: 24px;
+        .q-card {
+            background: #0d1117; border: 1px solid #30363d;
+            border-radius: 4px; padding: 5px; text-align: center;
+        }
+        .q-card .q-id { color: #58a6ff; font-weight: bold; font-size: 11px; margin-bottom: 2px; }
+        .q-card .q-prob-label { color: #8b949e; font-size: 7px; }
+        .q-card .q-prob { color: #00ff88; font-size: 9px; margin-bottom: 1px; }
+        .q-card .q-xyz { color: #8b949e; font-size: 7px; line-height: 1.3; }
+
+        .controls {
+            margin-top: 8px; padding-top: 8px;
+            border-top: 1px solid #30363d;
+        }
+        button {
+            background: #21262d; color: #00ff88;
+            border: 1px solid #00ff88;
+            padding: 5px 10px; margin: 2px;
+            cursor: pointer; font-family: inherit;
+            font-size: 10px; border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+        button:hover { background: #00ff88; color: #0d1117; }
+
+        #phase-anim-badge {
+            display: none; font-size: 9px; color: #58a6ff;
+            text-align: center; margin-top: 2px; opacity: 0.8;
         }
     </style>
 </head>
 <body>
-    <div id="container">
-        <div id="canvas-container">
-            <canvas id="bloch-canvas"></canvas>
-            <div id="status">⚡ FRANKENSTEIN 1.0 | Drag to rotate | Scroll to zoom</div>
+<div id="container">
+
+    <!-- LEFT PANEL (multi-qubit only) -->
+    <div id="left-panel">
+        <div class="frank-banner">
+            <span class="emoji">&#x1F9DF;</span>
+            <h1>FRANKENSTEIN<br>Bloch Sphere</h1>
         </div>
-        
-        <div id="info-panel">
-            <div class="frank-banner">
-                <span class="emoji">🧟</span>
-                <h1>FRANKENSTEIN<br>Bloch Sphere</h1>
-            </div>
-            
-            <h2>📍 Bloch Coordinates</h2>
+        <div class="section-hdr">&#x26A1; System Status</div>
+        <div id="left-state-ket" class="state-display" style="font-size:10px;">|psi> = |0></div>
+
+        <div class="section-hdr">&#x1F4CA; Probability Distribution</div>
+        <div style="font-size:9px;color:#ff6b6b;margin:3px 0 1px;">&#x2699; Theoretical (Statevector)</div>
+        <div id="prob-theoretical"></div>
+        <div style="font-size:9px;color:#ff8800;margin:5px 0 1px;">&#x1F52C; Experimental (Measured)</div>
+        <div id="prob-experimental"></div>
+
+        <div class="section-hdr">&#x1F4CB; Individual Qubit Marginals</div>
+        <div id="qubit-marginals"></div>
+    </div>
+
+    <!-- CENTER: Three.js 3D canvas -->
+    <div id="canvas-container">
+        <canvas id="bloch-canvas"></canvas>
+        <div id="status">&#x26A1; FRANKENSTEIN 1.0 | Drag to rotate | Scroll to zoom | Double-click to reset</div>
+    </div>
+
+    <!-- RIGHT: info panel -->
+    <div id="info-panel">
+        <div class="frank-banner" id="right-banner">
+            <span class="emoji">&#x1F9DF;</span>
+            <h1>FRANKENSTEIN<br>Bloch Sphere</h1>
+        </div>
+
+        <!-- Single-qubit sections -->
+        <div id="single-qubit-sections">
+            <h2>&#x1F4CD; Bloch Coordinates</h2>
             <div id="coordinates">
                 <div class="data-row">
                     <span class="label axis-x">X:</span>
@@ -194,30 +239,30 @@
                     <span class="value coord-value" id="coord-z">1.000000</span>
                 </div>
             </div>
-            
-            <h2>🎲 Quantum State</h2>
-            <div class="state-display" id="state-ket">|ψ⟩ = |0⟩</div>
-            
-            <h2>📊 Measurement Probabilities</h2>
+
+            <h2>&#x1F3B2; Quantum State</h2>
+            <div class="state-display" id="state-ket">|psi> = |0></div>
+
+            <h2>&#x1F4CA; Measurement Probabilities</h2>
             <div id="probabilities">
                 <div class="prob-bar">
                     <div class="prob-fill" id="prob-0-fill" style="width: 100%"></div>
-                    <span class="prob-label">|0⟩: 100.0%</span>
+                    <span class="prob-label">|0>: 100.0%</span>
                 </div>
                 <div class="prob-bar">
                     <div class="prob-fill" id="prob-1-fill" style="width: 0%"></div>
-                    <span class="prob-label">|1⟩: 0.0%</span>
+                    <span class="prob-label">|1>: 0.0%</span>
                 </div>
             </div>
-            
-            <h2>🎛️ Spherical Coordinates</h2>
+
+            <h2>&#x1F39B;&#xFE0F; Spherical Coordinates</h2>
             <div id="spherical">
                 <div class="data-row">
-                    <span class="label">θ (polar):</span>
+                    <span class="label">theta (polar):</span>
                     <span class="value" id="theta">0.000 rad</span>
                 </div>
                 <div class="data-row">
-                    <span class="label">φ (azimuth):</span>
+                    <span class="label">phi (azimuth):</span>
                     <span class="value" id="phi">0.000 rad</span>
                 </div>
                 <div class="data-row">
@@ -225,409 +270,680 @@
                     <span class="value" id="purity">1.000</span>
                 </div>
             </div>
-            
-            <div class="controls">
-                <button onclick="resetView()">🔄 Reset View</button>
-                <button onclick="toggleAnimation()">⏯️ Animate</button>
-                <button onclick="toggleAxes()">📐 Axes</button>
-            </div>
         </div>
-    </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
-        // ==================== DATA FROM FRANKENSTEIN ====================
-        // These placeholders are replaced by the Python engine
-        const BLOCH_X = parseFloat('{{BLOCH_X}}') || 0;
-        const BLOCH_Y = parseFloat('{{BLOCH_Y}}') || 0;
-        const BLOCH_Z = parseFloat('{{BLOCH_Z}}') || 1;
-        const PROBABILITIES = JSON.parse('{{PROBABILITIES}}' || '{}');
-        const STATEVECTOR = JSON.parse('{{STATEVECTOR}}' || '{"real":[1,0],"imag":[0,0]}');
-        
-        // ==================== THREE.JS SETUP ====================
-        let scene, camera, renderer, controls;
-        let sphere, stateVector, statePoint;
-        let axesGroup, animating = false, showAxes = true;
-        
-        const canvas = document.getElementById('bloch-canvas');
-        const container = document.getElementById('canvas-container');
-        
-        function init() {
-            // Scene
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0d1117);
-            
-            // Camera
-            const aspect = container.clientWidth / container.clientHeight;
-            camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000);
-            camera.position.set(2.5, 2, 2.5);
-            camera.lookAt(0, 0, 0);
-            
-            // Renderer
-            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-            renderer.setSize(container.clientWidth, container.clientHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            
-            // Lights
-            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
-            scene.add(ambientLight);
-            
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            directionalLight.position.set(5, 5, 5);
-            scene.add(directionalLight);
-            
-            const backLight = new THREE.DirectionalLight(0x00ff88, 0.3);
-            backLight.position.set(-5, -5, -5);
-            scene.add(backLight);
-            
-            // Create Bloch sphere
-            createBlochSphere();
-            
-            // Create state visualization
-            createStateVisualization(BLOCH_X, BLOCH_Y, BLOCH_Z);
-            
-            // Create axes
-            createAxes();
-            
-            // Mouse controls (simple orbit)
-            setupControls();
-            
-            // Update info panel
-            updateInfoPanel(BLOCH_X, BLOCH_Y, BLOCH_Z);
-            
-            // Animation loop
-            animate();
+        <!-- Entanglement panel (multi-qubit) -->
+        <div id="entanglement-panel">
+            <h2>&#x269B;&#xFE0F; Entanglement Analysis</h2>
+            <div id="ent-badge" class="ent-badge separable">&#x2713; SEPARABLE</div>
+            <div class="data-row">
+                <span class="label">Schmidt Rank:</span>
+                <span class="value" id="ent-schmidt">--</span>
+            </div>
+            <div class="data-row">
+                <span class="label">Entropy (bits):</span>
+                <span class="value" id="ent-entropy">--</span>
+            </div>
+            <div class="data-row">
+                <span class="label">Max Entropy:</span>
+                <span class="value" id="ent-max-entropy">--</span>
+            </div>
+            <h2>&#x1F4CB; Qubit States</h2>
+            <div id="q-cards-grid"></div>
+        </div>
+
+        <div class="controls">
+            <button onclick="resetView()">&#x1F504; Reset</button>
+            <button onclick="toggleAnimation()">&#x23EF;&#xFE0F; Animate</button>
+            <button onclick="toggleAxes()">&#x1F4D0; Axes</button>
+            <button onclick="togglePhaseAnim()" id="phase-btn" style="display:none">&#x1F300; Phase</button>
+        </div>
+        <div id="phase-anim-badge">&#x21BB; Global phase animating</div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// DATA INJECTED BY PYTHON ENGINE
+// ============================================================
+var BLOCH_X          = parseFloat('{{BLOCH_X}}')      || 0;
+var BLOCH_Y          = parseFloat('{{BLOCH_Y}}')      || 0;
+var BLOCH_Z          = parseFloat('{{BLOCH_Z}}')      || 1;
+var PROBABILITIES    = JSON.parse('{{PROBABILITIES}}'    || '{}');
+var STATEVECTOR      = JSON.parse('{{STATEVECTOR}}'      || '{"real":[1,0],"imag":[0,0]}');
+var N_QUBITS         = parseInt('{{N_QUBITS}}')        || 1;
+var MULTI_QUBIT_DATA = JSON.parse('{{MULTI_QUBIT_DATA}}' || 'null');
+
+// ============================================================
+// GLOBALS
+// ============================================================
+var scene, camera, renderer;
+var axesGroup, animating = false, showAxes = true;
+var statePoint; // single-qubit pulsing dot
+var isDragging = false;
+var prevMouse = {x:0, y:0};
+var sphereRot = {x:0, y:0};
+var canvas = document.getElementById('bloch-canvas');
+var canvasContainer = document.getElementById('canvas-container');
+
+// Multi-qubit: store per-qubit data for phase animation
+var qubitObjects = []; // [{arrowGroup, stateArrow, stateDot, glowDot, coord, phaseAngleGroup}, ...]
+var phaseAnimActive = true;
+var phaseOffset = 0.0;
+var PHASE_SPEED = 0.02;
+
+// ============================================================
+// LAYOUT: switch to 3-column for multi-qubit
+// ============================================================
+if (N_QUBITS > 1 && MULTI_QUBIT_DATA) {
+    document.getElementById('container').style.gridTemplateColumns = '260px 1fr 280px';
+    document.getElementById('left-panel').style.display = 'flex';
+    document.getElementById('single-qubit-sections').style.display = 'none';
+    document.getElementById('right-banner').style.display = 'none';
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0d1117);
+
+    var aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
+    camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000);
+
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+    renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+
+    // Lights
+    scene.add(new THREE.AmbientLight(0x404040, 0.6));
+    var dLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dLight.position.set(5, 5, 5);
+    scene.add(dLight);
+    var bLight = new THREE.DirectionalLight(0x00ff88, 0.3);
+    bLight.position.set(-5, -5, -5);
+    scene.add(bLight);
+
+    if (N_QUBITS > 1 && MULTI_QUBIT_DATA) {
+        initMultiQubit();
+    } else {
+        initSingleQubit();
+    }
+
+    setupControls();
+    animate();
+}
+
+// ============================================================
+// SINGLE-QUBIT MODE: original full-size 3D Bloch sphere
+// ============================================================
+function initSingleQubit() {
+    camera.position.set(2.5, 2, 2.5);
+    camera.lookAt(0, 0, 0);
+
+    createSphere(scene, new THREE.Vector3(0,0,0), 1.0, false);
+
+    // State arrow + dot
+    var dir = new THREE.Vector3(BLOCH_X, BLOCH_Z, BLOCH_Y);
+    var len = dir.length();
+    dir.normalize();
+    var arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(0,0,0), len, 0x00ff88, 0.15, 0.08);
+    scene.add(arrow);
+
+    var dotGeo = new THREE.SphereGeometry(0.08, 16, 16);
+    statePoint = new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({color: 0x00ff88, transparent: true, opacity: 0.9}));
+    statePoint.position.set(BLOCH_X, BLOCH_Z, BLOCH_Y);
+    scene.add(statePoint);
+
+    var glow = new THREE.Mesh(
+        new THREE.SphereGeometry(0.12, 16, 16),
+        new THREE.MeshBasicMaterial({color: 0x00ff88, transparent: true, opacity: 0.3})
+    );
+    glow.position.copy(statePoint.position);
+    scene.add(glow);
+
+    // Axes
+    createAxes(scene, new THREE.Vector3(0,0,0), 1.0);
+
+    updateInfoPanel(BLOCH_X, BLOCH_Y, BLOCH_Z);
+}
+
+// ============================================================
+// MULTI-QUBIT MODE: grid of real 3D Bloch spheres
+// ============================================================
+function initMultiQubit() {
+    var mq = MULTI_QUBIT_DATA;
+    var coords = mq.qubit_coords || [];
+    var ent = mq.entanglement || {};
+    var n = N_QUBITS;
+    var isEnt = ent.is_entangled || false;
+
+    // Camera: pull back based on qubit count
+    var cols = Math.ceil(Math.sqrt(n));
+    var rows = Math.ceil(n / cols);
+    var spacing = 3.0;
+    var camDist = Math.max(cols, rows) * spacing * 0.85;
+    camera.position.set(camDist * 0.6, camDist * 0.5, camDist);
+    camera.lookAt((cols - 1) * spacing / 2, 0, (rows - 1) * spacing / 2);
+
+    // Sphere radius scales down with more qubits
+    var R = Math.max(0.4, 1.2 - 0.06 * (n - 1));
+
+    // Create a 3D Bloch sphere for each qubit
+    qubitObjects = [];
+    for (var qi = 0; qi < n; qi++) {
+        var col = qi % cols;
+        var row = Math.floor(qi / cols);
+        var cx = col * spacing;
+        var cz = row * spacing;
+        var center = new THREE.Vector3(cx, 0, cz);
+
+        // Wireframe sphere
+        var sphereColor = isEnt ? 0x00ff88 : 0x00ff88;
+        createSphere(scene, center, R, isEnt);
+
+        // State vector arrow
+        var bx = coords[qi] ? coords[qi][0] : 0;
+        var by = coords[qi] ? coords[qi][1] : 0;
+        var bz = coords[qi] ? coords[qi][2] : 1;
+
+        var dir = new THREE.Vector3(bx * R, bz * R, by * R);
+        var len = dir.length();
+        var dirN = dir.clone().normalize();
+
+        var arrow = new THREE.ArrowHelper(dirN, center, len, 0x00ff88, 0.12 * R, 0.06 * R);
+        scene.add(arrow);
+
+        // State dot
+        var dot = new THREE.Mesh(
+            new THREE.SphereGeometry(0.06 * R, 12, 12),
+            new THREE.MeshBasicMaterial({color: 0x00ff88, transparent: true, opacity: 0.9})
+        );
+        dot.position.set(center.x + bx * R, center.y + bz * R, center.z + by * R);
+        scene.add(dot);
+
+        // Glow
+        var glow = new THREE.Mesh(
+            new THREE.SphereGeometry(0.1 * R, 12, 12),
+            new THREE.MeshBasicMaterial({color: 0x00ff88, transparent: true, opacity: 0.3})
+        );
+        glow.position.copy(dot.position);
+        scene.add(glow);
+
+        // Phase orbit ring (XY plane at height bz*R, showing global phase rotation path)
+        var r_xy = Math.sqrt(bx * bx + by * by);
+        var orbitRing = null;
+        if (r_xy > 0.02) {
+            var ringGeo = new THREE.RingGeometry(r_xy * R * 0.98, r_xy * R * 1.02, 64);
+            var ringMat = new THREE.MeshBasicMaterial({
+                color: 0x58a6ff, side: THREE.DoubleSide,
+                transparent: true, opacity: 0.25
+            });
+            orbitRing = new THREE.Mesh(ringGeo, ringMat);
+            orbitRing.position.set(center.x, center.y + bz * R, center.z);
+            orbitRing.rotation.x = Math.PI / 2;
+            scene.add(orbitRing);
         }
-        
-        function createBlochSphere() {
-            // Main sphere (wireframe)
-            const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
-            const sphereMaterial = new THREE.MeshBasicMaterial({
-                color: 0x00ff88,
-                wireframe: true,
-                transparent: true,
-                opacity: 0.15
-            });
-            sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-            scene.add(sphere);
-            
-            // Solid inner sphere (slightly transparent)
-            const innerSphereGeometry = new THREE.SphereGeometry(0.98, 32, 32);
-            const innerSphereMaterial = new THREE.MeshPhongMaterial({
-                color: 0x1a1a2e,
-                transparent: true,
-                opacity: 0.3,
-                side: THREE.DoubleSide
-            });
-            const innerSphere = new THREE.Mesh(innerSphereGeometry, innerSphereMaterial);
-            scene.add(innerSphere);
-            
-            // Equator circle
-            const equatorGeometry = new THREE.RingGeometry(0.99, 1.01, 64);
-            const equatorMaterial = new THREE.MeshBasicMaterial({
-                color: 0x4ecdc4,
-                side: THREE.DoubleSide,
-                transparent: true,
-                opacity: 0.5
-            });
-            const equator = new THREE.Mesh(equatorGeometry, equatorMaterial);
-            equator.rotation.x = Math.PI / 2;
-            scene.add(equator);
-            
-            // Prime meridian (XZ plane)
-            const meridianGeometry = new THREE.RingGeometry(0.99, 1.01, 64);
-            const meridianMaterial = new THREE.MeshBasicMaterial({
-                color: 0x58a6ff,
-                side: THREE.DoubleSide,
-                transparent: true,
-                opacity: 0.3
-            });
-            const meridian = new THREE.Mesh(meridianGeometry, meridianMaterial);
-            scene.add(meridian);
-        }
-        
-        function createStateVisualization(x, y, z) {
-            // State vector (arrow from origin to point)
-            const direction = new THREE.Vector3(x, z, y); // Note: Three.js Y is up
-            const length = direction.length();
-            direction.normalize();
-            
-            // Arrow helper
-            stateVector = new THREE.ArrowHelper(
-                direction,
-                new THREE.Vector3(0, 0, 0),
-                length,
-                0x00ff88,
-                0.15,
-                0.08
+
+        // Phase angle indicator arrow (rotates around Z axis)
+        var phaseGroup = new THREE.Group();
+        phaseGroup.position.copy(center);
+        if (r_xy > 0.02) {
+            // Small arrow showing current phase angle in XY plane at bz height
+            var phaseArrowLen = r_xy * R;
+            var phi0 = Math.atan2(by, bx);
+            var phaseDir = new THREE.Vector3(Math.cos(phi0), 0, Math.sin(phi0));
+            var phaseArrow = new THREE.ArrowHelper(
+                phaseDir, new THREE.Vector3(0, bz * R, 0),
+                phaseArrowLen, 0x58a6ff, 0.08 * R, 0.04 * R
             );
-            scene.add(stateVector);
-            
-            // State point (glowing sphere at tip)
-            const pointGeometry = new THREE.SphereGeometry(0.08, 16, 16);
-            const pointMaterial = new THREE.MeshBasicMaterial({
-                color: 0x00ff88,
-                transparent: true,
-                opacity: 0.9
-            });
-            statePoint = new THREE.Mesh(pointGeometry, pointMaterial);
-            statePoint.position.set(x, z, y); // Three.js Y-up convention
-            scene.add(statePoint);
-            
-            // Glow effect
-            const glowGeometry = new THREE.SphereGeometry(0.12, 16, 16);
-            const glowMaterial = new THREE.MeshBasicMaterial({
-                color: 0x00ff88,
-                transparent: true,
-                opacity: 0.3
-            });
-            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-            glow.position.copy(statePoint.position);
-            scene.add(glow);
+            phaseGroup.add(phaseArrow);
         }
-        
-        function createAxes() {
-            axesGroup = new THREE.Group();
-            
-            const axisLength = 1.3;
-            const colors = {
-                x: 0xff6b6b,  // Red
-                y: 0x4ecdc4,  // Cyan
-                z: 0xffe66d   // Yellow
-            };
-            
-            // X axis
-            const xAxis = new THREE.ArrowHelper(
-                new THREE.Vector3(1, 0, 0),
-                new THREE.Vector3(-axisLength, 0, 0),
-                axisLength * 2,
-                colors.x,
-                0.1,
-                0.05
-            );
-            axesGroup.add(xAxis);
-            
-            // Y axis (mapped to Z in Three.js)
-            const yAxis = new THREE.ArrowHelper(
-                new THREE.Vector3(0, 0, 1),
-                new THREE.Vector3(0, 0, -axisLength),
-                axisLength * 2,
-                colors.y,
-                0.1,
-                0.05
-            );
-            axesGroup.add(yAxis);
-            
-            // Z axis (mapped to Y in Three.js - vertical)
-            const zAxis = new THREE.ArrowHelper(
-                new THREE.Vector3(0, 1, 0),
-                new THREE.Vector3(0, -axisLength, 0),
-                axisLength * 2,
-                colors.z,
-                0.1,
-                0.05
-            );
-            axesGroup.add(zAxis);
-            
-            // Labels (using sprites)
-            addAxisLabel('X', axisLength + 0.2, 0, 0, colors.x);
-            addAxisLabel('Y', 0, 0, axisLength + 0.2, colors.y);
-            addAxisLabel('|0⟩', 0, axisLength + 0.2, 0, colors.z);
-            addAxisLabel('|1⟩', 0, -axisLength - 0.2, 0, colors.z);
-            
-            scene.add(axesGroup);
+        scene.add(phaseGroup);
+
+        // Qubit label sprite
+        var labelSprite = makeTextSprite('Q' + qi, 0x8b949e);
+        labelSprite.position.set(center.x, center.y - R - 0.3, center.z);
+        labelSprite.scale.set(0.5, 0.25, 1);
+        scene.add(labelSprite);
+
+        // Entanglement glow lines between entangled qubits
+        if (isEnt && qi > 0) {
+            var prevCol = (qi - 1) % cols;
+            var prevRow = Math.floor((qi - 1) / cols);
+            var prevCenter = new THREE.Vector3(prevCol * spacing, 0, prevRow * spacing);
+            var lineGeo = new THREE.BufferGeometry().setFromPoints([center, prevCenter]);
+            var lineMat = new THREE.LineBasicMaterial({color: 0x58a6ff, transparent: true, opacity: 0.3});
+            scene.add(new THREE.Line(lineGeo, lineMat));
         }
-        
-        function addAxisLabel(text, x, y, z, color) {
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            canvas.width = 64;
-            canvas.height = 64;
-            
-            context.fillStyle = '#' + color.toString(16).padStart(6, '0');
-            context.font = 'bold 32px Consolas';
-            context.textAlign = 'center';
-            context.textBaseline = 'middle';
-            context.fillText(text, 32, 32);
-            
-            const texture = new THREE.CanvasTexture(canvas);
-            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
-            const sprite = new THREE.Sprite(spriteMaterial);
-            sprite.position.set(x, y, z);
-            sprite.scale.set(0.3, 0.3, 1);
-            axesGroup.add(sprite);
-        }
-        
-        // ==================== CONTROLS ====================
-        let isDragging = false;
-        let previousMousePosition = { x: 0, y: 0 };
-        let sphereRotation = { x: 0, y: 0 };
-        
-        function setupControls() {
-            canvas.addEventListener('mousedown', (e) => {
-                isDragging = true;
-                previousMousePosition = { x: e.clientX, y: e.clientY };
-            });
-            
-            canvas.addEventListener('mousemove', (e) => {
-                if (!isDragging) return;
-                
-                const deltaMove = {
-                    x: e.clientX - previousMousePosition.x,
-                    y: e.clientY - previousMousePosition.y
-                };
-                
-                sphereRotation.y += deltaMove.x * 0.01;
-                sphereRotation.x += deltaMove.y * 0.01;
-                
-                // Clamp vertical rotation
-                sphereRotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, sphereRotation.x));
-                
-                updateCameraPosition();
-                previousMousePosition = { x: e.clientX, y: e.clientY };
-            });
-            
-            canvas.addEventListener('mouseup', () => { isDragging = false; });
-            canvas.addEventListener('mouseleave', () => { isDragging = false; });
-            
-            // Zoom with scroll
-            canvas.addEventListener('wheel', (e) => {
-                e.preventDefault();
-                const zoom = e.deltaY * 0.001;
-                camera.position.multiplyScalar(1 + zoom);
-                
-                // Clamp zoom
-                const dist = camera.position.length();
-                if (dist < 2) camera.position.setLength(2);
-                if (dist > 10) camera.position.setLength(10);
-            });
-            
-            // Window resize
-            window.addEventListener('resize', () => {
-                camera.aspect = container.clientWidth / container.clientHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(container.clientWidth, container.clientHeight);
-            });
-        }
-        
-        function updateCameraPosition() {
-            const radius = camera.position.length();
-            camera.position.x = radius * Math.cos(sphereRotation.x) * Math.sin(sphereRotation.y);
-            camera.position.y = radius * Math.sin(sphereRotation.x);
-            camera.position.z = radius * Math.cos(sphereRotation.x) * Math.cos(sphereRotation.y);
-            camera.lookAt(0, 0, 0);
-        }
-        
-        // ==================== INFO PANEL ====================
-        function updateInfoPanel(x, y, z) {
-            // Bloch coordinates
-            document.getElementById('coord-x').textContent = x.toFixed(6);
-            document.getElementById('coord-y').textContent = y.toFixed(6);
-            document.getElementById('coord-z').textContent = z.toFixed(6);
-            
-            // Spherical coordinates
-            const r = Math.sqrt(x*x + y*y + z*z);
-            const theta = Math.acos(z / (r || 1));
-            const phi = Math.atan2(y, x);
-            
-            document.getElementById('theta').textContent = theta.toFixed(3) + ' rad';
-            document.getElementById('phi').textContent = phi.toFixed(3) + ' rad';
-            document.getElementById('purity').textContent = r.toFixed(3);
-            
-            // State ket notation
-            updateStateKet();
-            
-            // Probabilities
-            updateProbabilities();
-        }
-        
-        function updateStateKet() {
-            const sv = STATEVECTOR;
-            if (!sv || !sv.real) return;
-            
-            const alpha = { re: sv.real[0], im: sv.imag[0] };
-            const beta = { re: sv.real[1], im: sv.imag[1] };
-            
-            const formatComplex = (c) => {
-                const re = c.re.toFixed(3);
-                const im = c.im.toFixed(3);
-                if (Math.abs(c.im) < 0.001) return re;
-                if (Math.abs(c.re) < 0.001) return im + 'i';
-                return `(${re}${c.im >= 0 ? '+' : ''}${im}i)`;
-            };
-            
-            let ket = '|ψ⟩ = ';
-            const alphaMag = Math.sqrt(alpha.re*alpha.re + alpha.im*alpha.im);
-            const betaMag = Math.sqrt(beta.re*beta.re + beta.im*beta.im);
-            
-            if (alphaMag > 0.001) {
-                ket += formatComplex(alpha) + '|0⟩';
+
+        qubitObjects.push({
+            center: center,
+            arrow: arrow,
+            dot: dot,
+            glowDot: glow,
+            coord: coords[qi] || [0, 0, 1],
+            R: R,
+            phaseGroup: phaseGroup,
+            orbitRing: orbitRing
+        });
+    }
+
+    // Populate right panel entanglement info
+    populateEntanglementPanel(coords, ent, n);
+
+    // Populate left panel
+    populateLeftPanel(coords);
+
+    // Show phase controls
+    document.getElementById('phase-btn').style.display = 'inline-block';
+    document.getElementById('phase-anim-badge').style.display = 'block';
+    document.getElementById('entanglement-panel').style.display = 'block';
+}
+
+// ============================================================
+// CREATE 3D WIREFRAME BLOCH SPHERE
+// ============================================================
+function createSphere(sc, center, R, isEntangled) {
+    // Green wireframe
+    var wf = new THREE.Mesh(
+        new THREE.SphereGeometry(R, 24, 24),
+        new THREE.MeshBasicMaterial({
+            color: isEntangled ? 0x00ff88 : 0x00ff88,
+            wireframe: true, transparent: true, opacity: 0.15
+        })
+    );
+    wf.position.copy(center);
+    sc.add(wf);
+
+    // Inner solid
+    var inner = new THREE.Mesh(
+        new THREE.SphereGeometry(R * 0.97, 24, 24),
+        new THREE.MeshPhongMaterial({color: 0x1a1a2e, transparent: true, opacity: 0.2, side: THREE.DoubleSide})
+    );
+    inner.position.copy(center);
+    sc.add(inner);
+
+    // Equator
+    var eq = new THREE.Mesh(
+        new THREE.RingGeometry(R * 0.99, R * 1.01, 64),
+        new THREE.MeshBasicMaterial({color: 0x4ecdc4, side: THREE.DoubleSide, transparent: true, opacity: 0.4})
+    );
+    eq.position.copy(center);
+    eq.rotation.x = Math.PI / 2;
+    sc.add(eq);
+
+    // Meridian
+    var mer = new THREE.Mesh(
+        new THREE.RingGeometry(R * 0.99, R * 1.01, 64),
+        new THREE.MeshBasicMaterial({color: 0x58a6ff, side: THREE.DoubleSide, transparent: true, opacity: 0.2})
+    );
+    mer.position.copy(center);
+    sc.add(mer);
+
+    // Axis lines (subtle)
+    var axMat = new THREE.LineBasicMaterial({color: 0xffe66d, transparent: true, opacity: 0.15});
+    // Z axis (vertical)
+    var zPts = [new THREE.Vector3(center.x, center.y - R * 1.15, center.z),
+                new THREE.Vector3(center.x, center.y + R * 1.15, center.z)];
+    sc.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(zPts), axMat));
+    // X axis
+    var xMat = new THREE.LineBasicMaterial({color: 0xff6b6b, transparent: true, opacity: 0.15});
+    var xPts = [new THREE.Vector3(center.x - R * 1.15, center.y, center.z),
+                new THREE.Vector3(center.x + R * 1.15, center.y, center.z)];
+    sc.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(xPts), xMat));
+
+    // |0> / |1> labels
+    var lbl0 = makeTextSprite('|0>', 0xffe66d);
+    lbl0.position.set(center.x, center.y + R + 0.15, center.z);
+    lbl0.scale.set(0.25, 0.13, 1);
+    sc.add(lbl0);
+    var lbl1 = makeTextSprite('|1>', 0xffe66d);
+    lbl1.position.set(center.x, center.y - R - 0.15, center.z);
+    lbl1.scale.set(0.25, 0.13, 1);
+    sc.add(lbl1);
+}
+
+// ============================================================
+// AXES (single-qubit mode)
+// ============================================================
+function createAxes(sc, center, R) {
+    axesGroup = new THREE.Group();
+    var L = R * 1.3;
+    axesGroup.add(new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(center.x-L,center.y,center.z), L*2, 0xff6b6b, 0.1, 0.05));
+    axesGroup.add(new THREE.ArrowHelper(new THREE.Vector3(0,0,1), new THREE.Vector3(center.x,center.y,center.z-L), L*2, 0x4ecdc4, 0.1, 0.05));
+    axesGroup.add(new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(center.x,center.y-L,center.z), L*2, 0xffe66d, 0.1, 0.05));
+
+    var s;
+    s = makeTextSprite('X', 0xff6b6b);
+    s.position.set(center.x + L + 0.2, center.y, center.z);
+    s.scale.set(0.3, 0.3, 1);
+    axesGroup.add(s);
+    s = makeTextSprite('Y', 0x4ecdc4);
+    s.position.set(center.x, center.y, center.z + L + 0.2);
+    s.scale.set(0.3, 0.3, 1);
+    axesGroup.add(s);
+    s = makeTextSprite('|0>', 0xffe66d);
+    s.position.set(center.x, center.y + L + 0.2, center.z);
+    s.scale.set(0.3, 0.3, 1);
+    axesGroup.add(s);
+    s = makeTextSprite('|1>', 0xffe66d);
+    s.position.set(center.x, center.y - L - 0.2, center.z);
+    s.scale.set(0.3, 0.3, 1);
+    axesGroup.add(s);
+
+    sc.add(axesGroup);
+}
+
+function makeTextSprite(text, color) {
+    var c = document.createElement('canvas');
+    c.width = 128; c.height = 64;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+    ctx.font = 'bold 28px Consolas';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 64, 32);
+    var tex = new THREE.CanvasTexture(c);
+    return new THREE.Sprite(new THREE.SpriteMaterial({map: tex}));
+}
+
+// ============================================================
+// MOUSE CONTROLS
+// ============================================================
+function setupControls() {
+    canvas.addEventListener('mousedown', function(e) {
+        isDragging = true;
+        prevMouse = {x: e.clientX, y: e.clientY};
+    });
+    canvas.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        sphereRot.y += (e.clientX - prevMouse.x) * 0.005;
+        sphereRot.x += (e.clientY - prevMouse.y) * 0.005;
+        sphereRot.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, sphereRot.x));
+        updateCameraPosition();
+        prevMouse = {x: e.clientX, y: e.clientY};
+    });
+    canvas.addEventListener('mouseup', function() { isDragging = false; });
+    canvas.addEventListener('mouseleave', function() { isDragging = false; });
+    canvas.addEventListener('dblclick', function() { resetView(); });
+
+    canvas.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        camera.position.multiplyScalar(1 + e.deltaY * 0.001);
+        var d = camera.position.length();
+        if (d < 2) camera.position.setLength(2);
+        if (d > 50) camera.position.setLength(50);
+    });
+
+    window.addEventListener('resize', function() {
+        camera.aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+    });
+}
+
+function updateCameraPosition() {
+    var r = camera.position.length();
+    var target = new THREE.Vector3(0, 0, 0);
+    if (N_QUBITS > 1 && MULTI_QUBIT_DATA) {
+        var cols = Math.ceil(Math.sqrt(N_QUBITS));
+        var rows = Math.ceil(N_QUBITS / cols);
+        target.set((cols - 1) * 3.0 / 2, 0, (rows - 1) * 3.0 / 2);
+    }
+    camera.position.x = target.x + r * Math.cos(sphereRot.x) * Math.sin(sphereRot.y);
+    camera.position.y = target.y + r * Math.sin(sphereRot.x);
+    camera.position.z = target.z + r * Math.cos(sphereRot.x) * Math.cos(sphereRot.y);
+    camera.lookAt(target);
+}
+
+// ============================================================
+// INFO PANEL (single-qubit)
+// ============================================================
+function updateInfoPanel(x, y, z) {
+    document.getElementById('coord-x').textContent = x.toFixed(6);
+    document.getElementById('coord-y').textContent = y.toFixed(6);
+    document.getElementById('coord-z').textContent = z.toFixed(6);
+    var r = Math.sqrt(x*x + y*y + z*z);
+    var theta = Math.acos(z / (r || 1));
+    var phi = Math.atan2(y, x);
+    document.getElementById('theta').textContent = theta.toFixed(3) + ' rad';
+    document.getElementById('phi').textContent = phi.toFixed(3) + ' rad';
+    document.getElementById('purity').textContent = r.toFixed(3);
+    // State ket
+    if (STATEVECTOR && STATEVECTOR.real) {
+        var a = {re: STATEVECTOR.real[0], im: STATEVECTOR.imag[0]};
+        var b = {re: STATEVECTOR.real[1], im: STATEVECTOR.imag[1]};
+        var fmt = function(c) {
+            if (Math.abs(c.im) < 0.001) return c.re.toFixed(3);
+            if (Math.abs(c.re) < 0.001) return c.im.toFixed(3) + 'i';
+            return '(' + c.re.toFixed(3) + (c.im >= 0 ? '+' : '') + c.im.toFixed(3) + 'i)';
+        };
+        var ket = '|psi> = ';
+        var am = Math.hypot(a.re, a.im), bm = Math.hypot(b.re, b.im);
+        if (am > 0.001) ket += fmt(a) + '|0>';
+        if (bm > 0.001) { if (am > 0.001) ket += ' + '; ket += fmt(b) + '|1>'; }
+        document.getElementById('state-ket').textContent = ket;
+    }
+    // Probabilities
+    if (STATEVECTOR && STATEVECTOR.real) {
+        var p0 = STATEVECTOR.real[0]*STATEVECTOR.real[0] + STATEVECTOR.imag[0]*STATEVECTOR.imag[0];
+        var p1 = STATEVECTOR.real[1]*STATEVECTOR.real[1] + STATEVECTOR.imag[1]*STATEVECTOR.imag[1];
+        document.getElementById('prob-0-fill').style.width = (p0*100)+'%';
+        document.getElementById('prob-0-fill').parentElement.querySelector('.prob-label').textContent = '|0>: '+(p0*100).toFixed(1)+'%';
+        document.getElementById('prob-1-fill').style.width = (p1*100)+'%';
+        document.getElementById('prob-1-fill').parentElement.querySelector('.prob-label').textContent = '|1>: '+(p1*100).toFixed(1)+'%';
+    }
+}
+
+// ============================================================
+// ENTANGLEMENT PANEL (multi-qubit right side)
+// ============================================================
+function populateEntanglementPanel(coords, ent, n) {
+    var isEnt = ent.is_entangled || false;
+    var badge = document.getElementById('ent-badge');
+    badge.textContent = isEnt ? 'ENTANGLED' : 'SEPARABLE';
+    badge.className = 'ent-badge ' + (isEnt ? 'entangled' : 'separable');
+    document.getElementById('ent-entropy').textContent =
+        (ent.entanglement_entropy != null) ? ent.entanglement_entropy.toFixed(3) : '--';
+    document.getElementById('ent-schmidt').textContent =
+        (ent.schmidt_rank != null) ? ent.schmidt_rank : '--';
+    document.getElementById('ent-max-entropy').textContent = (Math.floor(n / 2)).toFixed(1);
+
+    // Q-cards
+    var qGrid = document.getElementById('q-cards-grid');
+    var qCols = n <= 8 ? 2 : 3;
+    qGrid.style.gridTemplateColumns = 'repeat(' + qCols + ', 1fr)';
+    var cardFont = Math.max(8, Math.round(11 - 0.25 * n)) + 'px';
+    var xyzFont = Math.max(6, Math.round(8 - 0.15 * n)) + 'px';
+
+    coords.forEach(function(coord, qi) {
+        var bx = coord[0], by = coord[1], bz = coord[2];
+        var p0 = ((1 + bz) / 2 * 100).toFixed(1);
+        var p1 = ((1 - bz) / 2 * 100).toFixed(1);
+        var card = document.createElement('div');
+        card.className = 'q-card';
+        card.innerHTML =
+            '<div class="q-id" style="font-size:'+cardFont+'">Q'+qi+'</div>' +
+            '<div class="q-prob-label" style="font-size:'+xyzFont+'">P(|0>) / P(|1>)</div>' +
+            '<div class="q-prob" style="font-size:'+cardFont+'">'+p0+'% / '+p1+'%</div>' +
+            '<div class="q-xyz" style="font-size:'+xyzFont+'">x: '+bx.toFixed(2)+'<br>y: '+by.toFixed(2)+'<br>z: '+bz.toFixed(2)+'</div>';
+        qGrid.appendChild(card);
+    });
+}
+
+// ============================================================
+// LEFT PANEL (multi-qubit)
+// ============================================================
+function populateLeftPanel(coords) {
+    // State ket
+    var leftKet = document.getElementById('left-state-ket');
+    if (STATEVECTOR && STATEVECTOR.real) {
+        var nStates = STATEVECTOR.real.length;
+        var nBits = Math.round(Math.log2(nStates));
+        var topStates = [];
+        for (var i = 0; i < nStates; i++) {
+            var amp2 = STATEVECTOR.real[i]*STATEVECTOR.real[i] + STATEVECTOR.imag[i]*STATEVECTOR.imag[i];
+            if (amp2 > 0.001) {
+                topStates.push({ket: '|' + i.toString(2).padStart(nBits,'0') + '>', amp2: amp2});
             }
-            if (betaMag > 0.001) {
-                if (alphaMag > 0.001) ket += ' + ';
-                ket += formatComplex(beta) + '|1⟩';
+        }
+        topStates.sort(function(a,b){return b.amp2 - a.amp2;});
+        if (topStates.length <= 4) {
+            leftKet.textContent = '|psi> = ' + topStates.map(function(s){return Math.sqrt(s.amp2).toFixed(3)+s.ket;}).join(' + ');
+        } else {
+            leftKet.textContent = '|psi> = superposition of ' + topStates.length + ' states (' + nBits + 'q)';
+        }
+    }
+
+    // Theoretical probs
+    var theoDiv = document.getElementById('prob-theoretical');
+    if (STATEVECTOR && STATEVECTOR.real) {
+        var nS = STATEVECTOR.real.length;
+        var nB = Math.round(Math.log2(nS));
+        var probs = [];
+        for (var j = 0; j < nS; j++) {
+            var p = STATEVECTOR.real[j]*STATEVECTOR.real[j] + STATEVECTOR.imag[j]*STATEVECTOR.imag[j];
+            if (p > 0.0005) probs.push({bits: j.toString(2).padStart(nB,'0'), p: p});
+        }
+        probs.sort(function(a,b){return b.p - a.p;});
+        probs.slice(0, 16).forEach(function(item) {
+            var bar = document.createElement('div');
+            bar.className = 'prob-bar';
+            bar.style.height = '14px';
+            bar.innerHTML = '<div class="prob-fill" style="width:'+(item.p*100)+'%"></div>' +
+                '<span class="prob-label" style="font-size:9px">|'+item.bits+'>  '+(item.p*100).toFixed(2)+'%</span>';
+            theoDiv.appendChild(bar);
+        });
+    }
+
+    // Experimental probs
+    var expDiv = document.getElementById('prob-experimental');
+    if (PROBABILITIES && Object.keys(PROBABILITIES).length > 0) {
+        var entries = Object.entries(PROBABILITIES).sort(function(a,b){return b[1]-a[1];}).slice(0, 16);
+        entries.forEach(function(entry) {
+            var bar = document.createElement('div');
+            bar.className = 'prob-bar';
+            bar.style.height = '14px';
+            var ketStr = entry[0].length > 8 ? entry[0].slice(0,6)+'..' : entry[0];
+            bar.innerHTML = '<div class="prob-fill exp" style="width:'+(entry[1]*100)+'%"></div>' +
+                '<span class="prob-label" style="font-size:9px">|'+ketStr+'>  '+(entry[1]*100).toFixed(2)+'%</span>';
+            expDiv.appendChild(bar);
+        });
+    }
+
+    // Marginals
+    var margDiv = document.getElementById('qubit-marginals');
+    coords.forEach(function(coord, qi) {
+        var p0 = (1 + coord[2]) / 2;
+        var row = document.createElement('div');
+        row.className = 'marginal-row';
+        row.innerHTML =
+            '<span class="m-qid">Q'+qi+'</span>' +
+            '<span class="m-bar"><span class="m-fill" style="width:'+(p0*100)+'%"></span></span>' +
+            '<span class="m-text">|0>: '+(p0*100).toFixed(1)+'%  |1>: '+((1-p0)*100).toFixed(1)+'%</span>';
+        margDiv.appendChild(row);
+    });
+}
+
+// ============================================================
+// ANIMATION LOOP
+// ============================================================
+function animate() {
+    requestAnimationFrame(animate);
+
+    if (animating && scene) scene.rotation.y += 0.003;
+
+    // Single-qubit: pulse the state dot
+    if (statePoint) {
+        var s = 1 + 0.1 * Math.sin(Date.now() * 0.003);
+        statePoint.scale.setScalar(s);
+    }
+
+    // Multi-qubit: animate global phase (rotate phase arrows around Z)
+    if (phaseAnimActive && qubitObjects.length > 0) {
+        phaseOffset += PHASE_SPEED;
+        if (phaseOffset > Math.PI * 2) phaseOffset -= Math.PI * 2;
+
+        for (var i = 0; i < qubitObjects.length; i++) {
+            var qo = qubitObjects[i];
+            var bx = qo.coord[0], by = qo.coord[1], bz = qo.coord[2];
+            var r_xy = Math.sqrt(bx * bx + by * by);
+
+            if (r_xy > 0.02) {
+                // Rotate the state dot and arrow around the Z-axis at the qubit's center
+                var phi0 = Math.atan2(by, bx);
+                var phiA = phi0 + phaseOffset;
+                var newBx = r_xy * Math.cos(phiA);
+                var newBy = r_xy * Math.sin(phiA);
+
+                // Update dot position
+                qo.dot.position.set(
+                    qo.center.x + newBx * qo.R,
+                    qo.center.y + bz * qo.R,
+                    qo.center.z + newBy * qo.R
+                );
+                qo.glowDot.position.copy(qo.dot.position);
+
+                // Update arrow
+                scene.remove(qo.arrow);
+                var dir = new THREE.Vector3(newBx * qo.R, bz * qo.R, newBy * qo.R);
+                var len = dir.length();
+                dir.normalize();
+                qo.arrow = new THREE.ArrowHelper(dir, qo.center, len, 0x00ff88, 0.12 * qo.R, 0.06 * qo.R);
+                scene.add(qo.arrow);
+
+                // Rotate phase indicator group
+                qo.phaseGroup.rotation.y = phaseOffset;
             }
-            
-            document.getElementById('state-ket').textContent = ket;
+
+            // Pulse all dots
+            var pulse = 1 + 0.08 * Math.sin(Date.now() * 0.003);
+            qo.dot.scale.setScalar(pulse);
         }
-        
-        function updateProbabilities() {
-            const probs = PROBABILITIES;
-            const prob0 = (probs['0'] || probs['00'] || 0) * 100;
-            const prob1 = (probs['1'] || probs['01'] || 0) * 100;
-            
-            // If we have statevector, calculate directly
-            if (STATEVECTOR && STATEVECTOR.real) {
-                const p0 = STATEVECTOR.real[0]**2 + STATEVECTOR.imag[0]**2;
-                const p1 = STATEVECTOR.real[1]**2 + STATEVECTOR.imag[1]**2;
-                
-                document.getElementById('prob-0-fill').style.width = (p0 * 100) + '%';
-                document.getElementById('prob-0-fill').parentElement.querySelector('.prob-label').textContent = 
-                    `|0⟩: ${(p0 * 100).toFixed(1)}%`;
-                
-                document.getElementById('prob-1-fill').style.width = (p1 * 100) + '%';
-                document.getElementById('prob-1-fill').parentElement.querySelector('.prob-label').textContent = 
-                    `|1⟩: ${(p1 * 100).toFixed(1)}%`;
-            }
-        }
-        
-        // ==================== ANIMATION ====================
-        function animate() {
-            requestAnimationFrame(animate);
-            
-            if (animating) {
-                // Gentle rotation when animating
-                scene.rotation.y += 0.005;
-            }
-            
-            // Pulse effect on state point
-            if (statePoint) {
-                const scale = 1 + 0.1 * Math.sin(Date.now() * 0.003);
-                statePoint.scale.setScalar(scale);
-            }
-            
-            renderer.render(scene, camera);
-        }
-        
-        // ==================== BUTTON HANDLERS ====================
-        function resetView() {
-            sphereRotation = { x: 0, y: 0 };
-            camera.position.set(2.5, 2, 2.5);
-            camera.lookAt(0, 0, 0);
-            scene.rotation.y = 0;
-        }
-        
-        function toggleAnimation() {
-            animating = !animating;
-        }
-        
-        function toggleAxes() {
-            showAxes = !showAxes;
-            axesGroup.visible = showAxes;
-        }
-        
-        // ==================== INIT ====================
-        init();
-    </script>
+    }
+
+    renderer.render(scene, camera);
+}
+
+// ============================================================
+// BUTTON HANDLERS
+// ============================================================
+function resetView() {
+    sphereRot = {x: 0, y: 0};
+    if (N_QUBITS > 1 && MULTI_QUBIT_DATA) {
+        var cols = Math.ceil(Math.sqrt(N_QUBITS));
+        var rows = Math.ceil(N_QUBITS / cols);
+        var camDist = Math.max(cols, rows) * 3.0 * 0.85;
+        camera.position.set(camDist * 0.6, camDist * 0.5, camDist);
+        camera.lookAt((cols-1)*3.0/2, 0, (rows-1)*3.0/2);
+    } else {
+        camera.position.set(2.5, 2, 2.5);
+        camera.lookAt(0, 0, 0);
+    }
+    if (scene) scene.rotation.y = 0;
+}
+
+function toggleAnimation() { animating = !animating; }
+
+function toggleAxes() {
+    showAxes = !showAxes;
+    if (axesGroup) axesGroup.visible = showAxes;
+}
+
+function togglePhaseAnim() {
+    phaseAnimActive = !phaseAnimActive;
+    var badge = document.getElementById('phase-anim-badge');
+    badge.style.opacity = phaseAnimActive ? '0.8' : '0.3';
+    badge.textContent = phaseAnimActive ? 'Global phase animating' : 'Phase animation paused';
+}
+
+// ============================================================
+// INIT
+// ============================================================
+init();
+</script>
 </body>
 </html>

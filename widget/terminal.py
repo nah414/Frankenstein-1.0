@@ -169,6 +169,11 @@ class FrankensteinTerminal:
             'connect': self._cmd_connect,
             'disconnect': self._cmd_disconnect,
             'credentials': self._cmd_credentials,
+            # Permissions & Automation (Phase 3 Step 6)
+            'permissions': self._cmd_permissions,
+            'setup': self._cmd_setup,
+            'automation': self._cmd_automation,
+            'scheduler': self._cmd_scheduler,
             # System Diagnostics
             'diagnose': self._cmd_diagnose,
             # Quantum Mode
@@ -179,18 +184,34 @@ class FrankensteinTerminal:
             'synth': self._cmd_synthesis,  # Alias
             'bloch': self._cmd_bloch,      # Quick Bloch sphere
             'qubit': self._cmd_qubit,      # Quick qubit operations
+            # Intelligent Router (Phase 3 Step 5)
+            'route': self._cmd_route,
+            'route-options': self._cmd_route_options,
+            'route-test': self._cmd_route_test,
+            'route-history': self._cmd_route_history,
+            # Real-Time Adaptation (Phase 3 Step 7)
+            'adapt-status': self._cmd_adapt_status,
+            'adapt-patterns': self._cmd_adapt_patterns,
+            'adapt-performance': self._cmd_adapt_performance,
+            'adapt-insights': self._cmd_adapt_insights,
+            'adapt-recommend': self._cmd_adapt_recommend,
+            'adapt-history': self._cmd_adapt_history,
+            'adapt-dashboard': self._cmd_adapt_dashboard,
         }
         
         # Security monitor integration
         self._security_monitor = None
         self._security_dashboard = None
-        
+
         # Hardware monitor integration
         self._hardware_monitor = None
-        
+
         # Quantum mode integration
         self._quantum_mode = None
         self._in_quantum_mode = False
+
+        # Real-time adaptation integration (Phase 3 Step 7)
+        self._adaptation_commands = None  # Lazy-loaded
     
     def start(self) -> bool:
         """Start the terminal in a separate thread"""
@@ -1673,6 +1694,172 @@ class FrankensteinTerminal:
             self._write_error(f"Credentials module not available: {e}")
             self._write_output("Make sure integration/credentials.py exists.\n")
 
+    # ==================== INTELLIGENT ROUTER (Phase 3 Step 5) ====================
+
+    def _cmd_route(self, args: List[str]):
+        """Route a workload to the optimal compute provider"""
+        try:
+            from router.commands import handle_route_command
+            handle_route_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Router module not available: {e}")
+            self._write_output("Make sure router/ directory exists.\n")
+
+    def _cmd_route_options(self, args: List[str]):
+        """Show all compatible providers for a workload"""
+        try:
+            from router.commands import handle_route_options_command
+            handle_route_options_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Router module not available: {e}")
+
+    def _cmd_route_test(self, args: List[str]):
+        """Test routing to a specific provider"""
+        try:
+            from router.commands import handle_route_test_command
+            handle_route_test_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Router module not available: {e}")
+
+    def _cmd_route_history(self, args: List[str]):
+        """Show past routing decisions"""
+        try:
+            from router.commands import handle_route_history_command
+            handle_route_history_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Router module not available: {e}")
+
+    # ==================== REAL-TIME ADAPTATION ====================
+
+    def _ensure_adaptation_commands(self):
+        """Lazy-load adaptation commands on first use"""
+        if self._adaptation_commands is None:
+            try:
+                from agents.adaptation import get_adaptation_commands
+                self._adaptation_commands = get_adaptation_commands()
+            except ImportError as e:
+                self._write_error(f"⚠️ Adaptation module not available: {e}")
+                return None
+        return self._adaptation_commands
+
+    def _cmd_adapt_status(self, args: List[str]):
+        """Display current adaptation status"""
+        commands = self._ensure_adaptation_commands()
+        if commands:
+            try:
+                output = commands.cmd_adapt_status(args)
+                self._write_output(output)
+            except Exception as e:
+                self._write_error(f"Error getting adaptation status: {e}")
+
+    def _cmd_adapt_patterns(self, args: List[str]):
+        """Display learned adaptation patterns"""
+        commands = self._ensure_adaptation_commands()
+        if commands:
+            try:
+                output = commands.cmd_adapt_patterns(args)
+                self._write_output(output)
+            except Exception as e:
+                self._write_error(f"Error getting patterns: {e}")
+
+    def _cmd_adapt_performance(self, args: List[str]):
+        """Display performance metrics and rankings"""
+        commands = self._ensure_adaptation_commands()
+        if commands:
+            try:
+                output = commands.cmd_adapt_performance(args)
+                self._write_output(output)
+            except Exception as e:
+                self._write_error(f"Error getting performance metrics: {e}")
+
+    def _cmd_adapt_insights(self, args: List[str]):
+        """Display adaptation insights and analytics"""
+        commands = self._ensure_adaptation_commands()
+        if commands:
+            try:
+                output = commands.cmd_adapt_insights(args)
+                self._write_output(output)
+            except Exception as e:
+                self._write_error(f"Error getting insights: {e}")
+
+    def _cmd_adapt_recommend(self, args: List[str]):
+        """Get provider recommendation for a task type"""
+        commands = self._ensure_adaptation_commands()
+        if commands:
+            try:
+                output = commands.cmd_adapt_recommend(args)
+                self._write_output(output)
+            except Exception as e:
+                self._write_error(f"Error getting recommendation: {e}")
+
+    def _cmd_adapt_history(self, args: List[str]):
+        """Display adaptation history"""
+        commands = self._ensure_adaptation_commands()
+        if commands:
+            try:
+                output = commands.cmd_adapt_history(args)
+                self._write_output(output)
+            except Exception as e:
+                self._write_error(f"Error getting history: {e}")
+
+    def _cmd_adapt_dashboard(self, args: List[str]):
+        """Display full adaptation dashboard"""
+        commands = self._ensure_adaptation_commands()
+        if commands:
+            try:
+                from agents.adaptation import get_adaptation_engine
+                from agents.adaptation.adaptation_display import AdaptationDisplay
+
+                engine = get_adaptation_engine(initialize=True)
+                engine._initialize_components()
+
+                dashboard = AdaptationDisplay.render_dashboard(engine)
+                self._write_output(dashboard)
+            except Exception as e:
+                self._write_error(f"Error rendering dashboard: {e}")
+
+    # ==================== PERMISSIONS & AUTOMATION ====================
+
+    def _cmd_permissions(self, args: List[str]):
+        """Permission management commands"""
+        try:
+            from permissions.commands import handle_permissions_command
+            handle_permissions_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Permissions module not available: {e}")
+        except Exception as e:
+            self._write_error(f"Error executing permissions command: {e}")
+
+    def _cmd_setup(self, args: List[str]):
+        """Run setup wizard for permissions and automation"""
+        try:
+            from permissions.commands import handle_setup_command
+            handle_setup_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Setup wizard not available: {e}")
+        except Exception as e:
+            self._write_error(f"Error executing setup command: {e}")
+
+    def _cmd_automation(self, args: List[str]):
+        """Automation workflow management commands"""
+        try:
+            from automation.commands import handle_automation_command
+            handle_automation_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Automation module not available: {e}")
+        except Exception as e:
+            self._write_error(f"Error executing automation command: {e}")
+
+    def _cmd_scheduler(self, args: List[str]):
+        """Task scheduler management commands"""
+        try:
+            from automation.commands import handle_scheduler_command
+            handle_scheduler_command(args, self._write_output)
+        except ImportError as e:
+            self._write_error(f"Scheduler module not available: {e}")
+        except Exception as e:
+            self._write_error(f"Error executing scheduler command: {e}")
+
     # ==================== SYSTEM DIAGNOSTICS ====================
     
     def _cmd_diagnose(self, args: List[str]):
@@ -2680,7 +2867,7 @@ Type 'git' with no args to see the enhanced features menu.
                 # Provider Registry (Phase 3 Step 4 - ALL 30 PROVIDERS)
                 'providers': '''providers - Manage quantum and classical compute providers
 
-PHASE 3 STEP 4 COMPLETE: 30 provider adapters available!
+30 provider adapters available!
 
 SUBCOMMANDS:
   providers              Show all providers with SDK status
@@ -2760,7 +2947,7 @@ EXAMPLES:
 ''',
                 'connect': '''connect <provider_id> [OPTIONS] - Connect to a compute provider
 
-Phase 3 Step 4: 30 provider adapters available!
+30 provider adapters available.
 
 Establishes connection to quantum or classical provider.
 SDK must be installed first (use 'providers install <id>').
@@ -3064,40 +3251,467 @@ NOTES:
 ''',
                 # Diagnostics
                 'diagnose': 'diagnose [refresh|fix|kill|quick] - System diagnostics and optimization',
+                # Intelligent Router (Phase 3 Step 5)
+                'route': '''route - Route workloads to optimal compute providers
+
+INTELLIGENT ROUTER
+
+Routes quantum and classical workloads to the best available
+provider based on hardware, resources, and user priority.
+
+USAGE:
+  route --qubits N --priority MODE
+  route --type TYPE --qubits N --depth N
+  route --type classical_optimization --threads 2 --memory 512
+
+OPTIONS:
+  --type TYPE       Workload type:
+                      quantum_simulation (default if --qubits > 0)
+                      classical_optimization (default otherwise)
+                      hybrid_computation
+                      data_synthesis
+  --qubits N        Number of qubits (default 0)
+  --depth N         Circuit depth (default 0)
+  --threads N       CPU threads needed (default 1)
+  --memory N        Memory in MB (default 100)
+  --priority MODE   cost | speed | accuracy (default cost)
+
+SAFETY:
+  Hard limits enforced: CPU max 80%, RAM max 75%
+  Routes that would exceed limits are automatically blocked.
+
+EXAMPLES:
+  route --qubits 10 --priority cost      Small quantum, prefer free
+  route --qubits 30 --priority accuracy  Large quantum, best fidelity
+  route --type classical_optimization    Classical CPU routing
+
+RELATED COMMANDS:
+  route-options    Show all compatible providers ranked
+  route-test       Test routing to a specific provider
+  route-history    Show past routing decisions
+''',
+                'route-options': 'route-options --type TYPE --qubits N - Show all compatible providers ranked',
+                'route-test': 'route-test --provider NAME --qubits N - Test routing to a specific provider',
+                'route-history': 'route-history [--limit N] - Show past routing decisions',
+                # Real-Time Adaptation (Phase 3 Step 7)
+                'adapt-status': '''adapt-status - Display current adaptation status
+
+REAL-TIME ADAPTATION
+
+Shows monitoring status, resource usage, safety limits, and total adaptations.
+
+EXAMPLE OUTPUT:
+  ============================================================
+  REAL-TIME ADAPTATION STATUS
+  ============================================================
+  Monitoring Active: YES
+  Total Adaptations: 5
+  Concurrent:        0
+  CPU Usage:         24.3%
+  RAM Usage:         45.1%
+
+  Safety Limits:
+    CPU:  24.3% / 80% (Safe: True)
+    RAM:  45.1% / 75% (Safe: True)
+  ============================================================
+''',
+                'adapt-patterns': '''adapt-patterns [task_type] - View learned adaptation patterns
+
+USAGE:
+  adapt-patterns              Show all patterns summary
+  adapt-patterns quantum_sim  Show patterns for specific task type
+
+Displays learned execution patterns including:
+  - Provider success rates
+  - Confidence scores
+  - Resource profiles (CPU, RAM)
+  - Execution counts
+''',
+                'adapt-performance': '''adapt-performance [provider_id] - View performance metrics
+
+USAGE:
+  adapt-performance            Show provider rankings
+  adapt-performance ibm_q      Show metrics for specific provider
+
+Displays:
+  - Provider rankings by latency
+  - Average metrics (latency, CPU, RAM)
+  - Degradation alerts if present
+  - Recent execution history
+''',
+                'adapt-insights': '''adapt-insights - Analyze adaptation patterns and effectiveness
+
+Shows advanced analytics:
+  - High-performing providers
+  - Underperforming providers
+  - Adaptation effectiveness metrics
+  - Recent adaptation reasons
+  - Success/failure patterns
+''',
+                'adapt-recommend': '''adapt-recommend <task_type> - Get provider recommendation
+
+USAGE:
+  adapt-recommend quantum_simulation
+
+Returns:
+  - Recommended provider ID
+  - Confidence score (0-100%)
+  - Expected success rate
+  - Resource estimates (CPU, RAM, duration)
+  - Reason for recommendation
+''',
+                'adapt-history': '''adapt-history [limit] - View adaptation history
+
+USAGE:
+  adapt-history      Show last 10 adaptations
+  adapt-history 25   Show last 25 adaptations
+
+Displays chronological log of:
+  - Task IDs
+  - Success/failure status
+  - Adaptation reasons
+  - Provider switches
+  - Timestamps
+''',
+                'adapt-dashboard': '''adapt-dashboard - Display full adaptation dashboard
+
+Shows complete real-time dashboard with:
+  - Status panel (monitoring, CPU, RAM, safety)
+  - Performance summary (top providers)
+  - Learning summary (patterns learned)
+  - Real-time updates
+
+ASCII box-drawing visualization for terminal display.
+''',
+                # Permissions & Automation (Phase 3 Step 6)
+                'permissions': '''permissions - Permission management system
+
+PERMISSION MANAGEMENT
+
+Manage user roles, access control, and audit logging for
+all quantum and classical compute providers.
+
+USAGE:
+  permissions                     Show permission summary
+  permissions set-role ROLE       Set user role (Admin, User, Agent, ReadOnly)
+  permissions check PERMISSION    Check if permission is allowed
+  permissions providers           Show accessible providers
+  permissions audit [DAYS]        Show audit log (default: 7 days)
+  permissions reset               Reset to default settings
+
+ROLES:
+  Admin     - Full access to all 28 providers, automation control
+  User      - Submit jobs to quantum (15) and classical (13) providers
+  Agent     - Automated workflows only, no manual job submission
+  ReadOnly  - View-only access, no job submission
+
+PERMISSIONS:
+  quantum_job_submit         Submit quantum jobs
+  classical_compute_submit   Submit classical jobs
+  automation_control         Control automated workflows
+  permission_modify          Modify permission settings
+  provider_connect           Connect to providers
+  credential_modify          Modify credentials
+
+EXAMPLES:
+  permissions set-role Admin
+  permissions check quantum_job_submit
+  permissions providers
+  permissions audit 30
+
+RELATED COMMANDS:
+  setup       Run setup wizard for permissions
+  automation  Manage automated workflows
+''',
+                'setup': '''setup - Setup wizard for permissions and automation
+
+SETUP WIZARD
+
+Interactive wizard to configure user role, automation preferences,
+and workflow settings for Frankenstein 1.0.
+
+USAGE:
+  setup             Run interactive setup wizard
+  setup --default   Apply default configuration (Admin role, automation enabled)
+
+SETUP STEPS:
+  1. Select user role (Admin, User, Agent, ReadOnly)
+  2. Enable/disable automation
+  3. Configure automated workflows:
+     - Quantum queue optimization
+     - Classical queue optimization
+     - Credential expiry checking
+     - Resource report generation
+     - Provider health monitoring
+     - Hardware auto-tuning
+
+DEFAULT CONFIGURATION:
+  Role: Admin
+  Automation: Enabled
+  All workflows: Enabled (except auto_tune_hardware)
+
+EXAMPLES:
+  setup             Interactive setup
+  setup --default   Quick default setup
+''',
+                'automation': '''automation - Automation workflow management
+
+AUTOMATED WORKFLOWS
+
+Manage background automation workflows that optimize queue
+management, monitor provider health, and tune hardware.
+
+USAGE:
+  automation                      Show automation status
+  automation start                Start automation engine
+  automation stop                 Stop automation engine
+  automation status               Show workflow execution status
+  automation run WORKFLOW         Run a workflow manually
+  automation consent WORKFLOW     Grant termination consent
+  automation revoke WORKFLOW      Revoke termination consent
+
+WORKFLOWS (6 Total):
+  quantum_queue         Optimize quantum job queue (every 5 min)
+  classical_queue       Optimize classical compute queue (every 5 min)
+  credential_expiry     Check for expiring credentials (daily)
+  resource_report       Generate resource usage reports (daily)
+  provider_health       Monitor provider status (every 15 min)
+  hardware_tuning       Auto-tune hardware parameters (hourly)
+
+RESOURCE SAFETY:
+  CPU limit: 80% maximum
+  RAM limit: 75% maximum
+  Workflows paused if limits exceeded
+
+TERMINATION CONSENT:
+  Some workflows may terminate stuck/failed jobs.
+  User consent required before termination.
+
+EXAMPLES:
+  automation start
+  automation run quantum_queue
+  automation consent quantum_queue
+  automation status
+
+RELATED COMMANDS:
+  scheduler     Manage scheduled tasks
+  permissions   Configure automation permissions
+''',
+                'scheduler': '''scheduler - Task scheduler management
+
+TASK SCHEDULER
+
+Manage scheduled background tasks for automation workflows.
+Tasks run at configured intervals (every 5 min, hourly, daily).
+
+USAGE:
+  scheduler              Show scheduler status
+  scheduler tasks        List all scheduled tasks
+  scheduler pause TASK   Pause a task
+  scheduler resume TASK  Resume a paused task
+  scheduler stop         Stop the scheduler
+
+SCHEDULE TYPES:
+  Once       - Run once at specified time
+  Recurring  - Run repeatedly at interval
+  Daily      - Run once per day
+
+TASK STATUS:
+  pending   - Waiting to run
+  running   - Currently executing
+  paused    - Temporarily paused
+  stopped   - Stopped, won't run again
+  failed    - Execution failed
+
+SAFETY FEATURES:
+  - Resource monitoring (CPU < 80%, RAM < 75%)
+  - Auto-pause on high resource usage
+  - Error tracking and retry logic
+  - Graceful shutdown on stop
+
+EXAMPLES:
+  scheduler tasks
+  scheduler pause quantum_queue_task
+  scheduler resume quantum_queue_task
+
+RELATED COMMANDS:
+  automation    Manage workflows
+  permissions   Configure scheduler permissions
+''',
+                'routing': '''routing - Intelligent Router Help Topic
+
+INTELLIGENT WORKLOAD ROUTER
+
+The router automatically selects the best quantum or classical
+compute provider for your workload.
+
+HOW IT WORKS:
+  1. Analyzes your workload (qubits, memory, priority)
+  2. Detects available hardware (CPU, GPU, tier)
+  3. Checks resource safety (CPU < 80%, RAM < 75%)
+  4. Scores providers (cost, speed, accuracy)
+  5. Returns optimal provider + fallback chain
+
+ROUTING RULES:
+  Quantum:
+    <=5 qubits   -> Local simulators (free, instant)
+    6-20 qubits  -> Local sim + cloud fallback
+    21-29 qubits -> Cloud providers (IBM, AWS, Azure)
+    30+ qubits   -> Large-scale providers (IonQ, Rigetti, QuEra)
+
+  Classical:
+    NVIDIA GPU   -> nvidia_cuda
+    AMD GPU      -> amd_rocm
+    Apple Silicon -> apple_metal
+    Intel CPU    -> intel_oneapi, local_cpu
+    Default      -> local_cpu (NumPy/SciPy)
+
+PRIORITY MODES:
+  cost     -> Prefer free/local providers (default)
+  speed    -> Prefer fastest execution
+  accuracy -> Prefer highest fidelity
+
+COMMANDS:
+  route --qubits 10 --priority cost
+  route-options --type quantum_simulation --qubits 5
+  route-test --provider ibm_quantum --qubits 10
+  route-history
+''',
                 # Quantum Mode
                 'quantum': '''quantum - Enter quantum computing REPL mode
 
 ENTERING QUANTUM MODE:
   Just type 'quantum' or 'q' to enter the quantum computing sub-shell.
-  
+
 QUANTUM MODE COMMANDS (once inside):
-  qubit <n>       Initialize n qubits in |0> state
-  qubit <n>       Initialize n qubits in state |0>
-  qubit STATE     Initialize specific state (|+>, |0>, etc)
-  h <q>           Hadamard gate on qubit q
-  x/y/z <q>       Pauli gates
-  rx/ry/rz <q> θ  Rotation gates (use 'pi' for π)
-  cx <c> <t>      CNOT gate (control c, target t)
-  measure         Measure qubits and launch Bloch sphere visualization
-  bloch           Launch Bloch sphere visualization
-  bell            Quick Bell state creation
-  ghz [n]         Quick GHZ state (n qubits)
-  evolve H t      Time evolution under Hamiltonian
-  back            Return to main terminal
+
+  INITIALIZATION:
+    qubit <n>       Initialize n qubits in |0> state
+    qubit STATE     Initialize specific state (|+>, |0>, etc)
+    reset           Reset to |0> state
+
+  SINGLE-QUBIT GATES:
+    h <q>           Hadamard gate on qubit q
+    x/y/z <q>       Pauli gates
+    s/t <q>         Phase gates (S = sqrt(Z), T = 4th-root(Z))
+    rx/ry/rz <q> t  Rotation gates (use 'pi' for pi)
+
+  TWO-QUBIT GATES:
+    cx <c> <t>      CNOT gate (control c, target t)
+    cz <c> <t>      Controlled-Z gate
+
+  MULTI-CONTROLLED GATES (ENHANCED - 16 Qubit Support):
+    mcx <ctrls> <t> Multi-Controlled X (MCX)
+                    ENHANCED: numpy + scipy + qutip integration
+                    Supports up to 16 qubits (15 controls + 1 target)
+
+                    Examples:
+                      mcx 0 1              -> CNOT (1 control)
+                      mcx 0,1 2            -> Toffoli/CCNOT (2 controls)
+                      mcx 0,1,2 3          -> C³X (3 controls)
+                      mcx 0,1,2,3 4        -> C⁴X (4 controls)
+                      mcx 0,1,2,3,4,5,6 7  -> C⁷X (7 controls)
+                      mcx 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 15 -> C¹⁵X (max)
+
+                    Controls: comma-separated list (NO SPACES)
+                    Performance: 1-2: <5ms | 3-7: ~50ms | 8+: ~200ms
+                    Algorithm: Gate decomp (1-2) | NumPy (3-7) | SciPy sparse (8+)
+                    Use for: Grover search, amplitude amplification, oracle design
+
+  MEASUREMENT & VISUALIZATION:
+    measure         Measure all qubits + auto-launch 3D Bloch sphere
+    measure <shots> Specify number of shots (default: 1024)
+    bloch           Launch 3D Bloch sphere (Three.js in browser)
+    bloch2d         Matplotlib 2D Bloch sphere (X-Z projection)
+                    Uses 90% RAM limit (elevated for visualization)
+    bloch2d 3d      Matplotlib 3D interactive Bloch sphere
+                    Uses 90% RAM limit (elevated for visualization)
+
+  CIRCUITS:
+    bell            Quick Bell state creation (2 qubits)
+    ghz [n]         Quick GHZ state (n qubits, default 3)
+    qft [n]         Quantum Fourier Transform
+
+  EVOLUTION:
+    evolve H t      Time evolution under Hamiltonian H for time t
+
+  CONTROLS:
+    viz off/on      Toggle auto-visualization
+    back/exit       Return to main terminal
 
 AUTO-VISUALIZATION:
   After each 'measure' command, the 3D Bloch sphere opens in browser.
   Use 'viz off' to disable, 'viz on' to enable.
 
-EXAMPLE SESSION:
-  frankenstein> quantum
-  quantum[1q|0g]> qubit 2
-  quantum[2q|0g]> h 0
-  quantum[2q|1g]> cx 0 1
-  quantum[2q|2g]> measure
-  [3D Bloch sphere opens in browser]
-  quantum[2q|2g]> back
-  frankenstein>
+PERFORMANCE NOTES (Tier 1: Dell i3 8th Gen, 8GB RAM):
+  MCX Gates (numpy + scipy + qutip):
+    - 1-2 controls: <5ms   (gate decomposition)
+    - 3-7 controls: ~50ms  (numpy statevector)
+    - 8-15 controls: ~200ms (scipy sparse matrices)
+    - Maximum: 15 controls + 1 target = 16 qubits
+
+  Visualization:
+    - bloch (Three.js): No matplotlib, standard RAM usage
+    - bloch2d (matplotlib): 90% RAM limit (elevated for Bloch UI)
+    - General ops: 75% RAM limit (standard safety)
+
+  Tips:
+    - Use 'viz off' for batch operations with many measurements
+    - Use bloch2d when RAM is 75-90% (elevated limit)
+    - MCX with 8+ controls uses scipy for efficiency
+
+EXAMPLES:
+  # Create Bell state
+  quantum
+  qubit 2
+  h 0
+  cx 0 1
+  measure
+
+  # Create GHZ state with Toffoli
+  quantum
+  qubit 3
+  h 0
+  h 1
+  mcx 0,1 2
+  measure
+
+  # Advanced: 4-qubit entanglement
+  quantum
+  qubit 4
+  h 0
+  h 1
+  h 2
+  mcx 0,1,2 3
+  measure
+
+  # Maximum: 16-qubit entanglement (C¹⁵X gate)
+  quantum
+  qubit 16
+  h 0
+  h 1
+  h 2
+  h 3
+  h 4
+  h 5
+  h 6
+  h 7
+  h 8
+  h 9
+  h 10
+  h 11
+  h 12
+  h 13
+  h 14
+  mcx 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 15
+  measure
+
+  # Matplotlib Bloch sphere (2D/3D)
+  quantum
+  qubit 1
+  rx 0 1.2
+  bloch2d       # 2D projection with matplotlib (90% RAM limit)
+  bloch2d 3d    # 3D interactive matplotlib (90% RAM limit)
 ''',
                 'q': 'q - Shortcut to enter quantum mode (same as quantum)',
                 # Synthesis Engine
@@ -3235,7 +3849,7 @@ HARDWARE:
   hardware tiers  Hardware tier reference
   hardware recommend  Switch recommendation
 
-PROVIDERS (Phase 3 Step 4: 30 Quantum + Classical Adapters):
+PROVIDERS (30 Quantum + Classical Adapters):
   providers       List all 30 compute providers with SDK status
   providers quantum   List 19 quantum providers
   providers classical List 10 classical providers
@@ -3274,18 +3888,120 @@ DIAGNOSTICS:
   diagnose kill <name>  Terminate a process
   diagnose quick      Quick CPU/RAM stats
 
+INTELLIGENT ROUTER:
+  route --qubits N --priority MODE    Route workload to optimal provider
+  route-options --type TYPE --qubits N  Show all compatible providers
+  route-test --provider NAME --qubits N Test routing to specific provider
+  route-history                       Show past routing decisions
+
+  +----------------------------------------------------+
+  |  ROUTING QUICK START:                              |
+  |                                                    |
+  |  route --qubits 10 --priority cost                |
+  |    Routes 10-qubit simulation to best free option  |
+  |                                                    |
+  |  route --qubits 30 --priority accuracy            |
+  |    Routes to highest-fidelity quantum hardware     |
+  |                                                    |
+  |  route --type classical_optimization              |
+  |    Routes classical workload to best local compute|
+  |                                                    |
+  |  Safety: CPU max 80%, RAM max 75% enforced        |
+  |  Details: help route  |  Topics: help routing     |
+  +----------------------------------------------------+
+
+PERMISSIONS AND AUTOMATION:
+  help permissions     Manage user roles and access control
+  help setup           Setup wizard for permissions and automation
+  help automation      Manage automated workflows (6 workflows)
+  help scheduler       Task scheduler management
+
+  +----------------------------------------------------+
+  |  PERMISSIONS & AUTOMATION QUICK START:             |
+  |                                                    |
+  |  setup --default                                  |
+  |    Quick setup with Admin role and automation on   |
+  |                                                    |
+  |  permissions                                      |
+  |    View your role, permissions, and provider access|
+  |                                                    |
+  |  automation start                                 |
+  |    Start 6 background workflows (queue optimization|
+  |    credential checking, health monitoring)         |
+  |                                                    |
+  |  scheduler tasks                                  |
+  |    View all scheduled tasks and their status       |
+  |                                                    |
+  |  4 Roles: Admin, User, Agent, ReadOnly            |
+  |  28 Providers: 15 quantum + 13 classical          |
+  |  6 Workflows: Queue optimization, health checks   |
+  |  Safety Limits: CPU max 80%, RAM max 75%          |
+  |                                                    |
+  |  Details: help permissions  |  help automation    |
+  +----------------------------------------------------+
+
+REAL-TIME ADAPTATION:
+  help adapt-status        View current adaptation status
+  help adapt-patterns      View learned patterns
+  help adapt-performance   View performance metrics
+  help adapt-insights      View adaptation analytics
+  help adapt-recommend     Get provider recommendations
+  help adapt-history       View adaptation history
+  help adapt-dashboard     View full adaptation dashboard
+
+  +----------------------------------------------------+
+  |  REAL-TIME ADAPTATION QUICK START:                |
+  |                                                    |
+  |  adapt-status                                     |
+  |    Show monitoring status, CPU/RAM, safety limits  |
+  |                                                    |
+  |  adapt-dashboard                                  |
+  |    Full ASCII dashboard with all panels            |
+  |                                                    |
+  |  adapt-recommend quantum_simulation               |
+  |    Get best provider for task type                 |
+  |                                                    |
+  |  adapt-performance                                |
+  |    View provider rankings by latency               |
+  |                                                    |
+  |  adapt-insights                                   |
+  |    Analyze high/low performers and effectiveness   |
+  |                                                    |
+  |  FEATURES:                                        |
+  |  • EMA learning (30% new, 70% historical)         |
+  |  • Multi-factor confidence scoring                |
+  |  • 3-tier intelligent routing                     |
+  |  • Provider health monitoring (4 states)          |
+  |  • Automatic failover & degradation detection     |
+  |  • SQLite + JSON persistence                      |
+  |  • Safety: CPU max 80%, RAM max 75%               |
+  |                                                    |
+  |  Details: help adapt-status  |  help adapt-patterns|
+  +----------------------------------------------------+
+
 QUANTUM MODE:
   quantum         Enter quantum computing mode (or 'q')
   qubit <n>       Quick qubit initialization
-  
+
   +----------------------------------------------------+
   |  QUANTUM MODE QUICK START:                        |
   |                                                    |
   |  1. Type 'quantum' or 'q' to enter quantum mode   |
-  |  2. Initialize: qubit 2  (creates 2 qubits)       |
-  |  3. Apply gates: h 0, cx 0 1  (Bell state)        |
-  |  4. Measure: measure  (auto-shows 3D Bloch!)      |
-  |  5. Type 'back' to return to main terminal        |
+  |  2. Initialize: qubit 3  (creates 3 qubits)       |
+  |  3. Apply gates: h 0, h 1  (superposition)        |
+  |  4. Multi-control: mcx 0,1 2  (Toffoli gate)      |
+  |  5. Measure: measure  (auto-shows 3D Bloch!)      |
+  |  6. Type 'back' to return to main terminal        |
+  |                                                    |
+  |  ENHANCED FEATURES (numpy + scipy + qutip):       |
+  |    mcx 0,1,2 3         <- C³X (3 controls)        |
+  |    mcx 0,1,2,3,4,5,6 7 <- C⁷X (7 controls, scipy) |
+  |    Max: 16 qubits (15 controls + 1 target)        |
+  |                                                    |
+  |  VISUALIZATION OPTIONS:                           |
+  |    bloch      <- 3D Three.js (browser)            |
+  |    bloch2d    <- 2D matplotlib (90% RAM)          |
+  |    bloch2d 3d <- 3D matplotlib (90% RAM)          |
   |                                                    |
   |  Shortcuts: bell, ghz, qft for common circuits    |
   |  Toggle viz: viz off (disable auto-visualization) |
