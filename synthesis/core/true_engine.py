@@ -39,6 +39,27 @@ import numpy as np
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("frankenstein.synthesis")
 
+# TENSOR ACCELERATOR — lazy-loaded, activates only when first gate is applied.
+# Falls back to NumPy automatically if JAX/Numba not installed.
+# Import path is relative to the project root (synthesis/ package).
+try:
+    from synthesis.accelerator import (
+        apply_single_qubit_gate as _accel_single,
+        apply_controlled_gate   as _accel_controlled,
+        apply_mcx_gate          as _accel_mcx,
+    )
+    _ACCEL_AVAILABLE = True
+except ImportError:
+    _ACCEL_AVAILABLE = False
+
+# Computation logger — lazy-loaded, only activates on first quantum operation
+_comp_logger_available = False
+try:
+    from synthesis.computation_log import get_computation_logger
+    _comp_logger_available = True
+except ImportError:
+    pass
+
 # Physical constants (natural units where ℏ = c = 1, plus SI)
 HBAR = 1.054571817e-34  # J·s (SI)
 C = 299792458.0          # m/s
@@ -244,7 +265,8 @@ class TrueSynthesisEngine:
         self._max_history = 50  # Limit history to prevent RAM overflow
         self._gate_log: List[Dict[str, Any]] = []
         self._max_gate_log = 100  # Keep last 100 gates for debugging
-        
+        self._comp_log = None  # Lazy-loaded computation logger
+
         # Initialize storage
         self._init_storage()
         
@@ -254,6 +276,12 @@ class TrueSynthesisEngine:
         logger.info(f"  Max memory: {self.config.max_memory_bytes / 1e9:.1f} GB")
         logger.info(f"  Storage allocated: {self.config.max_storage_bytes / 1e9:.1f} GB")
     
+    def _get_logger(self):
+        """Lazy-load computation logger on first use."""
+        if self._comp_log is None and _comp_logger_available:
+            self._comp_log = get_computation_logger()
+        return self._comp_log
+
     def _init_storage(self):
         """Initialize 20GB storage allocation"""
         storage_info = self.config.storage_path / "storage_info.json"
@@ -326,132 +354,196 @@ class TrueSynthesisEngine:
             self._state.initialize_zero()
         
         self._gate_log = []
+        log = self._get_logger()
+        if log:
+            log.log_init(n_qubits, initial_state)
         logger.info(f"Initialized {n_qubits} qubits in |{initial_state}⟩")
         return self._state
     
     # ==================== QUANTUM GATES ====================
     
-    def _apply_single_qubit_gate(self, gate: np.ndarray, target: int):
-        """Apply single-qubit gate using efficient tensor product"""
+    def _apply_single_qubit_gate(self, gate: np.ndarray, target: int,
+                                  gate_name: str = "single_qubit"):
+        """
+        Apply single-qubit gate using tensor-indexed MSB convention.
+        step = 2^(n-1-target)  — qubit 0 is most significant bit.
+
+        Delegates to the accelerator (JAX -> Numba -> NumPy) when available.
+        Falls back to the original in-place loop which is already correct.
+        """
         if self._state is None:
             raise RuntimeError("No quantum state initialized")
-        
-        n = self._state.n_qubits
-        dim = self._state.dim
-        
-        # Build full operator via Kronecker products
-        # More memory efficient: operate on pairs of amplitudes
-        step = 2 ** (n - target - 1)
-        for i in range(0, dim, 2 * step):
-            for j in range(step):
-                idx0 = i + j
-                idx1 = i + j + step
-                a0 = self._state.amplitudes[idx0]
-                a1 = self._state.amplitudes[idx1]
-                self._state.amplitudes[idx0] = gate[0, 0] * a0 + gate[0, 1] * a1
-                self._state.amplitudes[idx1] = gate[1, 0] * a0 + gate[1, 1] * a1
+
+        sv = self._state.amplitudes
+        n  = self._state.n_qubits
+
+        if _ACCEL_AVAILABLE:
+            _accel_single(sv, gate, target, n)
+        else:
+            # Original implementation — MSB convention, correct as-is.
+            # step = 2^(n-1-target) identical to 2^(n - target - 1)
+            dim  = self._state.dim
+            step = 2 ** (n - target - 1)
+            for i in range(0, dim, 2 * step):
+                for j in range(step):
+                    idx0 = i + j
+                    idx1 = i + j + step
+                    a0 = sv[idx0]
+                    a1 = sv[idx1]
+                    sv[idx0] = gate[0, 0] * a0 + gate[0, 1] * a1
+                    sv[idx1] = gate[1, 0] * a0 + gate[1, 1] * a1
+
+        log = self._get_logger()
+        if log:
+            log.log_gate(gate_name, [target], state_norm_after=float(self._state.norm))
     
     def _apply_two_qubit_gate(self, gate: np.ndarray, control: int, target: int):
-        """Apply two-qubit controlled gate"""
+        """
+        Apply controlled gate using tensor-indexed MSB convention.
+        ctrl_bit = n-1-control, tgt_bit = n-1-target.
+
+        Delegates to the accelerator when available.
+        Falls back to the original in-place loop which is already MSB-correct.
+        """
         if self._state is None:
             raise RuntimeError("No quantum state initialized")
-        
-        n = self._state.n_qubits
-        dim = self._state.dim
-        
-        # Efficient two-qubit gate application
-        ctrl_step = 2 ** (n - control - 1)
-        tgt_step = 2 ** (n - target - 1)
-        
-        for i in range(dim):
-            # Check if control qubit is |1⟩
-            if (i >> (n - control - 1)) & 1:
-                # Get target qubit state
-                tgt_bit = (i >> (n - target - 1)) & 1
-                if tgt_bit == 0:
-                    # Pair indices for target = |0⟩ and |1⟩
-                    idx0 = i
-                    idx1 = i ^ (1 << (n - target - 1))
-                    if idx1 > idx0:  # Avoid double processing
-                        a0 = self._state.amplitudes[idx0]
-                        a1 = self._state.amplitudes[idx1]
-                        # Apply gate to target qubit subspace
-                        self._state.amplitudes[idx0] = gate[0, 0] * a0 + gate[0, 1] * a1
-                        self._state.amplitudes[idx1] = gate[1, 0] * a0 + gate[1, 1] * a1
+
+        sv = self._state.amplitudes
+        n  = self._state.n_qubits
+
+        if _ACCEL_AVAILABLE:
+            _accel_controlled(sv, gate, control, target, n)
+        else:
+            # Original implementation — MSB convention, correct as-is.
+            # n-control-1 == n-1-control, n-target-1 == n-1-target
+            dim = self._state.dim
+            for i in range(dim):
+                if (i >> (n - control - 1)) & 1:
+                    tgt_bit = (i >> (n - target - 1)) & 1
+                    if tgt_bit == 0:
+                        idx0 = i
+                        idx1 = i ^ (1 << (n - target - 1))
+                        if idx1 > idx0:  # Process each pair exactly once
+                            a0 = sv[idx0]
+                            a1 = sv[idx1]
+                            sv[idx0] = gate[0, 0] * a0 + gate[0, 1] * a1
+                            sv[idx1] = gate[1, 0] * a0 + gate[1, 1] * a1
+
+    def mcx(self, controls: list, target: int):
+        """
+        Multi-Controlled X gate — tensor-indexed sparse swap.
+
+        MSB convention: qubit k at bit position (n-1-k).
+        No matrix built. Memory: O(2^n) = ~1 MB for 16 qubits.
+
+        Args:
+            controls: List of control qubit indices (all must be |1> to fire)
+            target:   Target qubit index (X applied when all controls = |1>)
+        """
+        if self._state is None:
+            raise RuntimeError("No quantum state initialized")
+
+        sv = self._state.amplitudes
+        n  = self._state.n_qubits
+
+        all_q = set(controls) | {target}
+        if len(all_q) != len(controls) + 1:
+            raise ValueError("Control qubits and target must all be distinct.")
+        if any(q < 0 or q >= n for q in all_q):
+            raise ValueError(f"All qubit indices must be in [0, {n - 1}].")
+
+        if _ACCEL_AVAILABLE:
+            _accel_mcx(sv, list(controls), target, n)
+        else:
+            # MSB tensor-indexed sparse swap (fallback)
+            tgt_bit   = n - 1 - target
+            tgt_mask  = 1 << tgt_bit
+            ctrl_mask = sum(1 << (n - 1 - c) for c in controls)
+            dim = 1 << n
+            for i in range(dim):
+                if (i & ctrl_mask) == ctrl_mask and not (i & tgt_mask):
+                    j = i | tgt_mask
+                    sv[i], sv[j] = sv[j], sv[i]
+
+        self._gate_log.append({
+            "gate": "mcx", "targets": [target], "controls": list(controls),
+            "params": {}, "timestamp": time.time(),
+        })
+        self._trim_gate_log()
 
     # Standard quantum gates
     
     def hadamard(self, target: int):
         """Hadamard gate: H = (1/√2)[[1,1],[1,-1]]"""
         H = np.array([[1, 1], [1, -1]], dtype=np.complex128) / np.sqrt(2)
-        self._apply_single_qubit_gate(H, target)
-        self._gate_log.append({"gate": "H", "target": target})
+        self._apply_single_qubit_gate(H, target, "h")
+        self._gate_log.append({"gate": "h", "targets": [target], "controls": [], "params": {}, "timestamp": time.time()})
         self._trim_gate_log()
     
     def pauli_x(self, target: int):
         """Pauli-X (NOT) gate"""
         X = np.array([[0, 1], [1, 0]], dtype=np.complex128)
-        self._apply_single_qubit_gate(X, target)
-        self._gate_log.append({"gate": "X", "target": target})
+        self._apply_single_qubit_gate(X, target, "x")
+        self._gate_log.append({"gate": "x", "targets": [target], "controls": [], "params": {}, "timestamp": time.time()})
         self._trim_gate_log()
     
     def pauli_y(self, target: int):
         """Pauli-Y gate"""
         Y = np.array([[0, -1j], [1j, 0]], dtype=np.complex128)
-        self._apply_single_qubit_gate(Y, target)
-        self._gate_log.append({"gate": "Y", "target": target})
+        self._apply_single_qubit_gate(Y, target, "y")
+        self._gate_log.append({"gate": "y", "targets": [target], "controls": [], "params": {}, "timestamp": time.time()})
         self._trim_gate_log()
     
     def pauli_z(self, target: int):
         """Pauli-Z gate"""
         Z = np.array([[1, 0], [0, -1]], dtype=np.complex128)
-        self._apply_single_qubit_gate(Z, target)
-        self._gate_log.append({"gate": "Z", "target": target})
+        self._apply_single_qubit_gate(Z, target, "z")
+        self._gate_log.append({"gate": "z", "targets": [target], "controls": [], "params": {}, "timestamp": time.time()})
         self._trim_gate_log()
     
     def phase(self, target: int, phi: float):
         """Phase gate: P(φ) = [[1,0],[0,e^(iφ)]]"""
         P = np.array([[1, 0], [0, np.exp(1j * phi)]], dtype=np.complex128)
-        self._apply_single_qubit_gate(P, target)
-        self._gate_log.append({"gate": "P", "target": target, "phi": phi})
+        self._apply_single_qubit_gate(P, target, "p")
+        self._gate_log.append({"gate": "p", "targets": [target], "controls": [], "params": {"phi": phi}, "timestamp": time.time()})
         self._trim_gate_log()
     
     def rotation_x(self, target: int, theta: float):
         """Rotation around X-axis: Rx(θ)"""
         c, s = np.cos(theta / 2), np.sin(theta / 2)
         Rx = np.array([[c, -1j * s], [-1j * s, c]], dtype=np.complex128)
-        self._apply_single_qubit_gate(Rx, target)
-        self._gate_log.append({"gate": "Rx", "target": target, "theta": theta})
+        self._apply_single_qubit_gate(Rx, target, "rx")
+        self._gate_log.append({"gate": "rx", "targets": [target], "controls": [], "params": {"theta": theta}, "timestamp": time.time()})
         self._trim_gate_log()
     
     def rotation_y(self, target: int, theta: float):
         """Rotation around Y-axis: Ry(θ)"""
         c, s = np.cos(theta / 2), np.sin(theta / 2)
         Ry = np.array([[c, -s], [s, c]], dtype=np.complex128)
-        self._apply_single_qubit_gate(Ry, target)
-        self._gate_log.append({"gate": "Ry", "target": target, "theta": theta})
+        self._apply_single_qubit_gate(Ry, target, "ry")
+        self._gate_log.append({"gate": "ry", "targets": [target], "controls": [], "params": {"theta": theta}, "timestamp": time.time()})
         self._trim_gate_log()
     
     def rotation_z(self, target: int, theta: float):
         """Rotation around Z-axis: Rz(θ)"""
-        Rz = np.array([[np.exp(-1j * theta / 2), 0], 
+        Rz = np.array([[np.exp(-1j * theta / 2), 0],
                        [0, np.exp(1j * theta / 2)]], dtype=np.complex128)
-        self._apply_single_qubit_gate(Rz, target)
-        self._gate_log.append({"gate": "Rz", "target": target, "theta": theta})
+        self._apply_single_qubit_gate(Rz, target, "rz")
+        self._gate_log.append({"gate": "rz", "targets": [target], "controls": [], "params": {"theta": theta}, "timestamp": time.time()})
         self._trim_gate_log()
     
     def cnot(self, control: int, target: int):
         """Controlled-NOT gate"""
         X = np.array([[0, 1], [1, 0]], dtype=np.complex128)
         self._apply_two_qubit_gate(X, control, target)
-        self._gate_log.append({"gate": "CNOT", "control": control, "target": target})
+        self._gate_log.append({"gate": "cx", "targets": [target], "controls": [control], "params": {}, "timestamp": time.time()})
         self._trim_gate_log()
     
     def cz(self, control: int, target: int):
         """Controlled-Z gate"""
         Z = np.array([[1, 0], [0, -1]], dtype=np.complex128)
         self._apply_two_qubit_gate(Z, control, target)
-        self._gate_log.append({"gate": "CZ", "control": control, "target": target})
+        self._gate_log.append({"gate": "cz", "targets": [target], "controls": [control], "params": {}, "timestamp": time.time()})
         self._trim_gate_log()
     
     def swap(self, qubit1: int, qubit2: int):
@@ -461,7 +553,7 @@ class TrueSynthesisEngine:
         self.cnot(qubit1, qubit2)
         # Replace last 3 gate log entries with single SWAP
         self._gate_log = self._gate_log[:-3]
-        self._gate_log.append({"gate": "SWAP", "qubits": [qubit1, qubit2]})
+        self._gate_log.append({"gate": "swap", "targets": [qubit1, qubit2], "controls": [], "params": {}, "timestamp": time.time()})
         self._trim_gate_log()
 
     # ==================== SCHRÖDINGER EQUATION SOLVER ====================
@@ -791,9 +883,12 @@ class TrueSynthesisEngine:
             n_qubits=self._state.n_qubits,
             gate_log=json.dumps(self._gate_log)
         )
+        log = self._get_logger()
+        if log:
+            log.log_state_saved(name, str(filepath))
         logger.info(f"State saved: {filepath}")
         return filepath
-    
+
     def load_state(self, name: str) -> QuantumState:
         """Load quantum state from storage"""
         filepath = self.config.storage_path / "states" / f"{name}.npz"
@@ -806,9 +901,40 @@ class TrueSynthesisEngine:
         self._state.amplitudes[:] = data['amplitudes']
         self._gate_log = json.loads(str(data['gate_log']))
         
+        log = self._get_logger()
+        if log:
+            log.log_state_loaded(name, str(filepath))
         logger.info(f"State loaded: {filepath}")
         return self._state
-    
+
+    def list_states(self) -> List[Dict[str, Any]]:
+        """List all saved quantum states with metadata."""
+        states_dir = self.config.storage_path / "states"
+        states = []
+        for f in sorted(states_dir.glob("*.npz"),
+                        key=lambda x: x.stat().st_mtime, reverse=True):
+            try:
+                data = np.load(f, allow_pickle=True)
+                states.append({
+                    "name": f.stem,
+                    "n_qubits": int(data['n_qubits']),
+                    "size_bytes": f.stat().st_size,
+                    "size_kb": round(f.stat().st_size / 1024, 1),
+                    "modified": datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
+                })
+            except Exception:
+                states.append({"name": f.stem, "error": "corrupt file"})
+        return states
+
+    def delete_state(self, name: str) -> bool:
+        """Delete a saved quantum state. Returns True if deleted."""
+        filepath = self.config.storage_path / "states" / f"{name}.npz"
+        if filepath.exists():
+            filepath.unlink()
+            logger.info(f"State deleted: {name}")
+            return True
+        return False
+
     def save_result(self, result: SimulationResult, name: str) -> Path:
         """Save simulation result to storage"""
         filepath = self.config.storage_path / "results" / f"{name}.npz"

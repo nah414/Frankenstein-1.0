@@ -179,6 +179,12 @@ class FrankensteinTerminal:
             # Quantum Mode
             'quantum': self._cmd_quantum,
             'q': self._cmd_quantum,  # Shortcut
+            # Artifact overview
+            'saves': self._cmd_saves_overview,
+            # Memory Management (Pre-Phase 4)
+            'memory': self._cmd_memory,
+            # Circuit Library (Pre-Phase 4)
+            'circuit': self._cmd_circuit,
             # Synthesis Engine
             'synthesis': self._cmd_synthesis,
             'synth': self._cmd_synthesis,  # Alias
@@ -1871,8 +1877,707 @@ class FrankensteinTerminal:
             self._write_error(f"Diagnostics module not available: {e}")
             self._write_output("Make sure core/system_diagnostics.py exists.\n")
 
+    # ==================== ARTIFACT OVERVIEW ====================
+
+    def _cmd_saves_overview(self, args: List[str]):
+        """Show all saved quantum artifacts — states, circuits, and computation logs."""
+        self._write_output("\n📦 Saved Artifacts\n")
+        self._write_output("═" * 55 + "\n\n")
+
+        # --- Quantum States ---
+        self._write_output("🔬 Quantum States  (recall <name> in quantum mode):\n")
+        self._write_output("─" * 45 + "\n")
+        try:
+            from synthesis.core.true_engine import get_true_engine
+            states = get_true_engine().list_states()
+            if states:
+                for s in states:
+                    if "error" in s:
+                        self._write_output(f"  {s['name']:24s}  ⚠️  corrupt\n")
+                    else:
+                        self._write_output(
+                            f"  {s['name']:24s}  {s['n_qubits']:2d} qubits"
+                            f"  {s['size_kb']:6.1f} KB"
+                            f"  {s['modified'][:10]}\n"
+                        )
+            else:
+                self._write_output("  (none saved yet — use 'save <name>' in quantum mode)\n")
+        except Exception as e:
+            self._write_output(f"  (unavailable: {e})\n")
+
+        self._write_output("\n")
+
+        # --- Circuit Library ---
+        self._write_output("⚡ Circuit Library  (circuit load/export in quantum mode):\n")
+        self._write_output("─" * 45 + "\n")
+        try:
+            from synthesis.circuit_library import get_circuit_library
+            circuits = get_circuit_library().list_circuits()
+            if circuits:
+                for c in circuits:
+                    if "error" in c:
+                        self._write_output(f"  {c['name']:24s}  ⚠️  corrupt\n")
+                    else:
+                        self._write_output(
+                            f"  {c['name']:24s}  {c['n_qubits']:2d} qubits"
+                            f"  {c['gates']:3d} gates  v{c['version']}"
+                            f"  {c.get('modified','')[:10]}\n"
+                        )
+            else:
+                self._write_output("  (none saved yet)\n")
+        except Exception as e:
+            self._write_output(f"  (unavailable: {e})\n")
+
+        self._write_output("\n")
+
+        # --- Computation Logs ---
+        self._write_output("📋 Computation Logs  (memory view logs — coming in Session 3):\n")
+        self._write_output("─" * 45 + "\n")
+        try:
+            from synthesis.computation_log import ComputationLogger
+            logs = ComputationLogger.list_session_logs()
+            if logs:
+                for log in logs[:5]:
+                    self._write_output(
+                        f"  {log['filename']:38s}  {log['events']:4d} events"
+                        f"  {log['size_kb']:6.1f} KB\n"
+                    )
+                if len(logs) > 5:
+                    self._write_output(f"  ... and {len(logs) - 5} older sessions\n")
+            else:
+                self._write_output("  (no sessions logged yet)\n")
+        except Exception as e:
+            self._write_output(f"  (unavailable: {e})\n")
+
+        self._write_output("\n")
+
+    # ==================== MEMORY MANAGEMENT ====================
+
+    def _cmd_memory(self, args: List[str]):
+        """Memory management commands — view, edit, clear storage."""
+        if not args:
+            self._memory_overview()
+            return
+
+        subcmd = args[0].lower()
+        subargs = args[1:] if len(args) > 1 else []
+
+        if subcmd == "status":
+            self._memory_status_detailed()
+        elif subcmd == "view":
+            self._memory_view(subargs)
+        elif subcmd == "clear":
+            self._memory_clear(subargs)
+        elif subcmd == "export":
+            self._memory_export()
+        elif subcmd == "help":
+            self._memory_help()
+        else:
+            self._write_error(f"Unknown memory command: {subcmd}\n")
+            self._write_output("  Usage: memory [status|view|clear|export|help]\n")
+
+    def _memory_overview(self):
+        """Show memory system overview."""
+        from pathlib import Path
+        import json
+
+        base = Path.home() / ".frankenstein"
+        synth = base / "synthesis_data"
+
+        # Calculate sizes for each area
+        areas = {
+            "Session & History": base / "history",
+            "Adaptation Data": base / "data",
+            "Security Logs": base / "logs",
+            "Quantum States": synth / "states",
+            "Simulation Results": synth / "results",
+            "Circuit Library": synth / "circuits",
+            "Gate Cache": synth / "cache",
+            "Computation Logs": synth / "logs",
+        }
+
+        self._write_output("\n")
+        self._write_output("╔══════════════════════════════════════════════════════════╗\n", color="cyan")
+        self._write_output("║          FRANKENSTEIN MEMORY SYSTEM OVERVIEW            ║\n", color="cyan")
+        self._write_output("╚══════════════════════════════════════════════════════════╝\n", color="cyan")
+        self._write_output("\n")
+        self._write_output(f"  Base Path: {base}\n")
+        self._write_output(f"  Storage Budget: 20 GB (synthesis) + 10 GB (system)\n")
+        self._write_output("\n")
+
+        total_bytes = 0
+        for area_name, area_path in areas.items():
+            size = 0
+            file_count = 0
+            if area_path.exists():
+                for f in area_path.rglob("*"):
+                    if f.is_file():
+                        size += f.stat().st_size
+                        file_count += 1
+            total_bytes += size
+
+            size_str = self._format_size(size)
+            self._write_output(f"  {area_name:<25} {size_str:>10}  ({file_count} files)\n")
+
+        self._write_output(f"  {'─' * 50}\n")
+        self._write_output(f"  {'TOTAL':<25} {self._format_size(total_bytes):>10}\n")
+        self._write_output(f"  {'Budget Used':<25} {total_bytes / (30 * 1024**3) * 100:.2f}%\n")
+        self._write_output("\n")
+        self._write_output("  Commands: memory status | memory view | memory clear | memory export\n")
+        self._write_output("\n")
+
+    def _memory_status_detailed(self):
+        """Detailed memory status with system RAM info."""
+        import psutil
+
+        vm = psutil.virtual_memory()
+        self._write_output("\n")
+        self._write_output("  SYSTEM RAM:\n", color="cyan")
+        self._write_output(f"    Total:     {vm.total / (1024**3):.1f} GB\n")
+        self._write_output(f"    Used:      {vm.used / (1024**3):.1f} GB ({vm.percent}%)\n")
+        self._write_output(f"    Available: {vm.available / (1024**3):.1f} GB\n")
+        self._write_output(f"    Safety Limit: 75% ({vm.total * 0.75 / (1024**3):.1f} GB)\n")
+        self._write_output("\n")
+
+        # Show disk usage
+        import shutil
+        disk = shutil.disk_usage("C:\\")
+        self._write_output("  DISK STORAGE:\n", color="cyan")
+        self._write_output(f"    Total:     {disk.total / (1024**3):.1f} GB\n")
+        self._write_output(f"    Used:      {disk.used / (1024**3):.1f} GB\n")
+        self._write_output(f"    Free:      {disk.free / (1024**3):.1f} GB\n")
+        self._write_output("\n")
+
+        # Show Frankenstein-specific storage
+        self._memory_overview()
+
+    def _memory_view(self, args: List[str]):
+        """View contents of specific storage areas."""
+        if not args:
+            self._write_output("\n  Usage: memory view [sessions|logs|states|circuits|config]\n\n")
+            return
+
+        area = args[0].lower()
+        from pathlib import Path
+        import json
+        base = Path.home() / ".frankenstein"
+
+        if area == "sessions":
+            # Show session history
+            session_file = base / "session.json"
+            if session_file.exists():
+                data = json.loads(session_file.read_text())
+                self._write_output("\n  CURRENT SESSION:\n", color="cyan")
+                for k, v in data.items():
+                    self._write_output(f"    {k}: {v}\n")
+
+            history_file = base / "history" / "tasks.json"
+            if history_file.exists():
+                tasks = json.loads(history_file.read_text())
+                self._write_output(f"\n  TASK HISTORY: {len(tasks)} records\n", color="cyan")
+                for t in tasks[-5:]:  # Show last 5
+                    status = "✅" if t.get("success") else "❌"
+                    self._write_output(f"    {status} {t.get('task_type', '?')}: {t.get('input_summary', '')[:50]}\n")
+            self._write_output("\n")
+
+        elif area == "logs":
+            # Show computation logs
+            try:
+                from synthesis.computation_log import ComputationLogger
+                logs = ComputationLogger.list_session_logs()
+                self._write_output(f"\n  COMPUTATION LOGS: {len(logs)} sessions\n", color="cyan")
+                for log in logs[:10]:  # Show last 10
+                    self._write_output(f"    {log['filename']}: {log['events']} events, {log['size_kb']} KB\n")
+            except ImportError:
+                self._write_output("\n  Computation logger not available.\n")
+            self._write_output("\n")
+
+        elif area == "states":
+            # Show saved quantum states
+            states_dir = base / "synthesis_data" / "states"
+            if states_dir.exists():
+                files = list(states_dir.glob("*.npz"))
+                self._write_output(f"\n  SAVED QUANTUM STATES: {len(files)}\n", color="cyan")
+                for f in files:
+                    self._write_output(f"    {f.stem}: {self._format_size(f.stat().st_size)}\n")
+            else:
+                self._write_output("\n  No saved quantum states.\n")
+            self._write_output("\n")
+
+        elif area == "circuits":
+            # Alias for circuit list
+            self._cmd_circuit(["list"])
+
+        elif area == "config":
+            # Show config files
+            config_dir = base / "config"
+            if config_dir.exists():
+                self._write_output(f"\n  CONFIGURATION FILES:\n", color="cyan")
+                for f in config_dir.glob("*"):
+                    if f.is_file():
+                        self._write_output(f"    {f.name}: {self._format_size(f.stat().st_size)}\n")
+            self._write_output("\n")
+
+        else:
+            self._write_error(f"Unknown area: {area}\n")
+            self._write_output("  Options: sessions, logs, states, circuits, config\n")
+
+    def _memory_clear(self, args: List[str]):
+        """Clear storage areas with confirmation."""
+        if not args:
+            self._write_output("\n  Usage: memory clear [cache|logs|states|all]\n")
+            self._write_output("  ⚠️  Destructive operations require confirmation.\n\n")
+            return
+
+        area = args[0].lower()
+        from pathlib import Path
+        base = Path.home() / ".frankenstein"
+
+        if area == "cache":
+            # Clear gate cache and general cache
+            cache_dirs = [
+                base / "cache",
+                base / "synthesis_data" / "cache",
+            ]
+            cleared = 0
+            for d in cache_dirs:
+                if d.exists():
+                    for f in d.glob("*"):
+                        if f.is_file():
+                            f.unlink()
+                            cleared += 1
+            self._write_output(f"\n  ✅ Cache cleared: {cleared} files removed.\n\n")
+
+        elif area == "logs":
+            keep = 10
+            if len(args) > 1 and args[1].isdigit():
+                keep = int(args[1])
+            try:
+                from synthesis.computation_log import ComputationLogger
+                result = ComputationLogger.clear_old_logs(keep_last=keep)
+                self._write_output(f"\n  ✅ Cleared {result['deleted_files']} old log files ({result['freed_kb']} KB freed).\n")
+                self._write_output(f"  Kept {result['remaining_logs']} most recent logs.\n\n")
+            except ImportError:
+                self._write_output("\n  Computation logger not available.\n\n")
+
+        elif area == "states":
+            states_dir = base / "synthesis_data" / "states"
+            files = list(states_dir.glob("*.npz")) if states_dir.exists() else []
+            if not files:
+                self._write_output("\n  No saved states to clear.\n\n")
+                return
+
+            self._write_output(f"\n  ⚠️  This will delete {len(files)} saved quantum states.\n")
+            if len(args) > 1 and args[1] == "--confirm":
+                for f in files:
+                    f.unlink()
+                self._write_output(f"  ✅ Deleted {len(files)} state files.\n\n")
+            else:
+                self._write_output("  Add --confirm to proceed: memory clear states --confirm\n\n")
+
+        elif area == "all":
+            self._write_output("\n  ⚠️  This will clear: cache, old logs, and saved states.\n")
+            self._write_output("  Circuits and session data will NOT be deleted.\n")
+            if len(args) > 1 and args[1] == "--confirm":
+                self._memory_clear(["cache"])
+                self._memory_clear(["logs"])
+                self._memory_clear(["states", "--confirm"])
+            else:
+                self._write_output("  Add --confirm to proceed: memory clear all --confirm\n\n")
+
+        else:
+            self._write_error(f"Unknown area: {area}\n")
+            self._write_output("  Options: cache, logs [N], states, all\n")
+
+    def _memory_export(self):
+        """Export memory usage report to JSON file."""
+        import json
+        from pathlib import Path
+        from datetime import datetime
+
+        report = {
+            "generated": datetime.now().isoformat(),
+            "engine": "Frankenstein 1.0",
+        }
+
+        # Collect all storage stats
+        base = Path.home() / ".frankenstein"
+        for area_name, subdir in [
+            ("session", ""),
+            ("history", "history"),
+            ("adaptation", "data"),
+            ("logs", "logs"),
+            ("quantum_states", "synthesis_data/states"),
+            ("simulation_results", "synthesis_data/results"),
+            ("circuits", "synthesis_data/circuits"),
+            ("gate_cache", "synthesis_data/cache"),
+            ("computation_logs", "synthesis_data/logs"),
+        ]:
+            path = base / subdir if subdir else base
+            size = 0
+            count = 0
+            if path.exists():
+                for f in path.rglob("*"):
+                    if f.is_file():
+                        size += f.stat().st_size
+                        count += 1
+            report[area_name] = {"bytes": size, "files": count}
+
+        # Write report
+        report_path = base / "memory_report.json"
+        report_path.write_text(json.dumps(report, indent=2))
+        self._write_output(f"\n  ✅ Memory report exported to: {report_path}\n\n")
+
+    def _memory_help(self):
+        """Show memory command help."""
+        help_text = """
+╔══════════════════════════════════════════════════════════╗
+║                  MEMORY MANAGEMENT HELP                 ║
+╚══════════════════════════════════════════════════════════╝
+
+  memory                  Overview of all storage areas
+  memory status           Detailed RAM + disk + Frankenstein usage
+  memory view sessions    View session state and task history
+  memory view logs        View computation log files
+  memory view states      View saved quantum states
+  memory view circuits    View saved circuits (same as 'circuit list')
+  memory view config      View configuration files
+  memory clear cache      Clear gate cache and temp files
+  memory clear logs [N]   Delete old logs, keep last N (default: 10)
+  memory clear states --confirm   Delete all saved quantum states
+  memory clear all --confirm      Clear cache + logs + states
+  memory export           Export full memory report to JSON
+
+  Storage Location: ~/.frankenstein/
+  Budget: 20 GB (quantum data) + 10 GB (system data) = 30 GB max
+"""
+        self._write_output(help_text)
+
+    @staticmethod
+    def _format_size(bytes_val: int) -> str:
+        """Format bytes as human-readable size."""
+        if bytes_val < 1024:
+            return f"{bytes_val} B"
+        elif bytes_val < 1024 * 1024:
+            return f"{bytes_val / 1024:.1f} KB"
+        elif bytes_val < 1024 * 1024 * 1024:
+            return f"{bytes_val / (1024 * 1024):.1f} MB"
+        else:
+            return f"{bytes_val / (1024 ** 3):.2f} GB"
+
+    # ==================== CIRCUIT LIBRARY ====================
+
+    def _cmd_circuit(self, args: List[str]):
+        """Circuit library commands — save, load, list, export, delete."""
+        if not args:
+            self._circuit_help()
+            return
+
+        subcmd = args[0].lower()
+        subargs = args[1:] if len(args) > 1 else []
+
+        if subcmd == "list":
+            self._circuit_list()
+        elif subcmd == "save":
+            self._circuit_save(subargs)
+        elif subcmd == "load":
+            self._circuit_load(subargs)
+        elif subcmd == "delete":
+            self._circuit_delete(subargs)
+        elif subcmd == "export":
+            self._circuit_export(subargs)
+        elif subcmd == "info":
+            self._circuit_info(subargs)
+        elif subcmd == "help":
+            self._circuit_help()
+        else:
+            self._write_error(f"Unknown circuit command: {subcmd}\n")
+            self._write_output("  Usage: circuit [list|save|load|delete|export|info|help]\n")
+
+    def _circuit_list(self):
+        """List all saved circuits."""
+        try:
+            from synthesis.circuit_library import get_circuit_library
+            lib = get_circuit_library()
+            circuits = lib.list_circuits()
+
+            if not circuits:
+                self._write_output("\n  No circuits saved yet.\n")
+                self._write_output("  Save one with: circuit save <name>\n\n")
+                return
+
+            self._write_output(f"\n  CIRCUIT LIBRARY ({len(circuits)} circuits):\n\n", color="cyan")
+            self._write_output(f"  {'Name':<20} {'Qubits':<8} {'Gates':<8} {'Ver':<5} {'Description'}\n")
+            self._write_output(f"  {'─' * 70}\n")
+            for c in circuits:
+                if "error" in c:
+                    self._write_output(f"  {c['name']:<20} ⚠️ {c['error']}\n", color="yellow")
+                else:
+                    self._write_output(f"  {c['name']:<20} {c['n_qubits']:<8} {c['gates']:<8} v{c['version']:<4} {c['description']}\n")
+            self._write_output("\n")
+        except ImportError:
+            self._write_error("  Circuit library not available.\n")
+
+    def _circuit_save(self, args: List[str]):
+        """Save current quantum state's gate log as a named circuit."""
+        if not args:
+            self._write_output("\n  Usage: circuit save <name> [description]\n\n")
+            return
+
+        name = args[0]
+        description = " ".join(args[1:]) if len(args) > 1 else ""
+
+        try:
+            from synthesis.circuit_library import get_circuit_library, CircuitDefinition
+            from synthesis.core.true_engine import get_true_engine
+
+            engine = get_true_engine()
+            if engine._state is None:
+                self._write_error("  No quantum state initialized. Enter quantum mode first.\n")
+                return
+
+            # Build circuit definition from gate log
+            circuit = CircuitDefinition(name, engine._state.n_qubits, description)
+
+            for gate_entry in engine._gate_log:
+                gate_name = gate_entry.get("gate", "unknown")
+                targets = gate_entry.get("targets", [])
+                controls = gate_entry.get("controls", [])
+                params = gate_entry.get("params", {})
+                circuit.add_gate(gate_name, targets, controls if controls else None, params if params else None)
+
+            lib = get_circuit_library()
+            filepath = lib.save(circuit)
+
+            self._write_output(f"\n  ✅ Circuit '{name}' saved ({len(circuit.gates)} gates, {circuit.n_qubits} qubits)\n")
+            self._write_output(f"  Path: {filepath}\n\n")
+
+            # Log to computation logger
+            try:
+                from synthesis.computation_log import get_computation_logger
+                log = get_computation_logger()
+                log.log_circuit_saved(name, len(circuit.gates), circuit.n_qubits)
+            except ImportError:
+                pass
+
+        except ImportError as e:
+            self._write_error(f"  Circuit library not available: {e}\n")
+
+    def _circuit_load(self, args: List[str]):
+        """Load a circuit from library and replay its gates."""
+        if not args:
+            self._write_output("\n  Usage: circuit load <name>\n\n")
+            return
+
+        name = args[0]
+
+        try:
+            from synthesis.circuit_library import get_circuit_library
+            from synthesis.core.true_engine import get_true_engine
+
+            lib = get_circuit_library()
+            circuit = lib.load(name)
+
+            if circuit is None:
+                self._write_error(f"  Circuit '{name}' not found.\n")
+                self._write_output("  Use 'circuit list' to see available circuits.\n")
+                return
+
+            # Initialize qubits
+            engine = get_true_engine()
+            engine.initialize_qubits(circuit.n_qubits, "zero")
+
+            # Replay gates using correct TrueSynthesisEngine method names
+            gate_count = 0
+            for g in circuit.gates:
+                gate_name = g["gate"].lower()
+                targets = g["targets"]
+                controls = g.get("controls", [])
+                params = g.get("params", {})
+
+                try:
+                    if gate_name == "h":
+                        engine.hadamard(targets[0])
+                    elif gate_name == "x":
+                        engine.pauli_x(targets[0])
+                    elif gate_name == "y":
+                        engine.pauli_y(targets[0])
+                    elif gate_name == "z":
+                        engine.pauli_z(targets[0])
+                    elif gate_name == "p":
+                        engine.phase(targets[0], params.get("phi", 0.0))
+                    elif gate_name == "rx":
+                        engine.rotation_x(targets[0], params.get("theta", 0.0))
+                    elif gate_name == "ry":
+                        engine.rotation_y(targets[0], params.get("theta", 0.0))
+                    elif gate_name == "rz":
+                        engine.rotation_z(targets[0], params.get("theta", 0.0))
+                    elif gate_name in ("cx", "cnot") and controls:
+                        engine.cnot(controls[0], targets[0])
+                    elif gate_name == "cz" and controls:
+                        engine.cz(controls[0], targets[0])
+                    elif gate_name == "swap" and len(targets) >= 2:
+                        engine.swap(targets[0], targets[1])
+                    elif gate_name in ("mcx", "ccx", "toffoli") and controls:
+                        engine.mcx(controls, targets[0])
+                    else:
+                        self._write_output(f"  ⚠️ Skipped unknown gate: {gate_name}\n", color="yellow")
+                        continue
+                    gate_count += 1
+                except Exception as e:
+                    self._write_output(f"  ⚠️ Gate {gate_name} failed: {e}\n", color="yellow")
+
+            self._write_output(f"\n  ✅ Circuit '{name}' loaded: {gate_count}/{len(circuit.gates)} gates applied to {circuit.n_qubits} qubits\n")
+            if circuit.description:
+                self._write_output(f"  Description: {circuit.description}\n")
+            self._write_output(f"  Use 'measure' in quantum mode to see results, or continue adding gates.\n\n")
+
+        except ImportError as e:
+            self._write_error(f"  Circuit library not available: {e}\n")
+
+    def _circuit_delete(self, args: List[str]):
+        """Delete a circuit from library."""
+        if not args:
+            self._write_output("\n  Usage: circuit delete <name>\n\n")
+            return
+
+        name = args[0]
+        confirm = len(args) > 1 and args[1] == "--confirm"
+
+        try:
+            from synthesis.circuit_library import get_circuit_library
+            lib = get_circuit_library()
+
+            circuit = lib.load(name)
+            if circuit is None:
+                self._write_error(f"  Circuit '{name}' not found.\n")
+                return
+
+            if not confirm:
+                self._write_output(f"\n  ⚠️  Delete circuit '{name}' ({len(circuit.gates)} gates, {circuit.n_qubits} qubits)?\n")
+                self._write_output(f"  Run: circuit delete {name} --confirm\n\n")
+                return
+
+            lib.delete(name)
+            self._write_output(f"\n  ✅ Circuit '{name}' deleted.\n\n")
+
+        except ImportError:
+            self._write_error("  Circuit library not available.\n")
+
+    def _circuit_export(self, args: List[str]):
+        """Export circuit to OpenQASM 2.0."""
+        if not args:
+            self._write_output("\n  Usage: circuit export <name>\n\n")
+            return
+
+        name = args[0]
+
+        try:
+            from synthesis.circuit_library import get_circuit_library
+            lib = get_circuit_library()
+
+            filepath = lib.export_qasm(name)
+            if filepath is None:
+                self._write_error(f"  Circuit '{name}' not found.\n")
+                return
+
+            self._write_output(f"\n  ✅ Exported to OpenQASM 2.0: {filepath}\n")
+            self._write_output(f"  Import in Qiskit: qiskit.qasm2.load('{filepath}')\n")
+            self._write_output(f"  View contents: cat {filepath}\n\n")
+
+            # Show the QASM content
+            qasm_content = filepath.read_text()
+            self._write_output("  ─── QASM CONTENT ───\n", color="cyan")
+            for line in qasm_content.split("\n")[:20]:  # Show first 20 lines
+                self._write_output(f"  {line}\n")
+            if qasm_content.count("\n") > 20:
+                self._write_output(f"  ... ({qasm_content.count(chr(10)) - 20} more lines)\n")
+            self._write_output("  ─────────────────────\n\n")
+
+        except ImportError:
+            self._write_error("  Circuit library not available.\n")
+
+    def _circuit_info(self, args: List[str]):
+        """Show detailed circuit information."""
+        if not args:
+            self._write_output("\n  Usage: circuit info <name>\n\n")
+            return
+
+        name = args[0]
+
+        try:
+            from synthesis.circuit_library import get_circuit_library
+            lib = get_circuit_library()
+            circuit = lib.load(name)
+
+            if circuit is None:
+                self._write_error(f"  Circuit '{name}' not found.\n")
+                return
+
+            self._write_output(f"\n  CIRCUIT: {circuit.name} (v{circuit.version})\n", color="cyan")
+            self._write_output(f"  ─────────────────────────────\n")
+            self._write_output(f"  Description: {circuit.description or '(none)'}\n")
+            self._write_output(f"  Qubits:      {circuit.n_qubits}\n")
+            self._write_output(f"  Gates:       {len(circuit.gates)}\n")
+            self._write_output(f"  Depth:       ~{circuit.depth_estimate()}\n")
+            self._write_output(f"  Created:     {circuit.created}\n")
+            self._write_output(f"  Modified:    {circuit.modified}\n")
+            self._write_output(f"  Tags:        {', '.join(circuit.tags) if circuit.tags else '(none)'}\n")
+
+            # Gate breakdown
+            counts = circuit.gate_count()
+            if counts:
+                self._write_output(f"\n  Gate Breakdown:\n")
+                for gate, count in sorted(counts.items()):
+                    self._write_output(f"    {gate.upper()}: {count}\n")
+
+            # Show gate sequence
+            self._write_output(f"\n  Gate Sequence:\n")
+            for i, g in enumerate(circuit.gates[:20]):
+                controls = g.get("controls", [])
+                targets = g["targets"]
+                params = g.get("params", {})
+
+                ctrl_str = f" ctrl={controls}" if controls else ""
+                param_str = f" ({', '.join(f'{k}={v}' for k, v in params.items())})" if params else ""
+                self._write_output(f"    {i+1:3}. {g['gate'].upper()} target={targets}{ctrl_str}{param_str}\n")
+
+            if len(circuit.gates) > 20:
+                self._write_output(f"    ... ({len(circuit.gates) - 20} more gates)\n")
+
+            self._write_output("\n")
+
+        except ImportError:
+            self._write_error("  Circuit library not available.\n")
+
+    def _circuit_help(self):
+        """Show circuit command help."""
+        help_text = """
+╔══════════════════════════════════════════════════════════╗
+║                  CIRCUIT LIBRARY HELP                   ║
+╚══════════════════════════════════════════════════════════╝
+
+  circuit list            List all saved circuits
+  circuit save <name>     Save current quantum circuit
+  circuit load <name>     Load circuit and apply gates
+  circuit delete <name>   Delete circuit (add --confirm)
+  circuit export <name>   Export to OpenQASM 2.0 (.qasm)
+  circuit info <name>     Show detailed circuit info
+
+  WORKFLOW:
+    1. Enter quantum mode:    quantum
+    2. Build a circuit:       qubit 3 → h 0 → cx 0 1 → cx 0 2
+    3. Save it:               circuit save my_ghz A 3-qubit GHZ state
+    4. Later, reload it:      circuit load my_ghz
+    5. Export for Qiskit:     circuit export my_ghz
+
+  Storage: ~/.frankenstein/synthesis_data/circuits/
+  QASM exports: ~/.frankenstein/synthesis_data/circuits/qasm/
+"""
+        self._write_output(help_text)
+
     # ==================== QUANTUM MODE ====================
-    
+
     def _cmd_quantum(self, args: List[str]):
         """Enter quantum computing mode - hybrid REPL for quantum simulations"""
         try:
@@ -3757,6 +4462,48 @@ EXAMPLES:
   bloch precession --omega 2.0
 ''',
                 'qubit': 'qubit <n> or qubit |state> - Quick qubit initialization (shortcut)',
+                # Memory Management & Circuit Library (Pre-Phase 4)
+                'memory': '''memory - Memory management commands
+
+SUBCOMMANDS:
+  memory                  Overview of all storage areas
+  memory status           Detailed RAM + disk + Frankenstein usage
+  memory view sessions    View session state and task history
+  memory view logs        View computation log files
+  memory view states      View saved quantum states
+  memory view circuits    View saved circuits (same as 'circuit list')
+  memory view config      View configuration files
+  memory clear cache      Clear gate cache and temp files
+  memory clear logs [N]   Delete old logs, keep last N (default: 10)
+  memory clear states --confirm   Delete all saved quantum states
+  memory clear all --confirm      Clear cache + logs + states
+  memory export           Export full memory report to JSON
+
+Storage Location: ~/.frankenstein/
+Budget: 20 GB (quantum data) + 10 GB (system data) = 30 GB max
+''',
+                'circuit': '''circuit - Circuit library commands
+
+SUBCOMMANDS:
+  circuit list            List all saved circuits
+  circuit save <name>     Save current quantum circuit from gate log
+  circuit load <name>     Load circuit and replay gates on TrueSynthesisEngine
+  circuit delete <name>   Delete circuit (add --confirm to execute)
+  circuit export <name>   Export to OpenQASM 2.0 (.qasm file)
+  circuit info <name>     Show detailed gate sequence and stats
+
+WORKFLOW:
+  1. Enter quantum mode:    quantum
+  2. Build a circuit:       qubit 3 → h 0 → cx 0 1 → cx 0 2
+  3. Return to terminal:    back
+  4. Save the circuit:      circuit save my_ghz A 3-qubit GHZ state
+  5. Later, reload it:      circuit load my_ghz
+  6. Export for Qiskit:     circuit export my_ghz
+
+Storage: ~/.frankenstein/synthesis_data/circuits/
+QASM exports: ~/.frankenstein/synthesis_data/circuits/qasm/
+''',
+                'saves': 'saves - Show all saved quantum artifacts (states, circuits, computation logs)',
             }
             if cmd in help_text:
                 self._write_output(f"\n{help_text[cmd]}\n\n")
@@ -4023,6 +4770,24 @@ SYNTHESIS ENGINE:
   |  bloch rabi                - 3D Rabi oscillation  |
   |  bloch spiral --gamma 1.2  - Relativistic spiral  |
   +----------------------------------------------------+
+
+MEMORY MANAGEMENT:
+  memory                  Memory system overview
+  memory status           Detailed storage + RAM usage
+  memory view [area]      View stored data (sessions/logs/states/circuits/config)
+  memory clear [area]     Clear cache/logs/states (requires --confirm for states)
+  memory export           Export usage report to JSON
+
+CIRCUIT LIBRARY:
+  circuit list            List saved circuits
+  circuit save <name>     Save current quantum circuit
+  circuit load <name>     Load and replay circuit gates
+  circuit delete <name>   Delete circuit (requires --confirm)
+  circuit export <name>   Export to OpenQASM 2.0 (.qasm)
+  circuit info <name>     Detailed circuit information
+
+ARTIFACT OVERVIEW:
+  saves                   Show all saved states, circuits, and computation logs
 
 TIPS:
   - Use Tab for path completion

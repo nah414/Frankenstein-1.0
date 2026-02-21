@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 FRANKENSTEIN 1.0 - Quantum Mode Handler
-Phase 2, Step 3: Quantum Computing Mode for Monster Terminal
+Quantum Computing Mode for Monster Terminal
 
 Provides a dedicated quantum computing REPL mode within the Monster Terminal.
 Implements hybrid mode switching as per Option C architecture.
@@ -217,13 +217,17 @@ class QuantumModeHandler:
             # NEW: Circuit commands
             'circuit': self._cmd_circuit,
             'circuits': self._cmd_list_circuits,
+            # Artifact persistence
+            'save': self._cmd_save_state,
+            'saves': self._cmd_saves,
+            'recall': self._cmd_recall,
             'bell': self._cmd_bell,
             'ghz': self._cmd_ghz,
             'qft': self._cmd_qft,
             # NEW: Visualization toggle
             'viz': self._cmd_viz_toggle,
             'auto': self._cmd_viz_toggle,
-            # Phase 3.5: Local toolset commands
+            # Local toolset commands
             'decohere': self._cmd_decohere,
             'mesolve': self._cmd_mesolve,
             'transpile': self._cmd_transpile,
@@ -305,9 +309,9 @@ class QuantumModeHandler:
         welcome = """
 ╔═══════════════════════════════════════════════════════════════════╗
 ║                                                                   ║
-║   ⚛️  FRANKENSTEIN QUANTUM MODE v1.2.0 (Phase 2 Enhanced)        ║
+║   ⚛️  FRANKENSTEIN QUANTUM MODE v1.2.0                           ║
 ║                                                                   ║
-║   Local quantum simulation: NumPy 2.3.5 + SciPy 1.16.3           ║
+║   Tensor-MSB engine: NumPy 2.3.5 + SciPy 1.16.3 (JAX/Numba-ready)║
 ║   Tier 1 Hardware: Max 16 qubits (15 controls + 1 target)        ║
 ║                                                                   ║
 ╠═══════════════════════════════════════════════════════════════════╣
@@ -351,7 +355,7 @@ class QuantumModeHandler:
 ║     swap <q1> <q2>  SWAP two qubits                              ║
 ║     cswap <c> <q1> <q2>  Controlled-SWAP (Fredkin)               ║
 ║                                                                   ║
-║   ⚡ MULTI-CONTROLLED GATES (ENHANCED - Phase 2):                ║
+║   ⚡ MULTI-CONTROLLED GATES (ENHANCED):                          ║
 ║     mcx <c1,c2,...> <t>  Multi-Controlled X (up to 16 qubits!)   ║
 ║       • mcx 0 1              CNOT (1 control)                    ║
 ║       • mcx 0,1 2            Toffoli/CCNOT (2 controls)          ║
@@ -503,7 +507,7 @@ class QuantumModeHandler:
   auto [on|off]       Same as viz
                       (Default: ON - launches after every calculation)
 
-────────────────────── TOOLSET COMMANDS (Phase 3.5) ──────────────────────
+────────────────────── TOOLSET COMMANDS ──────────────────────────────────
   decohere [type] [gamma]  Model decoherence on current state
                            Types: amplitude_damping, dephasing, depolarizing
   mesolve <H> <t>     Solve Lindblad master equation (requires QuTiP)
@@ -554,12 +558,10 @@ class QuantumModeHandler:
      mcx 0,1 2
      measure
 
-  🔹 Advanced: 4-qubit entanglement (C3X):
-     qubit 4
+  🔹 Advanced: 16-qubit entanglement (C15X — Tier 1 max):
+     qubit 16
      h 0
-     h 1
-     h 2
-     mcx 0,1,2 3
+     mcx 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 15
      measure
 
 """
@@ -1401,6 +1403,11 @@ Examples:
             except Exception as e:
                 self._output(f"⚠️ Visualization error: {e}\n")
 
+        # Passive save hint — appears after every measurement
+        gate_count = len(self._engine._gate_log) if hasattr(self._engine, '_gate_log') else 0
+        if gate_count > 0:
+            self._output(f"💾 save <name>  ·  saves (view all)  ·  recall <name>\n")
+
     def _cmd_measure_x(self, args: List[str]):
         """Measure in X basis"""
         shots = 1024
@@ -1727,8 +1734,132 @@ Example: evolve pauli_x 3.14159
         self.exit_mode()
         return False
     
+    # ==================== ARTIFACT PERSISTENCE ====================
+
+    def _cmd_save_state(self, args: List[str]):
+        """Save current quantum state to persistent storage."""
+        if not args:
+            self._output("Usage: save <name>\n")
+            self._output("  Example: save bell_pair\n")
+            return
+
+        name = args[0]
+        try:
+            from synthesis.core.true_engine import get_true_engine
+            true_eng = get_true_engine()
+
+            # Copy current state from SynthesisEngine → TrueSynthesisEngine
+            sv = self._engine.get_state()
+            n = self._engine.get_num_qubits()
+            true_eng.initialize_qubits(n, "zero")
+            true_eng._state.amplitudes[:] = sv
+
+            filepath = true_eng.save_state(name)
+            self._output(f"\n✅ State '{name}' saved  ({n} qubits)\n")
+            self._output(f"   Path: {filepath}\n")
+            self._output(f"   Recall with: recall {name}\n\n")
+        except Exception as e:
+            self._output(f"❌ Save failed: {e}\n")
+
+    def _cmd_saves(self, args: List[str]):
+        """Show all saved artifacts — quantum states and circuits."""
+        self._output("\n📦 Saved Artifacts\n")
+        self._output("═" * 50 + "\n\n")
+
+        # --- Quantum States ---
+        self._output("🔬 Quantum States  (recall <name> to restore):\n")
+        self._output("─" * 40 + "\n")
+        try:
+            from synthesis.core.true_engine import get_true_engine
+            states = get_true_engine().list_states()
+            if states:
+                for s in states:
+                    if "error" in s:
+                        self._output(f"  {s['name']:22s}  ⚠️  corrupt\n")
+                    else:
+                        self._output(
+                            f"  {s['name']:22s}  {s['n_qubits']:2d} qubits"
+                            f"  {s['size_kb']:6.1f} KB"
+                            f"  {s['modified'][:10]}\n"
+                        )
+            else:
+                self._output("  (none saved yet)\n")
+        except Exception as e:
+            self._output(f"  (unavailable: {e})\n")
+
+        self._output("\n")
+
+        # --- Circuit Library ---
+        self._output("⚡ Circuit Library  (circuit load <name> to apply):\n")
+        self._output("─" * 40 + "\n")
+        try:
+            from synthesis.circuit_library import get_circuit_library
+            circuits = get_circuit_library().list_circuits()
+            if circuits:
+                for c in circuits:
+                    if "error" in c:
+                        self._output(f"  {c['name']:22s}  ⚠️  corrupt\n")
+                    else:
+                        self._output(
+                            f"  {c['name']:22s}  {c['n_qubits']:2d} qubits"
+                            f"  {c['gates']:3d} gates  v{c['version']}\n"
+                        )
+            else:
+                self._output("  (none saved yet)\n")
+        except Exception as e:
+            self._output(f"  (unavailable: {e})\n")
+
+        self._output("\n")
+
+        # --- Computation Logs ---
+        self._output("📋 Computation Logs:\n")
+        self._output("─" * 40 + "\n")
+        try:
+            from synthesis.computation_log import ComputationLogger
+            logs = ComputationLogger.list_session_logs()
+            if logs:
+                for log in logs[:5]:  # Show last 5 sessions
+                    self._output(
+                        f"  {log['filename']:35s}  {log['events']:4d} events"
+                        f"  {log['size_kb']:6.1f} KB\n"
+                    )
+                if len(logs) > 5:
+                    self._output(f"  ... and {len(logs) - 5} older sessions\n")
+            else:
+                self._output("  (no sessions logged yet)\n")
+        except Exception as e:
+            self._output(f"  (unavailable: {e})\n")
+
+        self._output("\n")
+
+    def _cmd_recall(self, args: List[str]):
+        """Load a saved quantum state back into the quantum engine."""
+        if not args:
+            self._output("Usage: recall <name>\n")
+            self._output("  Type 'saves' to see saved states\n")
+            return
+
+        name = args[0]
+        try:
+            from synthesis.core.true_engine import get_true_engine
+            true_eng = get_true_engine()
+            state = true_eng.load_state(name)
+
+            # Inject loaded amplitudes into the active SynthesisEngine
+            n = state.n_qubits
+            self._engine.reset(n)
+            self._engine.set_state(state.amplitudes.copy())
+
+            self._output(f"\n✅ Recalled '{name}'  ({n} qubits)\n")
+            self._engine.print_state()
+            self._output("\n")
+        except FileNotFoundError:
+            self._output(f"❌ State '{name}' not found. Type 'saves' to see saved states.\n")
+        except Exception as e:
+            self._output(f"❌ Recall failed: {e}\n")
+
     # ==================== CIRCUIT COMMANDS ====================
-    
+
     def _cmd_list_circuits(self, args: List[str]):
         """List available predefined circuits"""
         try:
@@ -1782,11 +1913,13 @@ Example: evolve pauli_x 3.14159
             
             self._output(f"✅ Applied {circuit_info['name']} circuit\n")
             self._engine.print_state()
-            
+
             # Auto-visualize
             if self._auto_visualize:
                 self._launch_bloch_after_measurement()
-                
+
+            self._output("💾 save <name>  ·  saves (view all)  ·  recall <name>\n")
+
         except ImportError as e:
             self._output(f"❌ Circuit library error: {e}\n")
     
@@ -1797,10 +1930,12 @@ Example: evolve pauli_x 3.14159
         self._engine.cx(0, 1)
         self._output("✅ Created Bell state |Φ+⟩ = (|00⟩ + |11⟩)/√2\n")
         self._engine.print_state()
-        
+
         if self._auto_visualize:
             self._launch_bloch_after_measurement()
-    
+
+        self._output("💾 save <name>  ·  saves (view all)  ·  recall <name>\n")
+
     def _cmd_ghz(self, args: List[str]):
         """Create GHZ state shortcut"""
         n = int(args[0]) if args else 3
@@ -1815,10 +1950,12 @@ Example: evolve pauli_x 3.14159
         
         self._output(f"✅ Created {n}-qubit GHZ state\n")
         self._engine.print_state()
-        
+
         if self._auto_visualize:
             self._launch_bloch_after_measurement()
-    
+
+        self._output("💾 save <name>  ·  saves (view all)  ·  recall <name>\n")
+
     def _cmd_qft(self, args: List[str]):
         """Apply Quantum Fourier Transform"""
         try:
@@ -1831,7 +1968,8 @@ Example: evolve pauli_x 3.14159
             QuantumCircuitLibrary.qft(self._engine, n)
             self._output(f"✅ Applied {n}-qubit QFT\n")
             self._engine.print_state()
-            
+            self._output("💾 save <name>  ·  saves (view all)  ·  recall <name>\n")
+
         except ImportError:
             self._output("❌ QFT circuit not available\n")
     
