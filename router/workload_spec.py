@@ -38,7 +38,7 @@ class WorkloadPriority(Enum):
 # Tier 1 hardware limits (Dell i3 8th Gen, 4 cores, 8GB RAM)
 _TIER1_MAX_QUBITS_LOCAL = 20       # RAM limit for local simulation
 _TIER1_MAX_CPU_THREADS = 3         # Leave 1 core for OS
-_TIER1_MAX_MEMORY_MB = 5632        # ~5.5GB (70% of 8GB)
+_TIER1_MAX_MEMORY_MB = 6144        # ~6GB (75% of 8GB)
 _TIER1_MAX_CIRCUIT_DEPTH = 1000    # Reasonable for local sim
 
 

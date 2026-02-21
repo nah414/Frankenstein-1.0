@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 import psutil
+from core.safety import SAFETY
 
 
 class ScheduleType(Enum):
@@ -64,9 +65,7 @@ class TaskScheduler:
     _lock = threading.Lock()
     _initialized = False
 
-    # Resource safety limits
-    MAX_CPU_PERCENT = 80
-    MAX_RAM_PERCENT = 75
+    # Resource safety limits — sourced from core/safety.py (single source of truth)
     MAX_CONCURRENT_TASKS = 5
 
     def __new__(cls):
@@ -100,12 +99,12 @@ class TaskScheduler:
             True if resources are safe, False otherwise
         """
         try:
-            cpu_percent = psutil.cpu_percent(interval=0.1)
+            cpu_percent = psutil.cpu_percent(interval=0)  # interval=0 returns cached value, non-blocking
             ram_percent = psutil.virtual_memory().percent
 
             return (
-                cpu_percent < self.MAX_CPU_PERCENT and
-                ram_percent < self.MAX_RAM_PERCENT
+                cpu_percent < SAFETY.MAX_CPU_PERCENT and
+                ram_percent < SAFETY.MAX_MEMORY_PERCENT
             )
         except Exception:
             # If we can't check resources, assume they're safe

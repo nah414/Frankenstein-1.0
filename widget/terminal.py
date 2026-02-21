@@ -886,7 +886,7 @@ class FrankensteinTerminal:
                 cpu = psutil.cpu_percent(interval=None)
                 mem = psutil.virtual_memory().percent
                 max_cpu = 80
-                max_mem = 70
+                max_mem = 75
 
                 # If hardware monitor was started by user, use its richer data
                 if self._hardware_monitor and self._hardware_monitor._running:
@@ -895,7 +895,7 @@ class FrankensteinTerminal:
                         hw_stats = self._hardware_monitor.get_stats()
                         health = self._hardware_monitor.get_health_status()
                         max_cpu = hw_stats.get('tier_max_cpu', 80)
-                        max_mem = hw_stats.get('tier_max_memory', 70)
+                        max_mem = hw_stats.get('tier_max_memory', 75)
                         self._health_label.configure(
                             text=f"{health.icon} {health.label}",
                             text_color=health.color
@@ -2867,7 +2867,7 @@ Type 'git' with no args to see the enhanced features menu.
                 # Provider Registry (Phase 3 Step 4 - ALL 30 PROVIDERS)
                 'providers': '''providers - Manage quantum and classical compute providers
 
-PHASE 3 STEP 4 COMPLETE: 30 provider adapters available!
+30 provider adapters available!
 
 SUBCOMMANDS:
   providers              Show all providers with SDK status
@@ -2947,7 +2947,7 @@ EXAMPLES:
 ''',
                 'connect': '''connect <provider_id> [OPTIONS] - Connect to a compute provider
 
-Phase 3 Step 4: 30 provider adapters available!
+30 provider adapters available.
 
 Establishes connection to quantum or classical provider.
 SDK must be installed first (use 'providers install <id>').
@@ -3254,7 +3254,7 @@ NOTES:
                 # Intelligent Router (Phase 3 Step 5)
                 'route': '''route - Route workloads to optimal compute providers
 
-INTELLIGENT ROUTER (Phase 3 Step 5)
+INTELLIGENT ROUTER
 
 Routes quantum and classical workloads to the best available
 provider based on hardware, resources, and user priority.
@@ -3277,7 +3277,7 @@ OPTIONS:
   --priority MODE   cost | speed | accuracy (default cost)
 
 SAFETY:
-  Hard limits enforced: CPU max 80%, RAM max 70%
+  Hard limits enforced: CPU max 80%, RAM max 75%
   Routes that would exceed limits are automatically blocked.
 
 EXAMPLES:
@@ -3296,7 +3296,7 @@ RELATED COMMANDS:
                 # Real-Time Adaptation (Phase 3 Step 7)
                 'adapt-status': '''adapt-status - Display current adaptation status
 
-REAL-TIME ADAPTATION (Phase 3 Step 7)
+REAL-TIME ADAPTATION
 
 Shows monitoring status, resource usage, safety limits, and total adaptations.
 
@@ -3312,7 +3312,7 @@ EXAMPLE OUTPUT:
 
   Safety Limits:
     CPU:  24.3% / 80% (Safe: True)
-    RAM:  45.1% / 70% (Safe: True)
+    RAM:  45.1% / 75% (Safe: True)
   ============================================================
 ''',
                 'adapt-patterns': '''adapt-patterns [task_type] - View learned adaptation patterns
@@ -3386,7 +3386,7 @@ ASCII box-drawing visualization for terminal display.
                 # Permissions & Automation (Phase 3 Step 6)
                 'permissions': '''permissions - Permission management system
 
-PERMISSION MANAGEMENT (Phase 3 Step 6)
+PERMISSION MANAGEMENT
 
 Manage user roles, access control, and audit logging for
 all quantum and classical compute providers.
@@ -3425,7 +3425,7 @@ RELATED COMMANDS:
 ''',
                 'setup': '''setup - Setup wizard for permissions and automation
 
-SETUP WIZARD (Phase 3 Step 6)
+SETUP WIZARD
 
 Interactive wizard to configure user role, automation preferences,
 and workflow settings for Frankenstein 1.0.
@@ -3456,7 +3456,7 @@ EXAMPLES:
 ''',
                 'automation': '''automation - Automation workflow management
 
-AUTOMATED WORKFLOWS (Phase 3 Step 6)
+AUTOMATED WORKFLOWS
 
 Manage background automation workflows that optimize queue
 management, monitor provider health, and tune hardware.
@@ -3499,7 +3499,7 @@ RELATED COMMANDS:
 ''',
                 'scheduler': '''scheduler - Task scheduler management
 
-TASK SCHEDULER (Phase 3 Step 6)
+TASK SCHEDULER
 
 Manage scheduled background tasks for automation workflows.
 Tasks run at configured intervals (every 5 min, hourly, daily).
@@ -3540,7 +3540,7 @@ RELATED COMMANDS:
 ''',
                 'routing': '''routing - Intelligent Router Help Topic
 
-PHASE 3 STEP 5: INTELLIGENT WORKLOAD ROUTER
+INTELLIGENT WORKLOAD ROUTER
 
 The router automatically selects the best quantum or classical
 compute provider for your workload.
@@ -3548,7 +3548,7 @@ compute provider for your workload.
 HOW IT WORKS:
   1. Analyzes your workload (qubits, memory, priority)
   2. Detects available hardware (CPU, GPU, tier)
-  3. Checks resource safety (CPU < 80%, RAM < 70%)
+  3. Checks resource safety (CPU < 80%, RAM < 75%)
   4. Scores providers (cost, speed, accuracy)
   5. Returns optimal provider + fallback chain
 
@@ -3849,7 +3849,7 @@ HARDWARE:
   hardware tiers  Hardware tier reference
   hardware recommend  Switch recommendation
 
-PROVIDERS (Phase 3 Step 4: 30 Quantum + Classical Adapters):
+PROVIDERS (30 Quantum + Classical Adapters):
   providers       List all 30 compute providers with SDK status
   providers quantum   List 19 quantum providers
   providers classical List 10 classical providers
@@ -3888,7 +3888,7 @@ DIAGNOSTICS:
   diagnose kill <name>  Terminate a process
   diagnose quick      Quick CPU/RAM stats
 
-INTELLIGENT ROUTER (Phase 3 Step 5):
+INTELLIGENT ROUTER:
   route --qubits N --priority MODE    Route workload to optimal provider
   route-options --type TYPE --qubits N  Show all compatible providers
   route-test --provider NAME --qubits N Test routing to specific provider
@@ -3906,11 +3906,11 @@ INTELLIGENT ROUTER (Phase 3 Step 5):
   |  route --type classical_optimization              |
   |    Routes classical workload to best local compute|
   |                                                    |
-  |  Safety: CPU max 80%, RAM max 70% enforced        |
+  |  Safety: CPU max 80%, RAM max 75% enforced        |
   |  Details: help route  |  Topics: help routing     |
   +----------------------------------------------------+
 
-PERMISSIONS AND AUTOMATION (Phase 3 Step 6):
+PERMISSIONS AND AUTOMATION:
   help permissions     Manage user roles and access control
   help setup           Setup wizard for permissions and automation
   help automation      Manage automated workflows (6 workflows)
@@ -3940,7 +3940,7 @@ PERMISSIONS AND AUTOMATION (Phase 3 Step 6):
   |  Details: help permissions  |  help automation    |
   +----------------------------------------------------+
 
-REAL-TIME ADAPTATION (Phase 3 Step 7):
+REAL-TIME ADAPTATION:
   help adapt-status        View current adaptation status
   help adapt-patterns      View learned patterns
   help adapt-performance   View performance metrics
@@ -3974,7 +3974,7 @@ REAL-TIME ADAPTATION (Phase 3 Step 7):
   |  • Provider health monitoring (4 states)          |
   |  • Automatic failover & degradation detection     |
   |  • SQLite + JSON persistence                      |
-  |  • Safety: CPU max 80%, RAM max 70%               |
+  |  • Safety: CPU max 80%, RAM max 75%               |
   |                                                    |
   |  Details: help adapt-status  |  help adapt-patterns|
   +----------------------------------------------------+

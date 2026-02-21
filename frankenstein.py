@@ -11,6 +11,7 @@ Usage:
 
 import sys
 import argparse
+import threading
 from core import get_governor, SAFETY, get_constraints_dict
 
 
@@ -68,9 +69,26 @@ def run_cli_mode():
     print()
     
     try:
-        while True:
-            pass
+        import signal
+
+        # Use event-based wait instead of busy loop
+        # This saves an entire CPU core vs `while True: pass`
+        shutdown_event = threading.Event()
+
+        def signal_handler(sig, frame):
+            shutdown_event.set()
+
+        signal.signal(signal.SIGINT, signal_handler)
+
+        print("  Type Ctrl+C to exit\n")
+
+        # Block on event — uses zero CPU while waiting
+        while not shutdown_event.is_set():
+            shutdown_event.wait(timeout=1.0)
+
     except KeyboardInterrupt:
+        pass
+    finally:
         print("\n\n⚡ FRANKENSTEIN shutting down...")
         governor.stop()
         print("Goodbye!")

@@ -7,7 +7,7 @@ zero startup overhead.
 
 CRITICAL SAFETY CONSTRAINTS:
 - CPU_MAX: 80% (hard-coded, never exceed)
-- RAM_MAX: 70% (hard-coded, never exceed)
+- RAM_MAX: 75% (hard-coded, never exceed)
 - Adaptation CPU budget: 5% max
 - Adaptation RAM budget: 50MB max
 - Minimum adaptation interval: 5 seconds
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Default safety limits (HARD-CODED - DO NOT MODIFY)
 DEFAULT_SAFETY_LIMITS = {
     'CPU_MAX': 0.80,                          # 80% CPU ceiling
-    'RAM_MAX': 0.70,                          # 70% RAM ceiling
+    'RAM_MAX': 0.75,                          # 75% RAM ceiling
     'ADAPTATION_CPU_BUDGET': 0.05,            # Max 5% CPU for adaptation
     'ADAPTATION_RAM_BUDGET': 50 * 1024 * 1024, # Max 50MB RAM
     'ADAPTATION_INTERVAL': 5.0,               # Minimum seconds between adaptations
