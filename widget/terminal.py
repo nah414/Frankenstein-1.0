@@ -203,8 +203,11 @@ class FrankensteinTerminal:
             'adapt-recommend': self._cmd_adapt_recommend,
             'adapt-history': self._cmd_adapt_history,
             'adapt-dashboard': self._cmd_adapt_dashboard,
+            # Phase 4 / Day 7 — Eye of Sauron (displays as [FRANK])
+            'sauron': self._cmd_frank_ai,
+            'eye':    self._cmd_frank_ai,  # shortcut alias
         }
-        
+
         # Security monitor integration
         self._security_monitor = None
         self._security_dashboard = None
@@ -218,6 +221,21 @@ class FrankensteinTerminal:
 
         # Real-time adaptation integration (Phase 3 Step 7)
         self._adaptation_commands = None  # Lazy-loaded
+
+        # Eye of Sauron integration (Phase 4 / Day 7 — displays as [FRANK])
+        self._in_frank_mode      = False   # True when interactive chat is active
+        self._frank_thread       = None    # Background daemon thread during inference
+        self._frank_thinking     = False   # True while waiting for streamed tokens
+        self._frank_last_active  = None    # float timestamp — for idle auto-unload
+        self._frank_stop_event   = None    # threading.Event — signals interrupt/stop
+        self._frank_spinner_idx  = 0       # Cycles through spinner frames
+        self._frank_monitor_label = None   # CTkLabel in monitor panel for FRANK status
+        self._frank_idle_after_id = None   # tkinter after() ID for idle watchdog
+        # Permission guard state (FRANK terminal execution — build guide)
+        self._frank_pending_cmd  = None   # str: command awaiting user approval
+        self._frank_pending_tier = 0      # int: 1=DESTROY needs CONFIRM, 2=MODIFY needs y/n
+        self._frank_exec_log     = []     # list[dict]: session audit trail
+        self._frank_exec_buffer  = ""     # str: token accumulator for ::EXEC:: detection
     
     def start(self) -> bool:
         """Start the terminal in a separate thread"""
@@ -390,14 +408,14 @@ class FrankensteinTerminal:
         # ==================== LIVE MONITOR PANEL - LAB INSTRUMENTS ====================
         self._monitor_frame = ctk.CTkFrame(
             self._root,
-            width=300,
-            height=180,
+            width=240,
+            height=208,
             fg_color=self._colors['bg_light'],
             border_width=2,
             border_color=self._colors['electric_purple'],
             corner_radius=10
         )
-        self._monitor_frame.place(relx=1.0, rely=0.0, x=-16, y=65, anchor="ne")
+        self._monitor_frame.place(relx=1.0, rely=0.0, x=-6, y=65, anchor="ne")
         self._monitor_frame.grid_propagate(False)
         self._monitor_frame.pack_propagate(False)
         
@@ -491,11 +509,36 @@ class FrankensteinTerminal:
             font=("Consolas", 8),
             text_color=self._colors['warning_amber'],
             anchor="w",
-            wraplength=220,
+            wraplength=195,
             justify="left"
         )
         self._diagnosis_label.place(x=8, y=132)
-        
+
+        # ===== FRANK AI SECTION =====
+        ctk.CTkLabel(
+            self._monitor_frame,
+            text="-" * 30,
+            font=("Consolas", 6),
+            text_color=self._colors['border_glow']
+        ).place(x=4, y=140)
+
+        ctk.CTkLabel(
+            self._monitor_frame,
+            text="[FRANK] AI",
+            font=("Consolas", 9, "bold"),
+            text_color=self._colors['electric_blue'],
+            anchor="w"
+        ).place(x=8, y=148)
+
+        self._frank_monitor_label = ctk.CTkLabel(
+            self._monitor_frame,
+            text="● OFFLINE",
+            font=("Consolas", 9),
+            text_color=self._colors['text_secondary'],
+            anchor="w"
+        )
+        self._frank_monitor_label.place(x=8, y=170)
+
         # Start live monitor update loop
         self._start_monitor_updates()
         
@@ -832,7 +875,9 @@ class FrankensteinTerminal:
         self._root.destroy()
     
     def _get_prompt(self) -> str:
-        """Generate Git Bash-style prompt"""
+        """Generate Git Bash-style prompt, or FRANK prompt when in chat mode."""
+        if self._in_frank_mode:
+            return "[FRANK]>"
         try:
             user = os.environ.get('USERNAME', os.environ.get('USER', 'frank'))
             # Shorten path like Git Bash
@@ -953,12 +998,43 @@ class FrankensteinTerminal:
                 self._ram_label.configure(text="🧠 RAM: --%", text_color=self._colors['text_secondary'])
                 self._health_label.configure(text="● STABLE", text_color=self._colors['electric_green'])
                 self._diagnosis_label.configure(text="")
+
+            # ===== FRANK AI STATUS =====
+            try:
+                from agents.sauron import is_loaded
+                if self._frank_monitor_label:
+                    if not is_loaded():
+                        self._frank_monitor_label.configure(
+                            text="● OFFLINE",
+                            text_color=self._colors['text_secondary']
+                        )
+                    elif self._frank_thinking:
+                        self._frank_monitor_label.configure(
+                            text="● THINKING",
+                            text_color=self._colors['warning_amber']
+                        )
+                    else:
+                        from agents.sauron import get_sauron
+                        h = get_sauron().health_check()
+                        turns = h.get('conversation_turns', 0)
+                        max_t  = h.get('max_turns', '?')
+                        self._frank_monitor_label.configure(
+                            text=f"● ACTIVE  T:{turns}/{max_t}",
+                            text_color="#7c3aed"
+                        )
+            except Exception:
+                if self._frank_monitor_label:
+                    self._frank_monitor_label.configure(
+                        text="● OFFLINE",
+                        text_color=self._colors['text_secondary']
+                    )
+
         except Exception:
             pass
 
-        # Schedule next update (every 3 seconds — lighter than 2s)
+        # Schedule next update (every 30 seconds — per Day 7 spec)
         if self._running and self._root:
-            self._root.after(3000, self._update_monitor_panel)
+            self._root.after(30000, self._update_monitor_panel)
 
     def _show_welcome(self):
         """Display welcome message - Monster Lab Theme"""
@@ -978,6 +1054,7 @@ class FrankensteinTerminal:
     |  🔌 PROVIDERS    Type 'providers' for quantum & classical compute|
     |  ⚛️  QUANTUM      Type 'q' or 'quantum' to enter quantum mode   |
     |  🧪 SYNTHESIS    Type 'synthesis' for physics simulations       |
+    |  🤖 [FRANK] AI   frank chat  |  Use !run <cmd> inside chat      |
     +-----------------------------------------------------------------+
 
     ⚡ Session: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
@@ -1006,6 +1083,12 @@ class FrankensteinTerminal:
     
     def _execute_command(self, command_line: str):
         """Parse and execute a command"""
+        # Check if in FRANK chat mode — route input to FRANK handler
+        if self._in_frank_mode:
+            self._write_frank(f"[FRANK]> {command_line}\n")
+            self._handle_frank_input(command_line)
+            return
+
         # Check if in quantum mode - route to quantum handler
         if self._in_quantum_mode and self._quantum_mode:
             # Show prompt with command
@@ -1569,14 +1652,21 @@ class FrankensteinTerminal:
             self._write_output("Run 'python frankenstein.py' to start full system.\n")
     
     def _cmd_frank(self, args: List[str]):
-        """Frankenstein special commands"""
-        if not args:
-            self._write_output("Usage: frank <command>\n")
-            self._write_output("Commands: status, version, quote\n")
+        """Frankenstein special commands + FRANK AI routing"""
+        # AI subcommands — route to the FRANK AI handler
+        _AI_SUBCMDS = {'chat', 'ask', 'agents', 'unload', 'reset'}
+        if args and args[0].lower() in _AI_SUBCMDS:
+            self._cmd_frank_ai(args)
             return
-        
+
+        if not args:
+            self._frank_help_guide()
+            return
+
         subcmd = args[0].lower()
-        if subcmd == "status":
+        if subcmd == "help":
+            self._frank_help_guide()
+        elif subcmd == "status":
             self._cmd_status([])
         elif subcmd == "version":
             self._write_output("⚡ FRANKENSTEIN 1.0\n")
@@ -1592,10 +1682,1159 @@ class FrankensteinTerminal:
             import random
             self._write_output(f"\n🧟 {random.choice(quotes)}\n\n")
         else:
-            self._write_error(f"frank: unknown command '{subcmd}'")
+            self._write_error(f"frank: unknown command '{subcmd}'. Type 'frank help' for options.")
+
+    # ==================== FRANK AI COMMANDS (Phase 4 / Day 7) ====================
+
+    def _write_frank(self, text: str):
+        """Write FRANK-branded output in purple (#7c3aed). Main thread only."""
+        if not self._output_text:
+            return
+        try:
+            # Configure the frank_output tag once per widget lifetime
+            if not getattr(self, '_frank_tag_ready', False):
+                self._output_text.tag_config("frank_output", foreground="#7c3aed")
+                self._frank_tag_ready = True
+            # Insert text and tag the inserted range
+            start = self._output_text.index("end-1c")
+            self._output_text.insert("end", text)
+            end = self._output_text.index("end-1c")
+            self._output_text.tag_add("frank_output", start, end)
+            self._output_text.see("end")
+        except Exception:
+            # Fallback: plain white if tags unavailable
+            self._output_text.insert("end", text)
+            self._output_text.see("end")
+
+    def _cmd_frank_ai(self, args: List[str]):
+        """[FRANK] Eye of Sauron AI — Usage: frank [status|chat|ask|unload|reset|agents]"""
+        subcmd = args[0].lower() if args else ""
+
+        if not subcmd or subcmd == "help":
+            self._frank_help_guide()
+        elif subcmd == "status":
+            self._frank_status()
+        elif subcmd == "chat":
+            self._frank_enter_chat()
+        elif subcmd == "ask":
+            if len(args) < 2:
+                self._write_error("Usage: frank ask <your question>")
+                return
+            self._frank_ask_single(" ".join(args[1:]))
+        elif subcmd == "agents":
+            self._frank_list_agents()
+        elif subcmd == "reset":
+            self._frank_reset_history()
+        elif subcmd == "unload":
+            self._frank_unload()
+        else:
+            self._write_error(
+                f"[FRANK] Unknown subcommand: '{subcmd}'. Type 'frank help'."
+            )
+
+    def _frank_status(self):
+        """Show FRANK health status. Never triggers a model load."""
+        from agents.sauron import is_loaded
+        self._write_frank("\n[FRANK] Status\n")
+        self._write_frank("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+        if not is_loaded():
+            self._write_frank("  State    :  OFFLINE\n")
+            self._write_frank("  Model    :  not loaded  (~4.5 GB on first use)\n")
+            self._write_frank("  Activate :  frank chat   or   frank ask <text>\n")
+            self._write_frank("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
+            return
+        try:
+            from agents.sauron import get_sauron
+            h = get_sauron().health_check()
+            self._write_frank(
+                f"  State    :  {'ACTIVE' if h.get('loaded') else 'STANDBY'}\n"
+                f"  Model    :  {h.get('model', 'unknown')}\n"
+                f"  Status   :  {h.get('status', '?')}\n"
+                f"  Turns    :  {h.get('conversation_turns', 0)} / {h.get('max_turns', '?')}\n"
+                f"  Threads  :  {h.get('inference_threads', '?')}\n"
+                f"  CPU cap  :  {h.get('safety_cpu_limit', '?')}%\n"
+                f"  RAM cap  :  {h.get('safety_ram_limit', '?')}%\n"
+            )
+        except Exception as e:
+            self._write_frank(f"  State    :  ERROR\n  Detail   :  {e}\n")
+        self._write_frank("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
+
+    def _frank_list_agents(self):
+        """List all agents discoverable by the orchestrator."""
+        self._write_frank("\n[FRANK] Discoverable Agents\n")
+        self._write_frank("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+        try:
+            from agents.sauron.orchestrator import get_orchestrator
+            agents = get_orchestrator().discover()
+            for a in agents:
+                icon = "✅" if a.available else "❌"
+                self._write_frank(f"  {icon}  {a.name:<22}  {a.description}\n")
+            self._write_frank(f"\n  Total: {len(agents)} agent(s) registered\n")
+        except Exception as e:
+            self._write_frank(f"  Error discovering agents: {e}\n")
+        self._write_frank("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
+
+    def _frank_reset_history(self):
+        """Clear FRANK conversation history without unloading the model."""
+        from agents.sauron import is_loaded
+        if not is_loaded():
+            self._write_frank("\n[FRANK] Nothing to reset — model not loaded.\n\n")
+            return
+        try:
+            from agents.sauron import get_sauron
+            get_sauron().reset_conversation()
+            self._write_frank("\n[FRANK] Conversation history cleared.\n\n")
+        except Exception as e:
+            self._write_error(f"[FRANK] Reset failed: {e}")
+
+    def _frank_unload(self):
+        """Unload FRANK model from RAM (~4.5 GB freed)."""
+        from agents.sauron import is_loaded
+        if not is_loaded():
+            self._write_frank("\n[FRANK] Already offline — nothing to unload.\n\n")
+            return
+        # Cancel idle watchdog — model is going away
+        if self._frank_idle_after_id:
+            try:
+                self._root.after_cancel(self._frank_idle_after_id)
+            except Exception:
+                pass
+            self._frank_idle_after_id = None
+        try:
+            from agents.sauron import unload_sauron
+            unload_sauron()
+            self._frank_last_active = None
+            self._write_frank("\n[FRANK] Unloaded. ~4.5 GB RAM freed.\n\n")
+        except Exception as e:
+            self._write_error(f"[FRANK] Unload failed: {e}")
+
+    # ------------------------------------------------------------------
+    # FRANK — Idle auto-unload watchdog (Step 5)
+    # ------------------------------------------------------------------
+
+    def _frank_start_idle_watch(self):
+        """Arm the idle watchdog once — safe to call multiple times."""
+        if self._frank_idle_after_id is None and self._running and self._root:
+            self._frank_idle_after_id = self._root.after(
+                60_000, self._frank_idle_check   # first check after 60 s
+            )
+
+    def _frank_idle_check(self):
+        """Main thread: runs every 60 s. Auto-unloads after 10 min idle."""
+        self._frank_idle_after_id = None   # mark slot as free before any early return
+        if not self._running or not self._root:
+            return
+        try:
+            from agents.sauron import is_loaded
+            if (is_loaded()
+                    and self._frank_last_active is not None
+                    and not self._frank_thinking):
+                idle_secs = time.time() - self._frank_last_active
+                if idle_secs >= 600:   # 10 minutes
+                    self._write_frank(
+                        "\n[FRANK] Idle 10 min — auto-unloading to free RAM.\n"
+                        "         Type 'frank chat' to reload.\n\n"
+                    )
+                    # Exit chat mode if still active
+                    if self._in_frank_mode:
+                        self._in_frank_mode = False
+                        self._update_prompt()
+                        if self._status_label:
+                            self._status_label.configure(
+                                text="  ● ALIVE  ",
+                                text_color=self._colors['electric_green']
+                            )
+                    self._frank_last_active = None
+                    try:
+                        from agents.sauron import unload_sauron
+                        unload_sauron()
+                    except Exception:
+                        pass
+                    return   # don't reschedule — model is gone
+        except Exception:
+            pass
+        # Reschedule for next 60 s window
+        self._frank_idle_after_id = self._root.after(
+            60_000, self._frank_idle_check
+        )
+
+    # ------------------------------------------------------------------
+    # FRANK — Permission Guard (build guide Steps B-H)
+    # ------------------------------------------------------------------
+
+    # TIER 0 — regex patterns that are ALWAYS blocked, no override
+    _FRANK_FORBIDDEN = [
+        r'rm\s+-[a-z]*rf?\s+/',          # rm -rf /  (root wipe)
+        r'rm\s+-[a-z]*rf?\s+\*',         # rm -rf *
+        r'rm\s+-[a-z]*rf?\s+[cC]:\\',    # rm -rf C:\
+        r'format\s+[cCdDeEfF]:',          # format c:
+        r'format\s+/',                    # format /
+        r'del\s+/s\s+/q\s+[cC]:\\',      # del /s /q C:\
+        r'rmdir\s+/s\s+/q\s+[cC]:\\',    # rmdir /s /q C:\
+        r'dd\s+if=/dev/',                 # dd overwrite disk
+        r':\(\)\s*\{.*\|.*&.*\}',         # fork bomb
+        r'DROP\s+DATABASE',               # SQL nuke
+        r'DROP\s+TABLE',                  # SQL nuke
+        r'TRUNCATE\s+TABLE',              # SQL nuke
+        r'git\s+clean\s+.*-fdx\s+/',     # git clean force delete root
+        r'git\s+reset\s+--hard\s+/',     # git reset hard on /
+    ]
+
+    # TIER 2 — command nouns that always need y/n (non-recursive file ops etc.)
+    _FRANK_MODIFY_CMDS = {
+        'cd', 'touch', 'mkdir', 'cp', 'copy', 'mv', 'move', 'echo',
+        'nano', 'vim', 'vi', 'notepad', 'code',
+        'export', 'set', 'unset', 'source',
+        'ssh', 'scp', 'ssh-keygen',
+        'connect', 'disconnect', 'credentials',
+        'setup', 'automation', 'scheduler', 'route-test',
+        'pip', 'npm', 'conda', 'python', 'node',
+        'quantum', 'q', 'bloch', 'qubit',
+        'synthesis', 'synth',
+    }
+
+    # TIER 2 — specific git subcommands that modify state
+    _FRANK_MODIFY_GIT = {
+        'add', 'commit', 'push', 'pull', 'merge',
+        'checkout', 'clone', 'fetch', 'rebase', 'stash',
+        'tag', 'cherry-pick',
+    }
+
+    def _frank_classify_risk(self, cmd_line: str):
+        """
+        Classify a command string into a permission tier.
+        Returns (tier: int, label: str).
+          0 = ABSOLUTE FORBIDDEN  — blocked, no override
+          1 = DESTRUCTIVE         — requires typed CONFIRM
+          2 = MODIFYING           — requires y/n
+          3 = READ-ONLY           — auto-executes
+        First-match-wins; checked in order 0 → 1 → 2 → 3.
+        """
+        import re
+        raw   = cmd_line.strip()
+        lower = raw.lower()
+        parts = raw.split()
+        if not parts:
+            return (3, "empty command")
+        noun  = parts[0].lower()
+
+        # ── TIER 0: absolute forbidden (regex) ──────────────────────────
+        for pattern in self._FRANK_FORBIDDEN:
+            if re.search(pattern, raw, re.IGNORECASE):
+                return (0, "ABSOLUTE FORBIDDEN — permanently blocked")
+
+        # ── TIER 1: destructive — needs explicit CONFIRM ─────────────────
+        # rm / del with recursive flag
+        if noun in ('rm', 'del'):
+            flags = ' '.join(parts[1:])
+            if any(f in flags for f in ('-r', '-rf', '-fr', '/s', '--recursive')):
+                return (1, "DESTRUCTIVE — recursive delete, cannot be undone")
+        # rmdir always destructive
+        if noun == 'rmdir':
+            return (1, "DESTRUCTIVE — removes directory, cannot be undone")
+        # git reset --hard / git clean
+        if noun == 'git' and len(parts) >= 2:
+            sub = parts[1].lower()
+            if sub == 'reset' and '--hard' in lower:
+                return (1, "DESTRUCTIVE — discards all uncommitted changes")
+            if sub == 'clean':
+                return (1, "DESTRUCTIVE — permanently deletes untracked files")
+        # memory clear, circuit delete
+        if noun == 'memory' and len(parts) >= 2 and parts[1].lower() == 'clear':
+            return (1, "DESTRUCTIVE — clears stored memory, cannot be undone")
+        if noun == 'circuit' and len(parts) >= 2 and parts[1].lower() == 'delete':
+            return (1, "DESTRUCTIVE — deletes saved circuit, cannot be undone")
+        if noun == 'frank' and len(parts) >= 2 and parts[1].lower() == 'reset':
+            return (1, "DESTRUCTIVE — clears all conversation history")
+
+        # ── TIER 2: modifying — needs y/n ────────────────────────────────
+        # Plain rm (no recursive flag) — just a single file delete
+        if noun in ('rm', 'del'):
+            return (2, "MODIFYING — deletes a file")
+        # git modifying subcommands
+        if noun == 'git' and len(parts) >= 2:
+            if parts[1].lower() in self._FRANK_MODIFY_GIT:
+                return (2, "MODIFYING — changes git repository state")
+        # pip uninstall
+        if noun == 'pip' and len(parts) >= 2 and parts[1].lower() == 'uninstall':
+            return (2, "MODIFYING — removes an installed package")
+        # All other TIER 2 command nouns
+        if noun in self._FRANK_MODIFY_CMDS:
+            return (2, "MODIFYING — changes files or system state")
+        # frank unload
+        if noun == 'frank' and len(parts) >= 2 and parts[1].lower() == 'unload':
+            return (2, "MODIFYING — frees model from RAM")
+        # circuit save/load/export
+        if noun == 'circuit' and len(parts) >= 2 and parts[1].lower() in ('save', 'load', 'export'):
+            return (2, "MODIFYING — changes circuit library")
+        # memory export
+        if noun == 'memory' and len(parts) >= 2 and parts[1].lower() == 'export':
+            return (2, "MODIFYING — writes memory to disk")
+
+        # ── TIER 3: read-only — auto-executes ────────────────────────────
+        return (3, "READ-ONLY — safe to run")
+
+    def _frank_guard_exec(self, cmd_line: str):
+        """
+        Single entry point for ALL FRANK-initiated command execution.
+        Classifies risk, checks resources, presents permission prompt or
+        auto-executes, and logs every proposal to the audit trail.
+        Must be called from the main thread.
+        """
+        import time as _time
+        cmd_line = cmd_line.strip()
+        if not cmd_line:
+            return
+
+        tier, label = self._frank_classify_risk(cmd_line)
+        ts = _time.strftime("%H:%M:%S")
+
+        # Resource check before any live execution (TIER 2 & 3)
+        if tier >= 2:
+            try:
+                from core import get_governor
+                gov = get_governor()
+                safety = gov.is_safe_to_proceed()
+                if not safety.get("safe", True):
+                    self._write_frank(
+                        f"\n[FRANK] ⚠ System too busy to execute safely.\n"
+                        f"  Reason: {safety.get('reason', 'unknown')}\n"
+                        f"  Try again when CPU/RAM usage drops.\n\n"
+                    )
+                    self._frank_exec_log.append({
+                        "ts": ts, "tier": tier, "cmd": cmd_line,
+                        "status": "DEFERRED — system overloaded"
+                    })
+                    return
+            except Exception:
+                pass   # governor unavailable — proceed anyway
+
+        # ── TIER 0: absolute block ────────────────────────────────────────
+        if tier == 0:
+            self._write_frank(
+                f"\n[FRANK] ⛔ BLOCKED\n"
+                f"  Command : {cmd_line}\n"
+                f"  Reason  : {label}\n"
+                f"  This command is permanently forbidden and cannot be run.\n\n"
+            )
+            self._frank_exec_log.append({
+                "ts": ts, "tier": 0, "cmd": cmd_line, "status": "BLOCKED"
+            })
+            return
+
+        # ── TIER 1: destructive — store pending, require CONFIRM ──────────
+        if tier == 1:
+            self._frank_pending_cmd  = cmd_line
+            self._frank_pending_tier = 1
+            self._write_frank(
+                f"\n[FRANK] 🔴 DESTRUCTIVE OPERATION\n"
+                f"  Command : {cmd_line}\n"
+                f"  Risk    : {label}\n"
+                f"  ─────────────────────────────────────────\n"
+                f"  Type  CONFIRM  to execute  |  n  to cancel\n\n"
+            )
+            return   # wait for user response in _handle_frank_input
+
+        # ── TIER 2: modifying — store pending, require y/n ───────────────
+        if tier == 2:
+            self._frank_pending_cmd  = cmd_line
+            self._frank_pending_tier = 2
+            self._write_frank(
+                f"\n[FRANK] 🟡 FRANK wants to run:\n"
+                f"  > {cmd_line}\n"
+                f"  Execute?  y  to approve  |  n  to cancel\n\n"
+            )
+            return   # wait for user response in _handle_frank_input
+
+        # ── TIER 3: read-only — auto-execute ─────────────────────────────
+        self._write_frank(f"\n[FRANK] 🟢 Running: {cmd_line}\n")
+        self._frank_exec_log.append({
+            "ts": ts, "tier": 3, "cmd": cmd_line, "status": "EXECUTED"
+        })
+        self._execute_command(cmd_line)
+
+    def _frank_enter_chat(self):
+        """Enter interactive FRANK chat mode. Lazy-loads model on first use."""
+        if self._in_frank_mode:
+            self._write_frank(
+                "\n[FRANK] Already in chat mode. Type 'exit' to leave.\n\n"
+            )
+            return
+        self._write_frank(
+            "\n[FRANK] Loading... (first load: ~2-4 s, ~4.5 GB RAM)\n"
+        )
+        def _load():
+            try:
+                from agents.sauron import get_sauron
+                get_sauron()  # triggers lazy model load
+                self._root.after(0, self._frank_chat_ready)
+            except Exception as e:
+                self._root.after(
+                    0, lambda: self._write_error(f"[FRANK] Load failed: {e}")
+                )
+        threading.Thread(target=_load, daemon=True).start()
+
+    def _frank_help_guide(self):
+        """Full FRANK chat guide — mirrors Monster Terminal help format. Purple output."""
+        self._write_frank("""
+╔══════════════════════════════════════════════════════════════════╗
+║               [FRANK] AI CHAT — COMMAND GUIDE                   ║
+╚══════════════════════════════════════════════════════════════════╝
+
+HOW I OPERATE:
+  Manual:    !run <cmd>   You propose → guard checks tier → executes
+  Automatic: I detect need → output ::EXEC::cmd → guard fires
+  Approve:   y / yes      Approve MODIFY (TIER 2) commands
+             CONFIRM      Approve DESTRUCTIVE (TIER 1) commands
+  Reject:    n / cancel   Block any pending command
+
+PERMISSION TIERS:
+  🟢 TIER 3 — Read-only    Auto-executes immediately (no prompt)
+  🟡 TIER 2 — Modify       Requires y/yes approval before running
+  🔴 TIER 1 — Destructive  Requires typing CONFIRM before running
+  ⛔ TIER 0 — Forbidden    Blocked permanently. Never runs.
+
+NAVIGATION & FILES:                                         [🟢 auto]
+  cd [DIR]        Change directory (~ home, .. parent)
+  pwd             Print working directory
+  ls [-la]        List files (-l long, -a all hidden)
+  cat FILE        Display file contents
+  head/tail FILE  Show first/last N lines (default 10)
+  find PATH       Find files recursively
+  grep PAT FILE   Search for pattern in file(s)
+  wc FILE         Count lines, words, characters
+
+FILE MODIFICATION:                                        [🟡 approve]
+  touch FILE      Create empty file
+  mkdir [-p] DIR  Create directory (-p for parent dirs)
+  echo TEXT       Print / redirect output to file
+  cp [-r] S D     Copy file or directory
+  mv SRC DEST     Move or rename files
+
+DESTRUCTIVE FILE OPS:                                      [🔴 CONFIRM]
+  rm FILE         Remove a single file
+  rm -r/-rf DIR   Remove recursively (DESTRUCTIVE)
+  rmdir DIR       Remove empty directory
+
+UTILITIES:                                                  [🟢 auto]
+  history         Show command history
+  date            Show current date and time
+  whoami          Show current user
+  clear           Clear terminal screen
+
+GIT — READ:                                                 [🟢 auto]
+  git status      Color-coded file states (✅📝❓)
+  git log         Visual commit graph with colors
+  git diff        Show unstaged changes
+  git branch      List branches with current highlighted
+  git remote      Show remotes with visual indicators
+
+GIT — WRITE:                                              [🟡 approve]
+  git add         Stage files for commit
+  git commit      Create a commit
+  git push/pull   Push to / pull from remote
+  git fetch       Fetch from remote (no merge)
+  git merge       Merge branch
+  git checkout    Switch branch or restore file
+  git stash       Stash / pop working changes
+  git tag         Create or list tags
+
+GIT — DANGEROUS:                                           [🔴 CONFIRM]
+  git reset --hard   Reset branch to commit (destructive)
+  git clean          Remove untracked files
+
+PACKAGE MANAGEMENT:                                       [🟡 approve]
+  pip install     Install a Python package
+  pip list        List installed packages  [🟢 auto]
+  pip show        Show package details     [🟢 auto]
+  pip uninstall   Remove a package
+  python FILE     Run a Python script
+
+SSH / REMOTE:                                             [🟡 approve]
+  ssh             Connect to remote host
+  scp             Secure copy files
+  ssh-keygen      Generate SSH key pair
+
+QUANTUM COMPUTING:                                          [🟢 auto]
+  quantum / q     Enter quantum sub-shell (REPL)
+  qubit N         Initialize N qubits in |0> state
+  h/x/y/z <q>    Hadamard / Pauli gates
+  cx/cz <c> <t>  Two-qubit CNOT / controlled-Z gate
+  mcx <c,..> <t> Multi-controlled X (up to 16 qubits)
+  measure [shots] Measure all qubits + auto-launch Bloch sphere
+  bloch [type]    3D Bloch sphere (Three.js, opens in browser)
+  bloch2d [3d]    Matplotlib 2D/3D Bloch sphere
+  circuit list    List saved circuits          [🟢 auto]
+  circuit save    Save current circuit         [🟡 approve]
+  circuit load    Load + replay a saved circuit [🟡 approve]
+  circuit export  Export circuit to OpenQASM 2.0
+  circuit delete  Delete saved circuit         [🔴 CONFIRM]
+  bell / ghz [n]  Quick Bell / GHZ state presets
+  qft [n]         Quantum Fourier Transform
+
+SYNTHESIS ENGINE:                                           [🟢 auto]
+  synthesis run <preset>    Run physics simulation
+  synthesis gaussian        Gaussian wave packet evolution
+  synthesis tunneling       Quantum tunneling simulation
+  synthesis harmonic        Harmonic oscillator
+  synthesis lorentz <v>     Set Lorentz boost velocity
+  synthesis compare/visualize/status
+  synth                     Alias for synthesis
+
+HARDWARE MONITOR:                                           [🟢 auto]
+  hardware                  Full dashboard (CPU, RAM, disk, tier)
+  hardware trend            Resource trend analysis
+  hardware tiers            Tier information and limits
+  hardware recommend        Auto-switch recommendation + headroom %
+  hardware diagnose         Hardware diagnosis with tier limits
+  hardware line             Compact status line
+
+PROVIDERS & CLOUD COMPUTE:                                  [🟢 auto]
+  providers                 List all quantum + classical providers
+  providers scan            Refresh SDK availability scan
+  providers info <id>       Detailed info for a provider
+  providers install <id>    Show pip install command (read-only)
+  providers quantum         List only quantum providers
+  providers classical       List only classical providers
+  providers suggest         Generate setup suggestions
+
+INTELLIGENT ROUTER:                                         [🟢 auto]
+  route --qubits N          Route workload to optimal provider
+  route --type T --priority P  Route by type + priority
+                            Priorities: cost | speed | accuracy
+  route-options --qubits N  Show all compatible providers (ranked)
+  route-test --provider ID  Test routing feasibility for provider  [🟡]
+  route-history             Show last 20 routing decisions
+  Router reports: primary provider, score, CPU%/RAM% safety,
+  fallback chain, alternatives, routing time in ms.
+
+REAL-TIME ADAPTATION ENGINE:                                [🟢 auto]
+  adapt-status              Current adaptation mode + active patterns
+  adapt-patterns            Learned patterns (condition → action → rate)
+  adapt-performance         Provider rankings with latency/reliability
+  adapt-insights            Analytics on workload + provider behavior
+  adapt-recommend <type>    Recommended provider for a task type
+  adapt-history             Chronological adaptation decisions log
+  adapt-dashboard           Full visual dashboard (all metrics)
+
+MEMORY & ARTIFACTS:                                       [🟡 approve]
+  memory status             Detailed RAM + disk + Frankenstein usage
+  memory view <area>        View sessions/logs/states/circuits
+  memory clear cache        Clear gate cache and temp files
+  memory clear logs [N]     Delete old logs, keep last N (default 10)
+  memory clear states       Delete all saved quantum states [🔴 CONFIRM]
+  memory export             Export full memory report to JSON
+  saves                     Show all saved quantum artifacts  [🟢 auto]
+  circuit delete <name>     Delete saved circuit             [🔴 CONFIRM]
+
+PERMISSIONS & SECURITY:
+  ─── READ / AUDIT ────────────────────────────────────  [🟢 auto]
+  permissions               Show current role + full permission summary
+  permissions check <action> Check if specific action is allowed
+  permissions providers     Show accessible providers for current role
+  permissions audit [days]  Show audit trail (default: last 7 days)
+  security                  Full threat dashboard (level, uptime, events)
+  security log [N]          Show last N security events (default 20)
+  security report           Threat statistics + severity breakdown
+  security level            Current threat level indicator
+  security test             Run security test suite
+
+  ─── MODIFY ─────────────────────────────────────────  [🟡 approve]
+  permissions set-role <r>  Change role: Admin / Operator / User
+  permissions reset         Reset permissions to defaults
+  security clear            Clear security event history
+  automation enable/disable Enable or disable a workflow
+  automation consent/revoke Grant or revoke workflow termination consent
+
+  ─── DESTRUCTIVE ────────────────────────────────────  [🔴 CONFIRM]
+  diagnose fix <n>          Apply system recommendation #N
+  diagnose kill <name>      Kill a running process by name
+
+  SECURITY BEST PRACTICES (built into guard system):
+  ├─ Roles: Admin > Operator > User  (set with: permissions set-role)
+  ├─ Every exec logged: timestamp, tier, status  →  !history
+  ├─ TIER 0 forbidden list blocks all OS-critical operations
+  ├─ TIER 1 requires typing CONFIRM explicitly (no accidents)
+  ├─ Governor: CPU < 80% and RAM < 75% checked before every exec
+  └─ permissions audit  →  full role-change and sensitive action log
+
+SYSTEM DIAGNOSTICS & AUTOMATION:
+  ─── READ ────────────────────────────────────────────  [🟢 auto]
+  status          Frankenstein full system status
+  diagnose        Full system diagnosis + ranked recommendations
+  diagnose quick  Quick CPU% / RAM% snapshot
+  setup           Run setup wizard
+  scheduler       Scheduler status summary
+  scheduler tasks List all scheduled tasks
+
+  ─── MODIFY ─────────────────────────────────────────  [🟡 approve]
+  automation start/stop     Start or stop all automation workflows
+  automation run <name>     Run specific workflow by name
+  automation status         Detailed per-workflow status
+  scheduler pause <id>      Pause a scheduled task by ID
+  scheduler resume <id>     Resume a paused task
+  scheduler stop            Stop the task scheduler
+
+[FRANK] AI:                                             [🟢 auto]
+  frank status    Health check (never loads model)
+  frank unload    Free model from RAM (~4.5 GB)      [🟡 approve]
+  frank reset     Clear conversation history          [🔴 CONFIRM]
+  frank agents    List all discoverable agents
+
+IN-CHAT SHORTCUTS:
+  !run <cmd>    Propose command for guarded execution
+  !help         This guide
+  !commands     Full 69-command tier reference (dense)
+  !history      Session execution audit log
+  !status       Quick FRANK health check
+  exit / quit   Leave FRANK chat mode
+  stop          Interrupt current AI response
+  reset         Clear conversation history
+
+PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
+  rm -rf /     rm -rf /*   format c:    del /s /q C:\\
+  dd if=/dev/  :(){ :|:&   DROP DATABASE   DROP TABLE
+  Anything touching: system32, boot, BIOS, kernel, MBR,
+  registry, /etc/hosts, or core OS files
+═══════════════════════════════════════════════════════════════════
+""")
+
+    def _frank_chat_ready(self):
+        """Called on main thread once model has loaded. Activate chat mode."""
+        self._in_frank_mode = True
+        self._frank_last_active = time.time()
+        self._update_prompt()
+        if self._status_label:
+            self._status_label.configure(
+                text="  [FRANK]  ", text_color="#7c3aed"
+            )
+        self._frank_help_guide()
+        self._write_frank("─" * 67 + "\n")
+        self._write_frank("[FRANK] Ready. Type a message to begin...\n\n")
+        self._frank_start_idle_watch()
+
+    def _frank_ask_single(self, query: str):
+        """Single-shot query using stream() — no history, no mode change."""
+        self._write_frank("\n[FRANK] Loading model for query...\n")
+        def _load_and_ask():
+            try:
+                from agents.sauron import get_sauron
+                sauron = get_sauron()
+                self._root.after(
+                    0, lambda: self._frank_start_stream(
+                        query, stream_func=sauron.stream
+                    )
+                )
+            except Exception as e:
+                self._root.after(
+                    0, lambda: self._write_error(f"[FRANK] Load failed: {e}")
+                )
+        threading.Thread(target=_load_and_ask, daemon=True).start()
+
+    def _handle_frank_input(self, text: str):
+        """Route user input while in FRANK chat mode."""
+        import time as _time
+        stripped = text.strip()
+        lower    = stripped.lower()
+
+        # ── PRIORITY 1: pending approval queue ───────────────────────────
+        # If FRANK proposed a command and is waiting for user approval,
+        # consume this input as the answer before anything else.
+        if self._frank_pending_cmd is not None:
+            ts = _time.strftime("%H:%M:%S")
+            if self._frank_pending_tier == 2 and lower in ('y', 'yes'):
+                cmd = self._frank_pending_cmd
+                self._frank_pending_cmd  = None
+                self._frank_pending_tier = 0
+                self._frank_exec_log.append({
+                    "ts": ts, "tier": 2, "cmd": cmd, "status": "EXECUTED"
+                })
+                self._write_frank(f"[FRANK] ✓ Approved. Running: {cmd}\n")
+                self._execute_command(cmd)
+            elif self._frank_pending_tier == 1 and lower == 'confirm':
+                cmd = self._frank_pending_cmd
+                self._frank_pending_cmd  = None
+                self._frank_pending_tier = 0
+                self._frank_exec_log.append({
+                    "ts": ts, "tier": 1, "cmd": cmd, "status": "EXECUTED"
+                })
+                self._write_frank(f"[FRANK] ✓ Confirmed. Running: {cmd}\n")
+                self._execute_command(cmd)
+            elif lower in ('n', 'no', 'cancel'):
+                cmd = self._frank_pending_cmd
+                self._frank_exec_log.append({
+                    "ts": ts, "tier": self._frank_pending_tier,
+                    "cmd": cmd, "status": "CANCELLED"
+                })
+                self._frank_pending_cmd  = None
+                self._frank_pending_tier = 0
+                self._write_frank("[FRANK] Cancelled.\n\n")
+            else:
+                # User typed something else — remind them what's needed
+                if self._frank_pending_tier == 1:
+                    self._write_frank(
+                        "[FRANK] Waiting for your decision:\n"
+                        "  Type  CONFIRM  to execute  |  n  to cancel\n\n"
+                    )
+                else:
+                    self._write_frank(
+                        "[FRANK] Waiting for your decision:\n"
+                        "  Type  y  to approve  |  n  to cancel\n\n"
+                    )
+            return
+
+        # ── PRIORITY 2: !cmd shortcut syntax ─────────────────────────────
+        if stripped.startswith('!'):
+            self._frank_handle_bang(stripped)
+            return
+
+        # Exit chat mode
+        if lower in ('exit', 'quit', '\\q'):
+            if self._frank_thinking:
+                self._frank_stop_streaming()
+            self._in_frank_mode = False
+            self._update_prompt()
+            self._write_frank("\n[FRANK] Chat mode closed.\n\n")
+            if self._status_label:
+                self._status_label.configure(
+                    text="  ● ALIVE  ",
+                    text_color=self._colors['electric_green']
+                )
+            return
+
+        # Interrupt current stream
+        if lower == 'stop':
+            self._frank_stop_streaming()
+            return
+
+        # Reset conversation history
+        if lower == 'reset':
+            self._frank_reset_history()
+            return
+
+        # Guard: already thinking — allow stop, refuse new message
+        if self._frank_thinking:
+            self._write_frank(
+                "\n[FRANK] Still thinking... type 'stop' to interrupt.\n\n"
+            )
+            return
+
+        # Empty input
+        if not stripped:
+            return
+
+        # Send to FRANK
+        try:
+            from agents.sauron import get_sauron
+            sauron = get_sauron()
+            self._frank_start_stream(stripped, stream_func=sauron.chat_stream)
+        except Exception as e:
+            self._write_error(f"[FRANK] {e}")
+
+    def _frank_handle_bang(self, text: str):
+        """
+        Route !cmd shortcuts typed inside FRANK chat mode.
+          !run <cmd>   → guarded execution
+          !help        → full command reference
+          !commands    → quick tier summary
+          !history     → execution audit log
+          !status      → FRANK health check
+        """
+        parts = text.split(None, 1)          # ['!run', 'git status']  or ['!help']
+        cmd   = parts[0].lower()             # e.g. '!run'
+        rest  = parts[1].strip() if len(parts) > 1 else ""
+
+        if cmd == '!run':
+            if not rest:
+                self._write_frank(
+                    "\n[FRANK] Usage: !run <terminal command>\n"
+                    "  Example: !run git status\n"
+                    "  Example: !run ls -la\n\n"
+                )
+            else:
+                self._frank_guard_exec(rest)
+
+        elif cmd == '!help':
+            self._frank_help_guide()
+
+        elif cmd == '!commands':
+            self._frank_cmd_list_quick()
+
+        elif cmd == '!history':
+            self._frank_exec_history()
+
+        elif cmd == '!status':
+            self._frank_status()
+
+        elif cmd == '!':
+            self._write_frank(
+                "\n[FRANK] In-chat shortcuts:\n"
+                "  !run <cmd>   Run a terminal command (guarded)\n"
+                "  !help        Full command reference with tier badges\n"
+                "  !commands    Quick command list\n"
+                "  !history     Execution audit log\n"
+                "  !status      FRANK health check\n\n"
+            )
+
+        else:
+            self._write_frank(
+                f"\n[FRANK] Unknown shortcut '{cmd}'. "
+                f"Type !help for available shortcuts.\n\n"
+            )
+
+    def _frank_cmd_list_quick(self):
+        """Quick command summary grouped by tier — shorter than full reference."""
+        self._write_frank(
+            "\n[FRANK] Command Tiers — Quick View\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🟢 READ-ONLY (auto-execute — no approval needed)\n"
+            "   ls  pwd  cat  head  tail  wc  grep  find\n"
+            "   git status  git log  git diff  git branch\n"
+            "   status  hardware  security  diagnose  whoami  date\n"
+            "   env  printenv  history  frank status  frank agents\n"
+            "   providers  saves  memory status  memory view\n"
+            "   adapt-*  route  route-options  route-history\n"
+            "   synthesis status  circuit info  help\n"
+            "\n"
+            "🟡 MODIFYING (type y to approve)\n"
+            "   cd  touch  mkdir  cp  mv  echo  rm <file>\n"
+            "   git add  commit  push  pull  merge  checkout  clone\n"
+            "   pip install/uninstall  npm  conda\n"
+            "   python  node  nano  vim  notepad  code\n"
+            "   ssh  scp  export  set  source  connect\n"
+            "   quantum  synthesis <cmd>  circuit save/load\n"
+            "   memory export  frank unload  setup  automation\n"
+            "\n"
+            "🔴 DESTRUCTIVE (type CONFIRM to execute)\n"
+            "   rm -r  rmdir  git reset --hard  git clean\n"
+            "   memory clear  circuit delete  frank reset\n"
+            "\n"
+            "⛔ BLOCKED (permanently forbidden — no override)\n"
+            "   rm -rf /  format c:  del /s /q C:\\  dd if=/dev/\n"
+            "   fork bombs  DROP DATABASE  DROP TABLE\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Type !help for the full 69-command detailed reference.\n\n"
+        )
+
+    def _frank_cmd_reference(self):
+        """Full purple-formatted command reference. Called by !help."""
+        ref = (
+            "\n[FRANK] COMPLETE COMMAND REFERENCE\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "TIERS:  🟢 READ-ONLY (auto)  🟡 MODIFY (y/n)  "
+            "🔴 DESTROY (CONFIRM)  ⛔ BLOCKED\n"
+            "━━ NAVIGATION & FILE SYSTEM ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🟢 ls [path]                List directory contents\n"
+            "🟢 dir [path]               Windows alias for ls\n"
+            "🟢 pwd                       Print working directory\n"
+            "🟡 cd <path>                Change directory\n"
+            "🟢 cat <file>               Read file contents\n"
+            "🟢 type <file>              Windows alias for cat\n"
+            "🟡 touch <file>             Create empty file\n"
+            "🟡 mkdir <dir>              Create directory\n"
+            "🟡 cp [-r] <src> <dest>     Copy file or directory\n"
+            "🟡 mv <src> <dest>          Move or rename\n"
+            "🟡 rm <file>                Delete single file  (no flags)\n"
+            "🔴 rm -r <dir>              Recursive delete directory\n"
+            "🔴 rmdir <dir>              Remove directory\n"
+            "🟢 head [-n N] <file>       First N lines  (default 10)\n"
+            "🟢 tail [-n N] <file>       Last N lines   (default 10)\n"
+            "🟢 wc <file>                Count lines, words, characters\n"
+            "🟢 grep [-i] <pat> <file>   Search pattern in file\n"
+            "🟢 find <path> [-name P]    Find files matching pattern\n"
+            "━━ SYSTEM INFO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🟢 status                   Frankenstein full system status\n"
+            "🟢 whoami                   Show current user\n"
+            "🟢 date                     Current date and time\n"
+            "🟢 history                  Command history log\n"
+            "🟢 hardware                 Live CPU, RAM, disk stats\n"
+            "🟢 security                 Security shield dashboard\n"
+            "🟢 diagnose                 Full system diagnosis\n"
+            "🟢 env                      List all environment variables\n"
+            "🟢 printenv [KEY]           Print one environment variable\n"
+            "━━ ENVIRONMENT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🟡 export KEY=VALUE         Set environment variable\n"
+            "🟡 set KEY VALUE            Set variable  (Windows style)\n"
+            "🟡 unset KEY                Remove environment variable\n"
+            "🟡 source <script>          Execute a shell script\n"
+            "🟡 echo <text>              Print text  (or redirect to file)\n"
+            "━━ GIT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🟢 git status               Color-coded working tree status\n"
+            "🟢 git log [--graph]        Visual commit history\n"
+            "🟢 git diff                 Staged and unstaged changes\n"
+            "🟢 git branch [-a]          List all branches\n"
+            "🟢 git remote [-v]          Show remotes with indicators\n"
+            "🟡 git add <file>           Stage files for commit\n"
+            "🟡 git commit -m \"msg\"      Create commit\n"
+            "🟡 git pull                 Pull from remote\n"
+            "🟡 git push                 Push to remote\n"
+            "🟡 git checkout <branch>    Switch branches\n"
+            "🟡 git clone <url> [dir]    Clone repository\n"
+            "🟡 git merge <branch>       Merge branch into current\n"
+            "🔴 git reset --hard         Hard reset  (DESTROYS uncommitted work)\n"
+            "🔴 git clean -f             Delete all untracked files\n"
+            "━━ PACKAGE MANAGEMENT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🟢 pip list                 List installed Python packages\n"
+            "🟢 pip show <pkg>           Show package details\n"
+            "🟡 pip install <pkg>        Install Python package\n"
+            "🟡 pip uninstall <pkg>      Remove Python package\n"
+            "🟡 npm install [pkg]        Install Node.js package\n"
+            "🟡 conda install <pkg>      Install conda package\n"
+            "━━ DEVELOPMENT TOOLS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🟡 python <script>          Run Python script\n"
+            "🟡 node <script>            Run Node.js script\n"
+            "🟡 nano <file>              Open file in Nano editor\n"
+            "🟡 vim / vi <file>          Open file in Vim\n"
+            "🟡 notepad <file>           Open in Windows Notepad\n"
+            "🟡 code [file/dir]          Open in VS Code\n"
+            "━━ SSH / REMOTE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🟡 ssh user@host            Connect to remote host\n"
+            "🟡 scp <src> <dest>         Secure file copy\n"
+            "🟡 ssh-keygen               Generate SSH key pair\n"
+            "━━ PROVIDERS & CLOUD COMPUTE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🟢 providers                List all 30 compute providers\n"
+            "🟡 connect <provider>       Connect to a provider\n"
+            "🟡 disconnect <provider>    Disconnect from provider\n"
+            "🟡 credentials <provider>   Manage provider credentials\n"
+            "━━ QUANTUM COMPUTING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🟡 quantum [cmd]            Enter quantum computing mode\n"
+            "🟡 q                        Shortcut for quantum\n"
+            "🟡 bloch                    Quick Bloch sphere visualization\n"
+            "🟡 qubit [ops]              Quick qubit gate operations\n"
+            "🟢 circuit info <name>      Show circuit details\n"
+            "🟡 circuit list             Show saved circuits\n"
+            "🟡 circuit save <name>      Save current circuit\n"
+            "🟡 circuit load <name>      Load a saved circuit\n"
+            "🟡 circuit export <name>    Export circuit to file\n"
+            "🔴 circuit delete <name>    Delete saved circuit permanently\n"
+            "━━ SYNTHESIS ENGINE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🟢 synthesis status         Synthesis engine status\n"
+            "🟡 synthesis compute <expr> Run computation\n"
+            "🟡 synthesis quantum <expr> Quantum simulation\n"
+            "🟡 synthesis physics <expr> Physics calculation\n"
+            "🟡 synthesis math <expr>    Mathematical computation\n"
+            "🟡 synthesis diff <expr>    Differentiate expression\n"
+            "🟡 synthesis integrate <e>  Integrate expression\n"
+            "🟡 synthesis solve <expr>   Solve equation\n"
+            "🟡 synthesis lorentz <p>    Lorentz transformation\n"
+            "🟡 synthesis schrodinger    Schrodinger equation solver\n"
+            "🟡 synth                    Alias for synthesis\n"
+            "━━ INTELLIGENT ROUTING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🟢 route [query]            Route request to best backend\n"
+            "🟢 route-options            Show available routing options\n"
+            "🟡 route-test               Test routing decision engine\n"
+            "🟢 route-history            Show past routing decisions\n"
+            "━━ REAL-TIME ADAPTATION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🟢 adapt-status             Adaptation engine status\n"
+            "🟢 adapt-patterns           Learned usage patterns\n"
+            "🟢 adapt-performance        Performance metrics dashboard\n"
+            "🟢 adapt-insights           AI-driven system insights\n"
+            "🟢 adapt-recommend          Current recommendations\n"
+            "🟢 adapt-history            Adaptation event log\n"
+            "🟢 adapt-dashboard          Full adaptation overview\n"
+            "━━ MEMORY & ARTIFACTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🟢 memory status            Memory system status\n"
+            "🟢 memory view [key]        View stored memory entry\n"
+            "🟡 memory export            Export memory to file\n"
+            "🔴 memory clear [key]       Clear memory  (permanent data loss)\n"
+            "🟢 saves                    Artifact save overview\n"
+            "━━ SYSTEM & AUTOMATION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🟢 permissions              Show current permission settings\n"
+            "🟡 setup [component]        Setup or configure a component\n"
+            "🟡 automation [cmd]         Automation engine controls\n"
+            "🟡 scheduler [cmd]          Task scheduler management\n"
+            "━━ [FRANK] AI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🟢 frank status             FRANK AI health check\n"
+            "🟡 frank chat               Enter interactive FRANK chat mode\n"
+            "🟡 frank ask <text>         Single-shot AI query  (no history)\n"
+            "🟢 frank agents             List all discoverable agents\n"
+            "🔴 frank reset              Clear conversation history permanently\n"
+            "🟡 frank unload             Unload model to free ~4.5 GB RAM\n"
+            "🟢 frank version            FRANK version info\n"
+            "🟢 frank quote              Random Frankenstein quote\n"
+            "━━ IN-CHAT SHORTCUTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "  !run <command>    Propose terminal command for guarded execution\n"
+            "  !help             Show this full command reference\n"
+            "  !commands         Quick command list grouped by tier\n"
+            "  !history          FRANK execution audit log (this session)\n"
+            "  !status           Quick FRANK health check\n"
+            "  exit / quit       Leave FRANK chat mode\n"
+            "  stop              Interrupt current streaming response\n"
+            "  reset             Clear conversation history\n"
+            "  y / yes           Approve a pending TIER 2 (MODIFY) command\n"
+            "  CONFIRM           Approve a pending TIER 1 (DESTROY) command\n"
+            "  n / no / cancel   Cancel any pending command\n"
+            "━━ PERMANENTLY FORBIDDEN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "⛔ rm -rf /          Wipe root filesystem\n"
+            "⛔ rm -rf /*         Wipe root filesystem (variant)\n"
+            "⛔ format c:         Format C drive\n"
+            "⛔ del /s /q C:\\     Recursive delete C drive\n"
+            "⛔ dd if=/dev/zero   Overwrite disk with zeros\n"
+            "⛔ :(){ :|:& };:     Fork bomb  (system crash)\n"
+            "⛔ DROP DATABASE     Destroy entire database\n"
+            "⛔ DROP TABLE        Destroy database table\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        )
+        self._write_frank(ref)
+
+    def _frank_exec_history(self):
+        """Display the session audit log of all FRANK command proposals."""
+        log = self._frank_exec_log
+        if not log:
+            self._write_frank(
+                "\n[FRANK] Execution Audit Log\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "  No commands proposed yet this session.\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            )
+            return
+
+        _TIER_ICONS = {0: '⛔', 1: '🔴', 2: '🟡', 3: '🟢'}
+        executed  = sum(1 for e in log if e['status'] == 'EXECUTED')
+        blocked   = sum(1 for e in log if e['status'] == 'BLOCKED')
+        cancelled = sum(1 for e in log if e['status'] == 'CANCELLED')
+        deferred  = sum(1 for e in log if 'DEFERRED' in e['status'])
+
+        lines = [
+            "\n[FRANK] Execution Audit Log\n",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n",
+            f"  {'#':<3}  {'Time':<10}  {'Tier':<4}  {'Status':<12}  Command\n",
+            f"  {'─'*3}  {'─'*8}  {'─'*4}  {'─'*10}  {'─'*30}\n",
+        ]
+        for i, entry in enumerate(log, 1):
+            icon   = _TIER_ICONS.get(entry['tier'], '?')
+            cmd    = entry['cmd'][:45] + ('…' if len(entry['cmd']) > 45 else '')
+            status = entry['status'][:10]
+            lines.append(
+                f"  {i:<3}  {entry['ts']:<10}  {icon:<4}  {status:<12}  {cmd}\n"
+            )
+        lines += [
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n",
+            f"  Total: {len(log)}  |  ✓ {executed} executed  |  "
+            f"⛔ {blocked} blocked  |  ✗ {cancelled} cancelled",
+        ]
+        if deferred:
+            lines.append(f"  |  ⏸ {deferred} deferred")
+        lines.append("\n\n")
+        self._write_frank("".join(lines))
+
+    def _frank_start_stream(self, message: str, stream_func):
+        """Kick off a background inference stream. Must be called from main thread."""
+        self._frank_stop_event  = threading.Event()
+        self._frank_thinking    = True
+        self._frank_spinner_idx = 0
+        self._frank_last_active = time.time()
+        # Print response header
+        self._write_frank("\n[FRANK]  ")
+        # Start spinner in header status bar
+        self._frank_spin()
+        # Launch background worker
+        self._frank_thread = threading.Thread(
+            target=self._frank_stream_worker,
+            args=(message, stream_func),
+            daemon=True
+        )
+        self._frank_thread.start()
+
+    def _frank_stream_worker(self, message: str, stream_func):
+        """Background thread: pull tokens and schedule main-thread GUI writes."""
+        stop_event = self._frank_stop_event
+        try:
+            for token in stream_func(message):
+                if stop_event and stop_event.is_set():
+                    break
+                # Capture token in lambda default to avoid loop-closure bug
+                self._root.after(0, lambda t=token: self._on_frank_token(t))
+        except Exception as e:
+            self._root.after(
+                0, lambda: self._write_frank(f"\n[FRANK] Stream error: {e}\n")
+            )
+        finally:
+            self._root.after(0, self._on_frank_stream_done)
+
+    def _on_frank_token(self, token: str):
+        """
+        Main thread: handle a single streamed token.
+        Accumulates into _frank_exec_buffer watching for ::EXEC:: markers.
+        When a complete ::EXEC::<cmd> sequence is detected the command is
+        extracted, the pre-marker text is displayed normally, and the command
+        is routed to _frank_guard_exec(). All other tokens display immediately.
+        """
+        _MARKER = '::EXEC::'
+        self._frank_exec_buffer += token
+
+        if _MARKER in self._frank_exec_buffer:
+            pre, _, rest = self._frank_exec_buffer.partition(_MARKER)
+            # Wait until we have a full command (newline-terminated or non-empty)
+            if rest:
+                cmd = rest.split('\n')[0].strip()
+                if cmd:
+                    # Display text that came before the marker
+                    if pre:
+                        self._write_frank(pre)
+                    # Keep anything after the command in the buffer
+                    remainder = rest[len(rest.split('\n')[0]):]
+                    self._frank_exec_buffer = remainder
+                    # Route command through permission guard (main thread safe)
+                    self._root.after(0, lambda c=cmd: self._frank_guard_exec(c))
+                    return
+            # Marker seen but command not complete yet — keep buffering
+            return
+
+        # No marker — display immediately and clear buffer
+        self._write_frank(token)
+        self._frank_exec_buffer = ""
+
+    def _on_frank_stream_done(self):
+        """Main thread: called when the stream thread finishes or is interrupted."""
+        # Flush any remaining buffered text that didn't trigger ::EXEC::
+        if self._frank_exec_buffer:
+            self._write_frank(self._frank_exec_buffer)
+            self._frank_exec_buffer = ""
+        self._frank_thinking = False
+        self._write_frank("\n\n")
+        self._frank_last_active = time.time()
+        if self._status_label:
+            if self._in_frank_mode:
+                self._status_label.configure(
+                    text="  [FRANK]  ", text_color="#7c3aed"
+                )
+            else:
+                self._status_label.configure(
+                    text="  ● ALIVE  ",
+                    text_color=self._colors['electric_green']
+                )
+        self._frank_start_idle_watch()
+
+    def _frank_stop_streaming(self):
+        """Signal the background stream thread to stop immediately."""
+        if self._frank_stop_event:
+            self._frank_stop_event.set()
+        self._frank_thinking = False
+        self._write_frank("\n[FRANK] Interrupted.\n\n")
+        if self._status_label:
+            label = "  [FRANK]  " if self._in_frank_mode else "  ● ALIVE  "
+            color = "#7c3aed" if self._in_frank_mode else self._colors['electric_green']
+            self._status_label.configure(text=label, text_color=color)
+
+    _FRANK_SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+    def _frank_spin(self):
+        """Cycle spinner chars in the header status bar while FRANK is thinking."""
+        if not self._frank_thinking or not self._root:
+            return
+        if self._status_label:
+            frame = self._FRANK_SPINNER[
+                self._frank_spinner_idx % len(self._FRANK_SPINNER)
+            ]
+            self._frank_spinner_idx += 1
+            self._status_label.configure(
+                text=f"  {frame} [FRANK]  ", text_color="#7c3aed"
+            )
+        self._root.after(150, self._frank_spin)
 
     # ==================== SECURITY COMMANDS ====================
-    
+
     def _cmd_security(self, args: List[str]):
         """Security dashboard and threat monitoring commands"""
         try:
@@ -3519,7 +4758,31 @@ class FrankensteinTerminal:
                 'grep': 'grep [-i] PATTERN FILE... - Search for pattern',
                 'find': 'find PATH [-name PATTERN] - Find files',
                 'status': 'status - Show Frankenstein system status',
-                'frank': 'frank <cmd> - Frankenstein commands (status, version, quote)',
+                'frank': (
+                    'frank <cmd> - Frankenstein commands + [FRANK] AI\n'
+                    '  frank help            Full FRANK command guide (also shows at chat start)\n'
+                    '  frank chat            Enter FRANK interactive AI chat mode\n'
+                    '  frank ask <text>      Single-shot AI query (no history)\n'
+                    '  frank status          AI health check (never loads model)\n'
+                    '  frank agents          List discoverable agents\n'
+                    '  frank reset           Clear conversation history\n'
+                    '  frank unload          Free model from RAM (~4.5 GB)\n'
+                    '  frank version/quote   Frankenstein info & quotes\n'
+                    '\nIN-CHAT SHORTCUTS (once inside frank chat):\n'
+                    '  !run <cmd>   Propose a terminal command for guarded execution\n'
+                    '  !help        Full command guide (same as frank help)\n'
+                    '  !commands    Dense tier reference for all 69+ commands\n'
+                    '  !history     Show FRANK execution audit log for this session\n'
+                    '  !status      Quick FRANK AI health check\n'
+                    '  y / yes      Approve a pending TIER 2 (modify) command\n'
+                    '  CONFIRM      Approve a pending TIER 1 (destructive) command\n'
+                    '  n / cancel   Reject any pending command proposal\n'
+                    '  exit / quit  Leave FRANK chat mode\n'
+                    '\nAUTOMATIC EXECUTION:\n'
+                    '  FRANK detects when a command is needed and proposes it via\n'
+                    '  ::EXEC:: token in its response. The guard system intercepts\n'
+                    '  it before running — same tier rules apply as !run.'
+                ),
                 # Git
                 'git': '''git <cmd> - ENHANCED Git Bash replacement with progress bars & colors
 

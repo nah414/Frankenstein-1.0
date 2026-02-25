@@ -1,0 +1,8 @@
+I encountered an error while processing your request.
+
+Error   : {error}
+Tool    : {tool_name}
+Context : {context}
+
+I will attempt to recover or suggest an alternative approach.
+If this error recurs, check the audit log at ~/.frankenstein/logs/sauron_audit.log

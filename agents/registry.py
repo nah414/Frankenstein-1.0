@@ -69,6 +69,19 @@ class AgentRegistry:
         except Exception as e:
             logger.debug(f"Could not register NumericalComputingAgent: {e}")
 
+        # Phase 4 / Day 6: Security + Hardware wrapper agents
+        try:
+            from .builtin.security_agent import SecurityAgent
+            self.register(SecurityAgent)
+        except Exception as e:
+            logger.debug(f"Could not register SecurityAgent: {e}")
+
+        try:
+            from .builtin.hardware_agent import HardwareAgent
+            self.register(HardwareAgent)
+        except Exception as e:
+            logger.debug(f"Could not register HardwareAgent: {e}")
+
     def register(self, agent_class: Type[BaseAgent]) -> bool:
         """Register an agent class (class reference only, no instantiation)"""
         name = agent_class.name

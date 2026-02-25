@@ -1,6 +1,6 @@
 """
-FRANKENSTEIN 2.0 - Monster Terminal Synthesis Commands
-Phase 2 Step 3: Terminal Integration for Quantum Simulations
+FRANKENSTEIN 1.0 - Monster Terminal Synthesis Commands
+Terminal Integration for Quantum Simulations
 
 Commands for triggering Schrödinger-Lorentz simulations from Monster Terminal.
 Spawns separate 3D visualization window when calculations are executed.
@@ -211,7 +211,7 @@ class SynthesisTerminalCommands:
     def cmd_help(self, args: List[str]) -> CommandResult:
         help_text = """
 ================================================================
-  FRANKENSTEIN SYNTHESIS ENGINE | Phase 2 Step 3
+  FRANKENSTEIN SYNTHESIS ENGINE | Quantum-Classical Bridge
   Schrodinger Equation + Lorentz + 3D Bloch Sphere
 ================================================================
   synthesis run <preset> [--velocity V]   Run simulation

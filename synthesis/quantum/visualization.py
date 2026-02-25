@@ -42,43 +42,54 @@ class QuantumVisualizer:
         coords: Tuple[float, float, float],
         probabilities: Dict[str, float] = None,
         statevector: np.ndarray = None,
-        result_id: str = "quantum"
+        result_id: str = "quantum",
+        n_qubits: int = None,
+        multi_qubit_data: Dict[str, Any] = None,
     ) -> bool:
         """
         Launch interactive 3D Bloch sphere in browser.
-        
+
+        Step 8 fix: now injects N_QUBITS and MULTI_QUBIT_DATA so the
+        HTML template can switch between single-sphere and CSS Grid
+        multi-sphere layouts (up to 16 qubits, no 4-qubit limit).
+
         Args:
-            coords: (x, y, z) Bloch coordinates
-            probabilities: Measurement probabilities
-            statevector: Full statevector
-            result_id: Unique identifier for temp file
-            
+            coords:           (x, y, z) Bloch coordinates for qubit 0
+            probabilities:    Measurement probabilities
+            statevector:      Full statevector (all qubits)
+            result_id:        Unique identifier for temp file
+            n_qubits:         Total number of qubits in the system
+            multi_qubit_data: Dict with keys:
+                                'qubit_coords'   — List[(x,y,z)] per qubit
+                                'entanglement'   — Dict from get_entanglement_info()
+                              Enables CSS Grid multi-sphere view in the HTML.
+
         Returns:
             True if launched successfully
         """
         widget_dir = Path(__file__).parent.parent.parent / "widget"
         template_path = widget_dir / "bloch_sphere.html"
-        
+
         if not template_path.exists():
             self._output(f"⚠️  Bloch sphere template not found at {template_path}\n")
             return False
-        
+
         x, y, z = coords
-        
+
         # Read template
         with open(template_path, 'r', encoding='utf-8') as f:
             html = f.read()
-        
-        # Inject data
+
+        # ── Inject single-qubit coordinates ──────────────────────────
         html = html.replace('{{BLOCH_X}}', str(x))
         html = html.replace('{{BLOCH_Y}}', str(y))
         html = html.replace('{{BLOCH_Z}}', str(z))
-        
+
         if probabilities:
             html = html.replace('{{PROBABILITIES}}', json.dumps(probabilities))
         else:
             html = html.replace('{{PROBABILITIES}}', '{}')
-        
+
         if statevector is not None:
             sv_data = {
                 'real': statevector.real.tolist(),
@@ -87,15 +98,24 @@ class QuantumVisualizer:
             html = html.replace('{{STATEVECTOR}}', json.dumps(sv_data))
         else:
             html = html.replace('{{STATEVECTOR}}', '{"real":[1,0],"imag":[0,0]}')
-        
+
+        # ── Step 8: inject N_QUBITS and MULTI_QUBIT_DATA ─────────────
+        _n = n_qubits if n_qubits is not None else 1
+        html = html.replace('{{N_QUBITS}}', str(_n))
+
+        if multi_qubit_data is not None:
+            html = html.replace('{{MULTI_QUBIT_DATA}}', json.dumps(multi_qubit_data))
+        else:
+            html = html.replace('{{MULTI_QUBIT_DATA}}', 'null')
+
         # Write temp file
         output_path = self._temp_dir / f"bloch_{result_id}.html"
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html)
-        
+
         # Launch browser
         webbrowser.open(f'file:///{output_path.as_posix()}')
-        
+
         return True
 
     def launch_multi_qubit_bloch(

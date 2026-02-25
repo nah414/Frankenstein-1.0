@@ -1,0 +1,10 @@
+The Eye of Sauron requires your explicit approval before proceeding.
+
+Action   : {action}
+Tool     : {tool_name}
+Risk     : {risk_level}
+Details  : {details}
+
+This is a Ring 2 (SENSITIVE) operation. Once approved it will execute immediately.
+
+Approve? [yes / no / always (for this session)]:

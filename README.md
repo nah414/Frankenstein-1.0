@@ -37,11 +37,19 @@ providers                                 # See 29+ available providers
 connect ibm_quantum                       # Connect with your credentials
 ```
 
-### Real-Time Adaptation (NEW ✨)
+### Real-Time Adaptation
 ```bash
 adapt-status         # Monitor system performance
 adapt-dashboard      # See real-time analytics
 adapt-recommend quantum_simulation    # Get AI-powered recommendations
+```
+
+### FRANK AI Chat (NEW ✨)
+```bash
+frank chat           # Enter FRANK AI mode (auto-displays full command guide)
+frank help           # Show complete command reference any time
+!run git status      # Propose commands — FRANK guards and executes safely
+!run rm -rf ./old    # FRANK asks CONFIRM before any destructive operation
 ```
 
 ---
@@ -55,6 +63,7 @@ adapt-recommend quantum_simulation    # Get AI-powered recommendations
 - **📊 Real-Time Adaptation** - Learns from your usage and optimizes performance
 - **🔒 Security & Permissions** - Role-based access control with audit logging
 - **⚙️ Automated Workflows** - 6 background tasks for health monitoring and optimization
+- **🤖 FRANK AI Chat** - Qwen 2.5 7B local LLM with 4-tier permission guard and full terminal oversight
 
 ---
 
@@ -104,10 +113,12 @@ Frankenstein-1.0/
 ├── launch_terminal.py    # Start here
 ├── widget/               # Terminal interface
 ├── agents/               # AI agents (compute, quantum, crypto)
-│   └── adaptation/       # Real-time learning system (NEW)
+│   ├── adaptation/       # Real-time learning system
+│   └── sauron/           # FRANK AI — Qwen 2.5 7B orchestrator (NEW)
 ├── router/               # Intelligent workload routing
 ├── integration/          # 29 provider adapters
 ├── permissions/          # Access control & automation
+├── configs/              # Model and system configuration
 └── synthesis/            # Quantum simulation engine
 ```
 
@@ -126,6 +137,37 @@ Frankenstein-1.0/
 
 ## 🌟 Latest Updates
 
+### Phase 4 Day 7: FRANK AI Chat with Permission Guard (COMPLETE ✅)
+*Released: February 2026*
+
+Frankenstein now has a local AI brain. FRANK (powered by Qwen 2.5 7B via Ollama) can
+converse naturally AND execute all 74+ terminal commands safely through a hard-coded
+4-tier permission system:
+
+- **🤖 FRANK AI Chat** - `frank chat` launches full AI mode with command guide on entry
+- **🛡️ 4-Tier Permission Guard** - Every command classified before execution:
+  - 🟢 **TIER 3** Read-only — auto-executes (`git status`, `ls`, `hardware`, `adapt-*`)
+  - 🟡 **TIER 2** Modify — requires `y` approval (`git commit`, `pip install`, `cp`, `mv`)
+  - 🔴 **TIER 1** Destructive — requires typing `CONFIRM` (`rm -r`, `git reset --hard`)
+  - ⛔ **TIER 0** Forbidden — permanently blocked (`rm -rf /`, `format c:`, fork bombs)
+- **`::EXEC::` Auto-Detection** - AI embeds commands in its stream; guard intercepts automatically
+- **`!run` Manual Proposals** - You can propose any command directly inside chat
+- **`frank help`** - Full command guide with tier labels for every command category
+- **Audit Trail** - `!history` shows every proposal: tier, status, timestamp
+
+```bash
+frank chat             # Enter FRANK AI (guide auto-displays)
+frank help             # Full command reference (outside chat)
+!run git log           # Manual command proposal (auto-approved — TIER 3)
+!run git push          # Manual command proposal (requires y — TIER 2)
+!history               # Session audit log
+```
+
+**Test Coverage**: 399/399 tests passing ✅
+**Safety**: CPU limit 80%, RAM limit 75% (never exceeded)
+
+---
+
 ### Phase 3 Step 7: Real-Time Adaptation (COMPLETE ✅)
 *Released: February 2026*
 
@@ -138,7 +180,7 @@ The system now learns from your usage patterns and automatically optimizes:
 - **7 Terminal Commands** - Full control via `adapt-*` commands
 
 **Test Coverage**: 98/98 tests passing ✅
-**Safety**: CPU limit 80%, RAM limit 70% (never exceeded)
+**Safety**: CPU limit 80%, RAM limit 75% (never exceeded)
 
 ---
 
@@ -160,7 +202,7 @@ The system now learns from your usage patterns and automatically optimizes:
 | **Phase 1** | ✅ Complete | Terminal, safety system, resource management |
 | **Phase 2** | ✅ Complete | Quantum simulation, Bloch visualization, 26 gates |
 | **Phase 3** | ✅ Complete | 29 providers, intelligent routing, permissions, **real-time adaptation** |
-| **Phase 4** | 🔜 Planned | Autonomous agents, multi-agent orchestration |
+| **Phase 4** | 🚧 In Progress | FRANK AI chat, 4-tier permission guard, Eye of Sauron orchestrator |
 | **Phase 5** | 🔜 Planned | Advanced ML models, federated learning |
 
 ---

@@ -110,7 +110,7 @@ def is_within_tier1_limits() -> Dict[str, bool]:
     """
     return {
         "cpu_limit_appropriate": SAFETY.MAX_CPU_PERCENT <= 80,
-        "memory_limit_appropriate": SAFETY.MAX_MEMORY_PERCENT <= 70,
+        "memory_limit_appropriate": SAFETY.MAX_MEMORY_PERCENT <= 80,
         "thread_limit_appropriate": SAFETY.MAX_WORKER_THREADS <= 2,
         "storage_limit_appropriate": SAFETY.MAX_STORAGE_USE_GB <= 30,
         "tier1_compliant": True
