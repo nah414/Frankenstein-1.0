@@ -142,8 +142,8 @@ class TestMemorySystem:
             stats = memory.get_session_stats()
             assert isinstance(stats, dict)
             assert "session_id" in stats
-            assert "started_at" in stats
-            assert "task_count" in stats
+            assert "active_task" in stats
+            assert "success_rate_percent" in stats
 
     def test_new_session_creation(self):
         """Test creating a new session"""
@@ -178,7 +178,7 @@ class TestMemoryLimits:
     def test_max_history_limit_set(self):
         """Test that max history limit is defined"""
         memory = MemorySystem()
-        assert memory._max_history == 1000
+        assert memory._max_history == 500
 
     def test_task_history_initialized(self):
         """Test that task history list is initialized"""

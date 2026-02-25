@@ -92,14 +92,20 @@ except ImportError:
     logger.warning("JAX not available - falling back to NumPy (slower)")
 
 # Numba JIT compiler (lazy-loaded)
+# Catches ImportError AND circular-import / broken-install errors
 NUMBA_AVAILABLE = False
 numba = None
 try:
     import numba
+    # Verify the install is functional — broken numba has circular imports
+    from numba.core import types as _numba_types_check  # noqa: F401
+    del _numba_types_check
     NUMBA_AVAILABLE = True
     logger.info(f"Numba {numba.__version__} loaded - JIT compilation enabled")
-except ImportError:
-    logger.warning("Numba not available - measurement sampling will be slower")
+except Exception:
+    numba = None
+    NUMBA_AVAILABLE = False
+    logger.warning("Numba not available or broken install - falling back to NumPy sampling")
 
 # opt_einsum for optimized contractions
 OPT_EINSUM_AVAILABLE = False
@@ -108,6 +114,19 @@ try:
     OPT_EINSUM_AVAILABLE = True
 except ImportError:
     pass
+
+# TENSOR ACCELERATOR — lazy-loaded, activates only when first gate is applied
+# Falls back to NumPy automatically if JAX/Numba not installed.
+try:
+    from synthesis.accelerator import (
+        apply_single_qubit_gate as _accel_single,
+        apply_controlled_gate   as _accel_controlled,
+        apply_mcx_gate          as _accel_mcx,
+        get_backend_name        as _accel_backend,
+    )
+    _ACCEL_AVAILABLE = True
+except ImportError:
+    _ACCEL_AVAILABLE = False
 
 
 class ComputeMode(Enum):
@@ -293,66 +312,149 @@ class SynthesisEngine:
     def apply_gate(self, gate: np.ndarray, target: int, control: Optional[int] = None):
         """
         Apply a quantum gate to the statevector.
-        
+
+        Uses tensor-indexed MSB convention: qubit k at bit position (n-1-k).
+        step = 2^(n-1-target). No full matrix is ever built — O(2^n) memory.
+
+        Delegates to the accelerator (JAX → Numba → NumPy fallback).
+        All three backends produce identical results; only speed differs.
+
         Args:
-            gate: 2x2 unitary matrix
-            target: Target qubit index (0-indexed from right/LSB)
-            control: Optional control qubit for controlled gates
+            gate:    2x2 unitary matrix (complex128)
+            target:  Target qubit index (MSB: qubit 0 = most significant bit)
+            control: Optional single control qubit for controlled gates
         """
         if self._statevector is None:
             raise RuntimeError("No statevector initialized. Call reset() first.")
-        
+
         n = self._num_qubits
-        dim = 2 ** n
-        
-        if control is None:
-            # Single-qubit gate
-            full_gate = self._expand_gate(gate, target, n)
+
+        if _ACCEL_AVAILABLE:
+            # Accelerator handles JAX/Numba/NumPy dispatch internally
+            if control is None:
+                _accel_single(self._statevector, gate, target, n)
+            else:
+                _accel_controlled(self._statevector, gate, control, target, n)
         else:
-            # Controlled gate
-            full_gate = self._expand_controlled_gate(gate, control, target, n)
-        
-        self._statevector = full_gate @ self._statevector
+            # Pure NumPy tensor-indexed fallback (MSB convention)
+            # step = 2^(n-1-target) — same formula as true_engine.py
+            if control is None:
+                self._tensor_apply_single(gate, target)
+            else:
+                self._tensor_apply_controlled(gate, control, target)
+
         self._gate_log.append({
             "gate": gate.tolist(),
             "target": target,
             "control": control,
             "timestamp": time.time()
         })
-        # Trim gate log to prevent memory buildup
         if len(self._gate_log) > self._max_gate_log:
             self._gate_log.pop(0)
-    
-    def _expand_gate(self, gate: np.ndarray, target: int, n: int) -> np.ndarray:
-        """Expand single-qubit gate to full n-qubit space using tensor products"""
-        result = np.array([[1.0]], dtype=np.complex128)
-        
-        for i in range(n):
-            if i == target:
-                result = np.kron(gate, result)
-            else:
-                result = np.kron(np.eye(2, dtype=np.complex128), result)
-        
-        return result
-    
-    def _expand_controlled_gate(self, gate: np.ndarray, control: int, target: int, n: int) -> np.ndarray:
-        """Expand controlled gate to full n-qubit space"""
-        dim = 2 ** n
-        full_gate = np.eye(dim, dtype=np.complex128)
-        
-        # Iterate through all basis states
+
+    def _tensor_apply_single(self, gate: np.ndarray, target: int):
+        """
+        NumPy fallback: apply 2x2 gate using tensor-indexed MSB convention.
+        step = 2^(n-1-target). Operates in-place. O(2^n) time, O(1) extra.
+        """
+        n    = self._num_qubits
+        step = 1 << (n - 1 - target)
+        dim  = 1 << n
+        sv   = self._statevector
+        g00, g01 = gate[0, 0], gate[0, 1]
+        g10, g11 = gate[1, 0], gate[1, 1]
+        for i in range(0, dim, 2 * step):
+            for j in range(step):
+                i0 = i + j
+                i1 = i0 + step
+                a0, a1 = sv[i0], sv[i1]
+                sv[i0] = g00 * a0 + g01 * a1
+                sv[i1] = g10 * a0 + g11 * a1
+
+    def _tensor_apply_controlled(self, gate: np.ndarray, control: int, target: int):
+        """
+        NumPy fallback: apply controlled gate using tensor-indexed MSB convention.
+        Only touches amplitudes where control = |1>. O(2^n) time, O(1) extra.
+        """
+        n        = self._num_qubits
+        ctrl_bit = n - 1 - control
+        tgt_bit  = n - 1 - target
+        tgt_step = 1 << tgt_bit
+        dim      = 1 << n
+        sv       = self._statevector
+        g00, g01 = gate[0, 0], gate[0, 1]
+        g10, g11 = gate[1, 0], gate[1, 1]
         for i in range(dim):
-            # Check if control qubit is |1⟩
-            if (i >> control) & 1:
-                # Apply gate to target qubit
-                target_bit = (i >> target) & 1
-                for new_target_bit in range(2):
-                    j = i ^ (target_bit << target) ^ (new_target_bit << target)
-                    full_gate[j, i] = gate[new_target_bit, target_bit]
-                    if new_target_bit != target_bit:
-                        full_gate[i, i] = 0  # Clear diagonal if modified
-        
-        return full_gate
+            if not ((i >> ctrl_bit) & 1):
+                continue
+            if (i >> tgt_bit) & 1:
+                continue
+            i0, i1 = i, i | tgt_step
+            a0, a1 = sv[i0], sv[i1]
+            sv[i0] = g00 * a0 + g01 * a1
+            sv[i1] = g10 * a0 + g11 * a1
+
+    def mcx(self, controls: list, target: int):
+        """
+        Multi-Controlled X gate — tensor-indexed sparse swap.
+
+        MSB convention: qubit k at bit position (n-1-k).
+        No matrix is built. Memory: O(2^n) = ~1 MB for 16 qubits.
+
+        This is the engine-level MCX, called by quantum_mode when
+        engine.mcx() is invoked directly. The widget-level
+        _apply_mcx_statevector continues to work via set_state().
+
+        Args:
+            controls: List of control qubit indices (all must be |1> to fire)
+            target:   Target qubit index (X applied when all controls = |1>)
+        """
+        if self._statevector is None:
+            raise RuntimeError("Initialize quantum state first with reset(n)")
+
+        n = self._num_qubits
+        all_q = set(controls) | {target}
+        if len(all_q) != len(controls) + 1:
+            raise ValueError("Control qubits and target must all be distinct.")
+        if any(q < 0 or q >= n for q in all_q):
+            raise ValueError(f"All qubit indices must be in [0, {n - 1}].")
+
+        if _ACCEL_AVAILABLE:
+            _accel_mcx(self._statevector, list(controls), target, n)
+        else:
+            # MSB tensor-indexed sparse swap (fallback)
+            tgt_bit   = n - 1 - target
+            tgt_mask  = 1 << tgt_bit
+            ctrl_mask = sum(1 << (n - 1 - c) for c in controls)
+            dim = 1 << n
+            sv  = self._statevector
+            for i in range(dim):
+                if (i & ctrl_mask) == ctrl_mask and not (i & tgt_mask):
+                    j = i | tgt_mask
+                    sv[i], sv[j] = sv[j], sv[i]
+
+        self._gate_log.append({
+            "gate": "MCX", "controls": list(controls),
+            "target": target, "timestamp": time.time()
+        })
+        if len(self._gate_log) > self._max_gate_log:
+            self._gate_log.pop(0)
+
+    # ── Legacy stubs — kept so any external caller gets a clear error ──────────
+    def _expand_gate(self, gate: np.ndarray, target: int, n: int) -> np.ndarray:
+        """REMOVED: Was kron-based LSB (OOM at 16 qubits). Use apply_gate()."""
+        raise RuntimeError(
+            "_expand_gate removed (caused OOM at 16 qubits via kron). "
+            "Use apply_gate() — tensor-indexed MSB via accelerator."
+        )
+
+    def _expand_controlled_gate(self, gate: np.ndarray, control: int,
+                                target: int, n: int) -> np.ndarray:
+        """REMOVED: Was full-matrix LSB. Use apply_gate(gate, target, control)."""
+        raise RuntimeError(
+            "_expand_controlled_gate removed. "
+            "Use apply_gate(gate, target, control=control)."
+        )
     
     # ==================== STANDARD GATE SET ====================
     
@@ -1134,7 +1236,8 @@ class SynthesisEngine:
         try:
             probs = self.get_probabilities()
             measurements = self.measure(shots) if shots > 0 else None
-            bloch = self.get_bloch_coords(0) if self._num_qubits <= 4 else None
+            # Step 9 fix: remove 4-qubit guard — get Bloch coords for all qubits
+            bloch = self.get_bloch_coords(0)
             
             result = ComputeResult(
                 result_id=result_id,
@@ -1181,55 +1284,115 @@ class SynthesisEngine:
         elif self.visualization_mode == VisualizationMode.TERMINAL:
             self._print_ascii_bloch(result)
     
+    def _build_multi_qubit_data(self, result: ComputeResult) -> dict:
+        """
+        Build MULTI_QUBIT_DATA dict for the Bloch sphere HTML template.
+
+        Step 9 fix: collects per-qubit Bloch coordinates and entanglement
+        info for all qubits (no 4-qubit limit) so the CSS Grid multi-sphere
+        layout can display up to 16 entangled Bloch spheres.
+
+        Returns:
+            dict with keys:
+                'qubit_coords'  — List[(x,y,z)] for each qubit
+                'entanglement'  — dict from get_entanglement_info()
+        """
+        import numpy as np
+        n = result.num_qubits or self._num_qubits
+
+        # Compute per-qubit Bloch coords via partial trace
+        qubit_coords = []
+        try:
+            for q in range(n):
+                coords = self.get_bloch_coords(q)
+                qubit_coords.append(list(coords))
+        except Exception:
+            qubit_coords = [[0, 0, 1]] * n
+
+        # Entanglement info
+        ent_info = {}
+        try:
+            ent_info = self.get_entanglement_info() or {}
+        except Exception:
+            pass
+
+        return {
+            'qubit_coords': qubit_coords,
+            'entanglement': ent_info,
+        }
+
     def _launch_bloch_sphere(self, result: ComputeResult):
-        """Launch 3D Bloch sphere in browser"""
+        """
+        Launch 3D Bloch sphere in browser.
+
+        Step 9 fix:
+        - Removed 4-qubit guard (was: bloch_coords is None → bail)
+        - Now injects N_QUBITS and MULTI_QUBIT_DATA for all qubit counts
+        - Single-qubit: big 3-D Three.js sphere as before
+        - Multi-qubit: CSS Grid of proportional mini-spheres (up to 16)
+        """
         if result.bloch_coords is None:
-            self._output("⚠️  Bloch visualization only available for ≤4 qubit systems\n")
-            return
-        
+            # Try to compute it now (guard was removed from compute())
+            try:
+                result.bloch_coords = self.get_bloch_coords(0)
+            except Exception:
+                self._output("⚠️  Bloch coordinates not available for this state\n")
+                return
+
         # Find the HTML file
         widget_dir = Path(__file__).parent.parent / "widget"
         html_path = widget_dir / "bloch_sphere.html"
-        
+
         if not html_path.exists():
             self._output(f"⚠️  Bloch sphere HTML not found at {html_path}\n")
             return
-        
-        # Create temp HTML with embedded data
+
         x, y, z = result.bloch_coords
-        
+        n        = result.num_qubits or self._num_qubits
+
         # Read template and inject data
         with open(html_path, 'r', encoding='utf-8') as f:
             html_content = f.read()
-        
-        # Inject coordinates
+
+        # Single-qubit coordinates
         html_content = html_content.replace('{{BLOCH_X}}', str(x))
         html_content = html_content.replace('{{BLOCH_Y}}', str(y))
         html_content = html_content.replace('{{BLOCH_Z}}', str(z))
-        
-        # Inject probabilities
+
+        # Probabilities
         probs_json = json.dumps(result.probabilities or {})
         html_content = html_content.replace('{{PROBABILITIES}}', probs_json)
-        
-        # Inject statevector
+
+        # Statevector
         if result.statevector is not None:
             sv_data = {
                 'real': result.statevector.real.tolist(),
                 'imag': result.statevector.imag.tolist()
             }
             html_content = html_content.replace('{{STATEVECTOR}}', json.dumps(sv_data))
-        
+        else:
+            html_content = html_content.replace('{{STATEVECTOR}}', '{"real":[1,0],"imag":[0,0]}')
+
+        # Step 9: inject N_QUBITS and MULTI_QUBIT_DATA
+        html_content = html_content.replace('{{N_QUBITS}}', str(n))
+
+        if n > 1:
+            mq_data = self._build_multi_qubit_data(result)
+            html_content = html_content.replace('{{MULTI_QUBIT_DATA}}', json.dumps(mq_data))
+        else:
+            html_content = html_content.replace('{{MULTI_QUBIT_DATA}}', 'null')
+
         # Write temp file
         temp_dir = Path.home() / ".frankenstein" / "temp"
         temp_dir.mkdir(parents=True, exist_ok=True)
         temp_html = temp_dir / f"bloch_{result.result_id}.html"
-        
+
         with open(temp_html, 'w', encoding='utf-8') as f:
             f.write(html_content)
-        
+
         # Launch in browser
         webbrowser.open(f'file:///{temp_html.as_posix()}')
-        self._output(f"🌐 Launched Bloch sphere visualization: {temp_html.name}\n")
+        self._output(f"🌐 Launched Bloch sphere visualization ({n} qubit{'s' if n > 1 else ''}): {temp_html.name}\n")
     
     def _print_ascii_bloch(self, result: ComputeResult):
         """Print ASCII representation of Bloch sphere"""
@@ -1302,38 +1465,43 @@ class SynthesisEngine:
 
 
 # ==================== NUMBA JIT SAMPLING ====================
-# Define outside class to allow Numba compilation
+# Define outside class to allow Numba compilation.
+# Wrapped in try/except so a broken numba install never crashes the module.
+
+def _sample_outcomes_numba(probs: np.ndarray, shots: int) -> np.ndarray:
+    """NumPy fallback sampling (used when Numba unavailable or broken)."""
+    indices = np.arange(len(probs))
+    return np.random.choice(indices, size=shots, p=probs)
 
 if NUMBA_AVAILABLE:
-    @numba.jit(nopython=True, cache=True)
-    def _sample_outcomes_numba(probs: np.ndarray, shots: int) -> np.ndarray:
-        """
-        JIT-compiled measurement sampling using cumulative probability.
+    try:
+        @numba.jit(nopython=True, cache=True)
+        def _sample_outcomes_numba(probs: np.ndarray, shots: int) -> np.ndarray:
+            """
+            JIT-compiled measurement sampling using cumulative probability.
 
-        10-150x faster than np.random.choice for large shot counts.
-        Uses binary search on cumulative distribution.
-        """
-        cumsum = np.cumsum(probs)
-        samples = np.zeros(shots, dtype=np.int64)
+            10-150x faster than np.random.choice for large shot counts.
+            Uses binary search on cumulative distribution.
+            """
+            cumsum = np.cumsum(probs)
+            samples = np.zeros(shots, dtype=np.int64)
 
-        for i in range(shots):
-            r = np.random.random()
-            # Binary search for efficiency
-            lo, hi = 0, len(cumsum) - 1
-            while lo < hi:
-                mid = (lo + hi) // 2
-                if cumsum[mid] < r:
-                    lo = mid + 1
-                else:
-                    hi = mid
-            samples[i] = lo
+            for i in range(shots):
+                r = np.random.random()
+                # Binary search for efficiency
+                lo, hi = 0, len(cumsum) - 1
+                while lo < hi:
+                    mid = (lo + hi) // 2
+                    if cumsum[mid] < r:
+                        lo = mid + 1
+                    else:
+                        hi = mid
+                samples[i] = lo
 
-        return samples
-else:
-    def _sample_outcomes_numba(probs: np.ndarray, shots: int) -> np.ndarray:
-        """Fallback when Numba not available"""
-        indices = np.arange(len(probs))
-        return np.random.choice(indices, size=shots, p=probs)
+            return samples
+    except Exception:
+        # @numba.jit failed at decoration time — keep NumPy fallback above
+        logger.warning("numba.jit decoration failed — using NumPy sampling fallback")
 
 
 # ==================== GLOBAL INSTANCE ====================

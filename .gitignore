@@ -41,3 +41,7 @@ htmlcov/
 
 # Generated visualizations
 visualizations/
+
+# Backup files
+*.bak
+backups/

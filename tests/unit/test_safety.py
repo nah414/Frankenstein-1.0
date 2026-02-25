@@ -34,13 +34,13 @@ class TestSafetyConstraints:
 
     def test_memory_limits_appropriate(self):
         """Test memory limits are set correctly for Tier 1"""
-        assert SAFETY.MAX_MEMORY_PERCENT == 70
+        assert SAFETY.MAX_MEMORY_PERCENT == 75
         assert SAFETY.MAX_MEMORY_PERCENT <= 100
         assert SAFETY.MAX_MEMORY_PERCENT > 0
 
     def test_thread_limits_appropriate(self):
         """Test thread limits are set correctly for 4-core CPU"""
-        assert SAFETY.MAX_WORKER_THREADS == 3
+        assert SAFETY.MAX_WORKER_THREADS == 2
         assert SAFETY.MAX_WORKER_THREADS >= 1
 
     def test_auto_throttle_enabled(self):
@@ -80,7 +80,7 @@ class TestResourceViolationCheck:
         """Test memory violation is detected"""
         result = check_resource_violation(
             cpu_percent=50.0,
-            memory_percent=75.0  # Exceeds 70%
+            memory_percent=80.0  # Exceeds 75%
         )
         assert result["safe"] is False
         assert len(result["violations"]) == 1

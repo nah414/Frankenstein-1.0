@@ -254,7 +254,7 @@ class MetricsStore:
             cursor = conn.cursor()
             cursor.execute("""
                 DELETE FROM metrics WHERE timestamp < ?
-            """, (cutoff_date,))
+            """, (cutoff_date.isoformat(),))
             deleted = cursor.rowcount
 
         logger.info(f"Cleaned up {deleted} old metrics (older than {days_to_keep} days)")
@@ -334,7 +334,7 @@ class MetricsStore:
                     error_rate = ?, last_updated = ?
                 WHERE provider_id = ?
             """, (new_total, new_avg_latency, new_avg_cpu, new_avg_ram,
-                  new_error_rate, datetime.now(), provider_id))
+                  new_error_rate, datetime.now().isoformat(), provider_id))
         else:
             # Create new summary
             cursor.execute("""
@@ -348,5 +348,5 @@ class MetricsStore:
                 metrics.get('cpu_usage', 0),
                 metrics.get('ram_usage', 0),
                 metrics.get('error_rate', 0),
-                datetime.now()
+                datetime.now().isoformat()
             ))

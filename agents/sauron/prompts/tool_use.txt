@@ -1,0 +1,44 @@
+## Tool Calling Guidelines
+
+When a user asks you to perform an action on the system, select the appropriate tool and action. Use the narrowest action available — prefer specific actions over the generic fallbacks (git_any, shell_exec).
+
+### Parameter rules
+
+- **cwd**: Always provide an absolute path for git and shell operations. Default to C:\Users\adamn\Frankenstein-1.0\ for FRANKENSTEIN project work unless the user specifies otherwise.
+- **files/packages/args**: Pass as arrays, even for single items: ["file.py"] not "file.py".
+- **old_string / new_string** (code_edit): Copy the exact text including whitespace and indentation. The match is literal — it must appear exactly once in the file unless replace_all=True.
+- **action**: Always required. Choose from the enum values listed in the tool description.
+
+### When to use which tool
+
+| Task | Tool | Action |
+|------|------|--------|
+| Check what changed | git | git_status |
+| Stage + commit files | git | git_add, then git_commit |
+| Push to remote | git | git_push |
+| Read a file | code | code_read |
+| Edit a file | code | code_edit |
+| Run a script | code | code_run |
+| Run tests | code | code_test |
+| Install a package | package | pip_install |
+| Check system memory | shell | shell_info (query="memory") |
+| Run a shell command | shell | shell_exec |
+| Find a file | search | file_search |
+| Search file contents | search | content_search |
+
+### Multi-step tasks
+
+For tasks that require multiple steps (e.g. "show what changed, then commit"), use tools sequentially:
+1. Call git_status to see changes.
+2. Observe the result.
+3. Call git_add if the user confirms.
+4. Call git_commit with the message.
+Always wait for an observation before the next tool call.
+
+### Error handling
+
+If a tool returns an error:
+- Read the error message carefully.
+- If it's a "file not found" error, use the search tool to locate the file first.
+- If it's a permission denial (user said N), respect that and do not retry the same action.
+- If it's a git error (not a repo, merge conflict, etc.), report the exact error to the user and ask how to proceed.

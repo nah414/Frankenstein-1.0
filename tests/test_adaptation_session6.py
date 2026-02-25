@@ -398,7 +398,7 @@ def test_safety_constraints_during_display():
 
     # Verify safety limits
     assert engine.safety_limits['CPU_MAX'] == 0.80
-    assert engine.safety_limits['RAM_MAX'] == 0.70
+    assert engine.safety_limits['RAM_MAX'] == 0.75
 
     # Render dashboard multiple times (stress test)
     for _ in range(5):

@@ -1,0 +1,36 @@
+# FRANKENSTEIN 1.0 - Eye of Sauron Configuration
+# Phase 4: Master Orchestrator Agent
+# Model: Qwen 2.5 7B Instruct Q4_K_M (served via Ollama)
+# Hardware: Dell i3 8th Gen, 4 cores, 8GB RAM
+
+sauron:
+  version: "1.0.0"
+
+  model:
+    name: "qwen2.5:7b-instruct-q4_K_M"
+    provider: "ollama"
+    quantization: "Q4_K_M"
+    parameters: "7B"
+    gguf_source: ""  # Set to your local GGUF path if loading directly (optional — Ollama handles this)
+
+  inference:
+    num_ctx: 8192          # Context window (tokens)
+    num_thread: 3          # Leave 1 core free for OS on i3 quad-core
+    temperature: 0.7       # Balanced creativity vs precision
+    top_p: 0.9
+    keep_alive: "5m"       # Ollama unloads model after 5 min idle
+
+  resource_budget:
+    max_ram_gb: 5.0        # 4.5GB model + 0.5GB inference buffer
+    max_cpu_inference: 60  # Target CPU % during active inference
+    max_cpu_idle: 10       # Target CPU % when loaded but waiting
+    hard_cpu_limit: 80     # Emergency stop threshold (matches SAFETY)
+
+  behavior:
+    lazy_load: true          # NEVER load at terminal startup
+    idle_timeout_sec: 300    # 5 min inactivity → unload model
+    max_conversation_turns: 20
+    stream_by_default: true  # Stream output to terminal
+
+  paths:
+    log_file: "~/.frankenstein/logs/sauron.log"

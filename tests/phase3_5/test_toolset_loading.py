@@ -56,7 +56,7 @@ class TestManagerInit:
 
     def test_all_five_toolsets_registered(self):
         mgr = _fresh_manager()
-        expected = {"numpy", "scipy", "qutip", "qiskit", "qencrypt"}
+        expected = {"numpy", "scipy", "qutip", "qiskit", "qencrypt", "matplotlib"}
         assert set(mgr.toolsets.keys()) == expected
 
     def test_none_loaded_at_init(self):
@@ -186,7 +186,7 @@ class TestStatus:
     def test_get_loaded_status_keys(self):
         mgr = _fresh_manager()
         status = mgr.get_loaded_status()
-        assert set(status.keys()) == {"numpy", "scipy", "qutip", "qiskit", "qencrypt"}
+        assert set(status.keys()) == {"numpy", "scipy", "qutip", "qiskit", "qencrypt", "matplotlib"}
         for key, info in status.items():
             assert "loaded" in info
             assert "ram_mb" in info
