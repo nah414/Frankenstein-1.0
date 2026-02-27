@@ -1,24 +1,23 @@
 """
 FRANKENSTEIN 1.0 - Eye of Sauron: Quantum Tool
-Phase 4 / Day 3: Tool Framework
+Phase 4 / Day 3: Tool Framework  (expanded Day 7+)
 
-Gives Sauron direct programmatic control over the quantum engine.
-Integrates: SynthesisEngine (native), Qiskit (QASM/Aer), QuTiP (open systems),
-            SciPy (linear algebra), NumPy (statevector math).
+Gives Frank full programmatic control over every quantum and synthesis operation
+available in the Monster Terminal.  Manual terminal mode and Frank share the SAME
+engine singletons — they co-exist and can hand off to each other.
 
-Two execution modes:
-  Direct mode  — Sauron calls individual gate ops on the live SynthesisEngine
-                 state. Manual terminal mode and Sauron share the SAME engine
-                 singleton — they co-exist and can hand off to each other.
-
-  Circuit mode — Sauron submits a full circuit definition (list of gate dicts,
-                 matching CircuitDefinition.gates format) which executes in
-                 sequence. Works with circuits recalled from memory_tool.
+Two quantum engines:
+  SynthesisEngine    — 16-qubit RAM-only (fast, default for n_qubits <= 16)
+  TrueSynthesisEngine— 18-qubit disk-backed 20 GB (auto-selected for n_qubits > 16)
 
 Permission mapping:
-  Ring 3 (SAFE):     init_qubits, apply_gate, run_circuit, get_state_info
-  Ring 2 (SENSITIVE): measure, save_state, load_circuit_and_run,
-                       qiskit_run, qutip_evolve, show_bloch
+  Ring 3 (SAFE):      init_qubits, apply_gate, run_circuit, run_preset,
+                      get_state_info, list_circuits, synthesis_status,
+                      true_engine_status
+  Ring 2 (SENSITIVE): measure, save_state, save_circuit, delete_circuit,
+                      load_circuit_and_run, qiskit_run, qutip_evolve, show_bloch,
+                      synthesis_run, synthesis_bloch, synthesis_gaussian,
+                      synthesis_tunneling, synthesis_harmonic, synthesis_lorentz
 """
 
 import logging
@@ -64,60 +63,92 @@ class QuantumTool(BaseTool):
     """
     Eye of Sauron's quantum execution tool.
 
-    Supports 6 actions dispatched via execute(action=...):
-      init_qubits        — reset engine to n-qubit |0...0⟩ (Ring 3)
-      apply_gate         — single gate operation (Ring 3)
-      run_circuit        — execute list of gate dicts in sequence (Ring 3)
-      get_state_info     — read probabilities, Bloch coords, qubit count (Ring 3)
-      measure            — run measurement simulation (Ring 2)
-      save_state         — persist current state to .npz (Ring 2)
-      load_circuit_and_run — recall named circuit + execute + measure (Ring 2)
-      qiskit_run         — compile QASM string via Qiskit + run on Aer (Ring 2)
-      qutip_evolve       — Schrödinger/Lindblad time evolution via QuTiP (Ring 2)
-      show_bloch         — launch Bloch sphere browser visualisation (Ring 2)
+    22 actions dispatched via execute(action=...):
+
+    Ring 3 (auto-safe):
+      init_qubits        — reset engine to n-qubit |0...0> (1-18; >16 uses TrueEngine)
+      apply_gate         — single gate operation
+      run_circuit        — execute list of gate dicts in sequence
+      run_preset         — build bell / ghz / qft circuit automatically
+      get_state_info     — read probabilities, Bloch coords, qubit count
+      list_circuits      — list saved circuits from the library
+      synthesis_status   — synthesis engine status
+      true_engine_status — 20 GB TrueSynthesisEngine storage status
+
+    Ring 2 (requires approval):
+      measure            — run measurement + auto-launch Bloch sphere
+      save_state         — persist current state to .npz
+      save_circuit       — save current circuit to named library entry
+      delete_circuit     — remove a named circuit from the library
+      load_circuit_and_run — recall named circuit + execute + measure
+      qiskit_run         — compile QASM string via Qiskit + run on Aer
+      qutip_evolve       — Schrodinger/Lindblad time evolution via QuTiP
+      show_bloch         — launch Bloch sphere browser visualisation
+      synthesis_run      — run synthesis preset (gaussian/tunneling/harmonic/relativistic)
+      synthesis_bloch    — launch synthesis Bloch popup (rabi/precession/spiral/hadamard)
+      synthesis_gaussian — Gaussian wave packet simulation
+      synthesis_tunneling— quantum tunneling simulation
+      synthesis_harmonic — harmonic oscillator simulation
+      synthesis_lorentz  — relativistic Lorentz boost simulation
     """
 
     name = "quantum"
     description = (
-        "Execute quantum circuits and computations using the Frankenstein synthesis engine. "
-        "Supports gate operations, measurement, Qiskit QASM execution, QuTiP open-system "
-        "evolution, Bloch sphere visualisation, and state save/recall. "
-        "Ring 3 for gate ops and reads; Ring 2 for measure, visualise, save, Qiskit, QuTiP."
+        "Full quantum computing automation via FRANKENSTEIN synthesis engines. "
+        "Ring 3 (free): init_qubits, apply_gate, run_circuit, run_preset (bell/ghz/qft), "
+        "get_state_info, list_circuits, synthesis_status, true_engine_status. "
+        "Ring 2 (approval): measure (auto-launches Bloch sphere), show_bloch, save_state, "
+        "save_circuit, delete_circuit, load_circuit_and_run, qiskit_run, qutip_evolve, "
+        "synthesis_run, synthesis_bloch, synthesis_gaussian, synthesis_tunneling, "
+        "synthesis_harmonic, synthesis_lorentz. "
+        "Supports up to 18 qubits (>16 auto-routes to 20 GB TrueSynthesisEngine)."
     )
-    # Default permission level shown in registry; actual level is action-dependent.
     permission_level = PermissionLevel.SAFE
 
     # Actions that require Ring 2 approval
     _SENSITIVE_ACTIONS = frozenset({
-        "measure", "save_state", "load_circuit_and_run",
-        "qiskit_run", "qutip_evolve", "show_bloch",
+        "measure", "save_state", "save_circuit", "delete_circuit",
+        "load_circuit_and_run", "qiskit_run", "qutip_evolve", "show_bloch",
+        "synthesis_run", "synthesis_bloch", "synthesis_gaussian",
+        "synthesis_tunneling", "synthesis_harmonic", "synthesis_lorentz",
     })
 
-    def execute(self, action: str = "get_state_info", **kwargs) -> ToolResult:
-        """
-        Dispatch to the requested quantum action.
+    def __init__(self):
+        # Tracks whether the last init_qubits call selected the TrueSynthesisEngine
+        self._use_true_engine: bool = False
 
-        Args:
-            action: One of the supported actions (see class docstring)
-            **kwargs: Action-specific parameters (see each method)
-        """
-        # Override permission level for sensitive actions
+    def execute(self, action: str = "get_state_info", **kwargs) -> ToolResult:
+        """Dispatch to the requested quantum action."""
         if action in self._SENSITIVE_ACTIONS:
             self.permission_level = PermissionLevel.SENSITIVE
         else:
             self.permission_level = PermissionLevel.SAFE
 
         dispatch = {
+            # Ring 3
             "init_qubits":           self._init_qubits,
             "apply_gate":            self._apply_gate,
             "run_circuit":           self._run_circuit,
+            "run_preset":            self._run_preset,
             "get_state_info":        self._get_state_info,
+            "list_circuits":         self._list_circuits,
+            "synthesis_status":      self._synthesis_status,
+            "true_engine_status":    self._true_engine_status,
+            # Ring 2
             "measure":               self._measure,
             "save_state":            self._save_state,
+            "save_circuit":          self._save_circuit,
+            "delete_circuit":        self._delete_circuit,
             "load_circuit_and_run":  self._load_circuit_and_run,
             "qiskit_run":            self._qiskit_run,
             "qutip_evolve":          self._qutip_evolve,
             "show_bloch":            self._show_bloch,
+            "synthesis_run":         self._synthesis_run,
+            "synthesis_bloch":       self._synthesis_bloch,
+            "synthesis_gaussian":    self._synthesis_gaussian,
+            "synthesis_tunneling":   self._synthesis_tunneling,
+            "synthesis_harmonic":    self._synthesis_harmonic,
+            "synthesis_lorentz":     self._synthesis_lorentz,
         }
 
         if action not in dispatch:
@@ -143,44 +174,67 @@ class QuantumTool(BaseTool):
 
         return dispatch[action](**kwargs)
 
-    # ── Helpers ────────────────────────────────────────────────────────────────
+    # ── Engine routing ──────────────────────────────────────────────────────────
 
     def _get_engine(self):
-        """Get the shared SynthesisEngine singleton."""
+        """Return the active quantum engine (RAM or TrueEngine based on last init)."""
+        if self._use_true_engine:
+            from synthesis.core.true_engine import get_true_engine
+            return get_true_engine()
         from synthesis.engine import get_synthesis_engine
         return get_synthesis_engine()
 
     def _describe_action(self, action: str, kwargs: dict) -> str:
         """Human-readable description for permission prompts."""
         descriptions = {
-            "measure":              f"Run {kwargs.get('shots', 1024)}-shot measurement",
+            "measure":              f"Run {kwargs.get('shots', 1024)}-shot measurement + launch Bloch sphere",
             "save_state":           f"Save quantum state as '{kwargs.get('name', '?')}'",
+            "save_circuit":         f"Save current circuit as '{kwargs.get('name', '?')}'",
+            "delete_circuit":       f"Delete circuit '{kwargs.get('name', '?')}' from library",
             "load_circuit_and_run": f"Load + run circuit '{kwargs.get('name', '?')}' and measure",
             "qiskit_run":           f"Compile + run QASM circuit via Qiskit-Aer ({kwargs.get('shots', 1024)} shots)",
             "qutip_evolve":         "Run QuTiP open-system time evolution",
             "show_bloch":           "Launch Bloch sphere visualisation in browser",
+            "synthesis_run":        f"Run synthesis simulation: {kwargs.get('preset', 'gaussian')}",
+            "synthesis_bloch":      f"Launch synthesis Bloch sphere: {kwargs.get('sim_type', 'rabi')}",
+            "synthesis_gaussian":   f"Run Gaussian wave packet (sigma={kwargs.get('sigma', 1.0)}, k0={kwargs.get('k0', 0.0)})",
+            "synthesis_tunneling":  f"Run quantum tunneling (barrier={kwargs.get('barrier', 1.0)})",
+            "synthesis_harmonic":   f"Run harmonic oscillator (omega={kwargs.get('omega', 1.0)})",
+            "synthesis_lorentz":    f"Apply Lorentz boost (velocity={kwargs.get('velocity', 0.5)}c)",
         }
         return descriptions.get(action, f"Execute quantum.{action}")
 
-    # ── Ring 3 Actions ─────────────────────────────────────────────────────────
+    # ── Ring 3 Actions ──────────────────────────────────────────────────────────
 
     def _init_qubits(self, n_qubits: int = 1, **kwargs) -> ToolResult:
         """
-        Reset the quantum register to |0...0⟩ with n_qubits.
-        Max 16 qubits on Tier 1 hardware.
+        Reset the quantum register to |0...0> with n_qubits.
+        1-16 qubits: uses the 16-qubit RAM SynthesisEngine.
+        17-18 qubits: automatically uses the 20 GB TrueSynthesisEngine.
         """
-        if not isinstance(n_qubits, int) or n_qubits < 1 or n_qubits > 16:
+        if not isinstance(n_qubits, int) or n_qubits < 1 or n_qubits > 18:
             return ToolResult(
                 success=False,
-                error=f"n_qubits must be 1–16 (got {n_qubits})",
+                error=f"n_qubits must be 1-18 (got {n_qubits}). TrueEngine supports up to 18.",
             )
         try:
-            engine = self._get_engine()
-            engine.reset(n_qubits)
+            if n_qubits > 16:
+                from synthesis.core.true_engine import get_true_engine
+                engine = get_true_engine()
+                engine.initialize_qubits(n_qubits)
+                self._use_true_engine = True
+                engine_name = "TrueSynthesisEngine (20 GB)"
+            else:
+                from synthesis.engine import get_synthesis_engine
+                engine = get_synthesis_engine()
+                engine.reset(n_qubits)
+                self._use_true_engine = False
+                engine_name = "SynthesisEngine (RAM)"
             return ToolResult(
                 success=True,
-                data={"n_qubits": n_qubits, "state": "|" + "0" * n_qubits + ">"},
-                summary=f"Initialized {n_qubits}-qubit register in |{'0'*n_qubits}> state.",
+                data={"n_qubits": n_qubits, "state": "|" + "0" * n_qubits + ">",
+                      "engine": engine_name},
+                summary=f"Initialized {n_qubits}-qubit register in |{'0'*n_qubits}> on {engine_name}.",
             )
         except Exception as e:
             return ToolResult(success=False, error=str(e))
@@ -326,13 +380,11 @@ class QuantumTool(BaseTool):
                 elif gate == "measure":
                     shots = int(op.get("shots", 1024))
                     measure_results = engine.measure(shots)
-                    results.append(f"measure({shots}) → {len(measure_results)} outcomes")
+                    results.append(f"measure({shots}) -> {len(measure_results)} outcomes")
 
                 elif targets:
                     target = targets[0]
                     ctrl = controls[0] if controls else None
-                    angle = float(params[0]) if params else None
-
                     r = self._apply_gate(
                         gate=gate,
                         target=target,
@@ -370,6 +422,86 @@ class QuantumTool(BaseTool):
         except Exception as e:
             return ToolResult(success=False, error=str(e), data={"completed_steps": results})
 
+    def _run_preset(self, preset: str = "bell", n_qubits: int = None, **kwargs) -> ToolResult:
+        """
+        Build and run a standard quantum circuit preset automatically.
+
+        Presets:
+          bell  — Bell state |Phi+> on 2 qubits: H(0) -> CNOT(0,1)
+          ghz   — GHZ state on n_qubits (default 3): H(0) -> CNOT(0,1..n-1)
+          qft   — Quantum Fourier Transform on n_qubits (default 3)
+
+        Args:
+            preset:   "bell", "ghz", or "qft"
+            n_qubits: Number of qubits (bell ignores this, uses 2)
+        """
+        try:
+            p = preset.lower().strip()
+
+            if p == "bell":
+                r = self._init_qubits(n_qubits=2)
+                if not r.success:
+                    return r
+                engine = self._get_engine()
+                engine.h(0)
+                engine.cx(0, 1)
+                return ToolResult(
+                    success=True,
+                    data={"preset": "bell", "n_qubits": 2,
+                          "circuit": ["reset(2)", "h(0)", "cx(0,1)"]},
+                    summary="Bell state prepared: H(0) -> CNOT(0,1). State: (|00>+|11>)/sqrt(2).",
+                )
+
+            elif p == "ghz":
+                n = n_qubits if n_qubits and n_qubits >= 2 else 3
+                r = self._init_qubits(n_qubits=n)
+                if not r.success:
+                    return r
+                engine = self._get_engine()
+                engine.h(0)
+                steps = ["reset({})".format(n), "h(0)"]
+                for i in range(1, n):
+                    engine.cx(0, i)
+                    steps.append(f"cx(0,{i})")
+                return ToolResult(
+                    success=True,
+                    data={"preset": "ghz", "n_qubits": n, "circuit": steps},
+                    summary=f"GHZ state prepared on {n} qubits. State: (|{'0'*n}>+|{'1'*n}>)/sqrt(2).",
+                )
+
+            elif p == "qft":
+                import math
+                n = n_qubits if n_qubits and n_qubits >= 1 else 3
+                r = self._init_qubits(n_qubits=n)
+                if not r.success:
+                    return r
+                engine = self._get_engine()
+                steps = [f"reset({n})"]
+                for i in range(n):
+                    engine.h(i)
+                    steps.append(f"h({i})")
+                    for j in range(i + 1, n):
+                        angle = math.pi / (2 ** (j - i))
+                        engine.cp(j, i, angle)
+                        steps.append(f"cp({j},{i},{angle:.4f})")
+                # Bit reversal swaps
+                for i in range(n // 2):
+                    engine.swap(i, n - 1 - i)
+                    steps.append(f"swap({i},{n-1-i})")
+                return ToolResult(
+                    success=True,
+                    data={"preset": "qft", "n_qubits": n, "circuit": steps},
+                    summary=f"QFT applied to {n}-qubit register ({len(steps)-1} gates).",
+                )
+
+            else:
+                return ToolResult(
+                    success=False,
+                    error=f"Unknown preset '{preset}'. Valid: bell, ghz, qft",
+                )
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
+
     def _get_state_info(self, **kwargs) -> ToolResult:
         """
         Return current quantum state information: probabilities, Bloch coords,
@@ -381,8 +513,6 @@ class QuantumTool(BaseTool):
             if n == 0:
                 return ToolResult(success=True, data={"n_qubits": 0}, summary="No state initialized.")
 
-            import numpy as np
-            state = engine.get_state()
             probs = engine.get_probabilities()
             marginals = engine.get_marginal_probabilities()
 
@@ -405,6 +535,7 @@ class QuantumTool(BaseTool):
                 data={
                     "n_qubits":    n,
                     "gate_count":  len(gate_log),
+                    "engine":      "TrueSynthesisEngine" if self._use_true_engine else "SynthesisEngine",
                     "top_states":  [{"state": s, "probability": round(p, 6)} for s, p in top],
                     "bloch_coords": bloch,
                     "marginal_probabilities": [
@@ -418,11 +549,59 @@ class QuantumTool(BaseTool):
         except Exception as e:
             return ToolResult(success=False, error=str(e))
 
-    # ── Ring 2 Actions ─────────────────────────────────────────────────────────
+    def _list_circuits(self, **kwargs) -> ToolResult:
+        """List all saved circuits in the circuit library."""
+        try:
+            from synthesis.circuit_library import get_circuit_library
+            lib = get_circuit_library()
+            circuits = lib.list_circuits()
+            return ToolResult(
+                success=True,
+                data={"circuits": circuits, "count": len(circuits)},
+                summary=f"{len(circuits)} circuits in library."
+                        + (f" Names: {', '.join(c['name'] for c in circuits[:10])}" if circuits else " Library is empty."),
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
+
+    def _synthesis_status(self, **kwargs) -> ToolResult:
+        """Return synthesis engine status (safe read-only)."""
+        try:
+            from synthesis.terminal_commands import get_synthesis_commands
+            cmds = get_synthesis_commands()
+            result = cmds.execute("status", [])
+            return ToolResult(
+                success=result.status.name in ("SUCCESS", "OK"),
+                data=result.data,
+                summary=result.message,
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
+
+    def _true_engine_status(self, **kwargs) -> ToolResult:
+        """Return 20 GB TrueSynthesisEngine storage and state info."""
+        try:
+            from synthesis.core.true_engine import get_true_engine
+            engine = get_true_engine()
+            usage = engine.get_storage_usage()
+            status = engine.status()
+            return ToolResult(
+                success=True,
+                data={"storage": usage, "status": status},
+                summary=(
+                    f"TrueSynthesisEngine: {status.get('n_qubits', 0)} qubits active. "
+                    f"Storage: {usage.get('used_gb', 0):.2f} GB / {usage.get('total_gb', 20):.0f} GB. "
+                    f"Saved states: {usage.get('state_count', 0)}."
+                ),
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
+
+    # ── Ring 2 Actions ──────────────────────────────────────────────────────────
 
     def _measure(self, shots: int = 1024, **kwargs) -> ToolResult:
         """
-        Run measurement simulation and return counts dictionary.
+        Run measurement simulation, return counts, and auto-launch Bloch sphere.
         Permission already checked in execute() before dispatch.
         """
         try:
@@ -432,6 +611,10 @@ class QuantumTool(BaseTool):
             counts = engine.measure(int(shots))
             total = sum(counts.values())
             top = sorted(counts.items(), key=lambda kv: -kv[1])[:8]
+
+            # Auto-launch Bloch sphere (mirrors quantum_mode.py _cmd_measure behaviour)
+            self._launch_bloch_for_measure(engine, int(shots), counts)
+
             return ToolResult(
                 success=True,
                 data={
@@ -441,11 +624,42 @@ class QuantumTool(BaseTool):
                         {"state": s, "count": c, "probability": round(c / total, 4)}
                         for s, c in top
                     ],
+                    "bloch_launched": True,
                 },
-                summary=f"Measured {total} shots. Top: |{top[0][0]}> {top[0][1]}x ({top[0][1]/total*100:.1f}%)" if top else "Measurement complete.",
+                summary=(
+                    f"Measured {total} shots. Top: |{top[0][0]}> {top[0][1]}x "
+                    f"({top[0][1]/total*100:.1f}%). Bloch sphere launched."
+                ) if top else "Measurement complete.",
             )
         except Exception as e:
             return ToolResult(success=False, error=str(e))
+
+    def _launch_bloch_for_measure(self, engine, shots: int, counts: dict) -> None:
+        """
+        Internal helper: launch the multi-qubit Bloch sphere visualiser after a
+        measurement.  Non-fatal — a visualiser error never blocks the measurement
+        result.  Only runs for n_qubits <= 16 (browser visualiser limit).
+        """
+        try:
+            n = engine.get_num_qubits()
+            if n == 0 or n > 16:
+                return
+            total = sum(counts.values()) or 1
+            experimental_probs = {k: v / total for k, v in counts.items()}
+            from synthesis.quantum import get_visualizer
+            visualizer = get_visualizer()
+            visualizer.launch_multi_qubit_bloch(
+                qubit_coords=engine.get_all_qubit_bloch_coords(),
+                entanglement_info=engine.get_entanglement_info(),
+                num_qubits=n,
+                gate_count=len(getattr(engine, "_gate_log", [])),
+                theoretical_probs=engine.get_probabilities(),
+                experimental_probs=experimental_probs,
+                marginal_probs=engine.get_marginal_probabilities(),
+                shots=shots,
+            )
+        except Exception as e:
+            logger.warning("Bloch auto-launch after measure failed (non-fatal): %s", e)
 
     def _save_state(self, name: str = "sauron_state", **kwargs) -> ToolResult:
         """Save current SynthesisEngine state to .npz under the given name."""
@@ -460,6 +674,52 @@ class QuantumTool(BaseTool):
         except Exception as e:
             return ToolResult(success=False, error=str(e))
 
+    def _save_circuit(self, name: str = "", description: str = "", **kwargs) -> ToolResult:
+        """Save the current engine's gate log as a named circuit in the library."""
+        if not name:
+            return ToolResult(success=False, error="'name' parameter required")
+        try:
+            from synthesis.circuit_library import get_circuit_library, CircuitDefinition
+            engine = self._get_engine()
+            n = engine.get_num_qubits()
+            gate_log = getattr(engine, "_gate_log", [])
+            if not gate_log:
+                return ToolResult(success=False, error="No gates applied yet. Build a circuit first.")
+            lib = get_circuit_library()
+            circ = CircuitDefinition(name=name, n_qubits=n, description=description)
+            for entry in gate_log:
+                # gate_log entries vary by engine; handle both dict and object forms
+                if isinstance(entry, dict):
+                    circ.gates.append(entry)
+                else:
+                    circ.gates.append({"gate": str(entry)})
+            path = lib.save(circ)
+            return ToolResult(
+                success=True,
+                data={"name": name, "n_qubits": n, "gates": len(circ.gates), "path": str(path)},
+                summary=f"Circuit '{name}' saved ({len(circ.gates)} gates, {n} qubits).",
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
+
+    def _delete_circuit(self, name: str = "", **kwargs) -> ToolResult:
+        """Delete a named circuit from the library."""
+        if not name:
+            return ToolResult(success=False, error="'name' parameter required")
+        try:
+            from synthesis.circuit_library import get_circuit_library
+            lib = get_circuit_library()
+            success = lib.delete(name)
+            if success:
+                return ToolResult(
+                    success=True,
+                    data={"name": name},
+                    summary=f"Circuit '{name}' deleted from library.",
+                )
+            return ToolResult(success=False, error=f"Circuit '{name}' not found in library.")
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
+
     def _load_circuit_and_run(self, name: str = "", shots: int = 1024, **kwargs) -> ToolResult:
         """Recall a named circuit from the library, execute it, and measure."""
         if not name:
@@ -471,12 +731,10 @@ class QuantumTool(BaseTool):
             if circuit_def is None:
                 return ToolResult(success=False, error=f"Circuit '{name}' not found in library.")
 
-            # Execute the circuit
             run_result = self._run_circuit(circuit=circuit_def.gates)
             if not run_result.success:
                 return run_result
 
-            # Measure
             counts = self._get_engine().measure(int(shots))
             run_result.data["measurement_counts"] = counts
             run_result.data["circuit_name"] = name
@@ -488,10 +746,6 @@ class QuantumTool(BaseTool):
     def _qiskit_run(self, qasm: str = "", shots: int = 1024, **kwargs) -> ToolResult:
         """
         Compile an OpenQASM 2.0 string via Qiskit and run on Aer statevector simulator.
-
-        Args:
-            qasm:  Complete OpenQASM 2.0 string
-            shots: Number of measurement shots
         """
         if not qasm:
             return ToolResult(success=False, error="'qasm' parameter required (OpenQASM 2.0 string)")
@@ -543,16 +797,14 @@ class QuantumTool(BaseTool):
         """
         Time-evolve a quantum state using QuTiP.
 
-        Schrödinger equation (c_ops=None):
-            Uses qt.sesolve(H, psi0, tlist)
-        Lindblad master equation (c_ops provided):
-            Uses qt.mesolve(H, rho0, tlist, c_ops)
+        Schrodinger equation (c_ops=None): Uses qt.sesolve(H, psi0, tlist)
+        Lindblad master equation (c_ops provided): Uses qt.mesolve(...)
 
         Args:
-            H:     Hamiltonian as nested list (NxN complex matrix) or QuTiP Qobj
+            H:     Hamiltonian as nested list (NxN complex matrix)
             psi0:  Initial state as flat list of complex amplitudes
-            tlist: Time points as list of floats [t0, t1, ..., tN]
-            c_ops: Optional collapse operators (list of nested lists) for open systems
+            tlist: Time points as list of floats
+            c_ops: Optional collapse operators for open systems
         """
         if H is None or psi0 is None or tlist is None:
             return ToolResult(
@@ -563,7 +815,6 @@ class QuantumTool(BaseTool):
             import qutip as qt
             import numpy as np
 
-            # Convert inputs to QuTiP objects
             H_arr = np.array(H, dtype=complex)
             dims = H_arr.shape[0]
             H_qobj = qt.Qobj(H_arr, dims=[[dims], [dims]])
@@ -574,33 +825,31 @@ class QuantumTool(BaseTool):
             t_arr = list(tlist)
 
             if c_ops:
-                # Open system — Lindblad master equation
                 c_ops_qobj = [qt.Qobj(np.array(c, dtype=complex)) for c in c_ops]
                 result = qt.mesolve(H_qobj, psi0_qobj * psi0_qobj.dag(), t_arr, c_ops_qobj, [])
                 final_state = result.states[-1] if result.states else None
                 mode = "mesolve (Lindblad)"
                 final_data = final_state.full().tolist() if final_state else None
             else:
-                # Closed system — Schrödinger equation
                 result = qt.sesolve(H_qobj, psi0_qobj, t_arr)
                 final_state = result.states[-1] if result.states else None
-                mode = "sesolve (Schrödinger)"
+                mode = "sesolve (Schrodinger)"
                 final_data = final_state.full().flatten().tolist() if final_state else None
 
             return ToolResult(
                 success=True,
                 data={
-                    "mode":          mode,
-                    "time_steps":    len(t_arr),
-                    "t_start":       t_arr[0],
-                    "t_end":         t_arr[-1],
-                    "hilbert_dim":   dims,
-                    "final_state":   final_data,
-                    "n_states":      len(result.states),
+                    "mode":        mode,
+                    "time_steps":  len(t_arr),
+                    "t_start":     t_arr[0],
+                    "t_end":       t_arr[-1],
+                    "hilbert_dim": dims,
+                    "final_state": final_data,
+                    "n_states":    len(result.states),
                 },
                 summary=(
                     f"QuTiP {mode}: {dims}D Hilbert space, "
-                    f"{len(t_arr)} time steps [{t_arr[0]:.2f}→{t_arr[-1]:.2f}]."
+                    f"{len(t_arr)} time steps [{t_arr[0]:.2f}->{t_arr[-1]:.2f}]."
                 ),
             )
         except ImportError:
@@ -653,3 +902,117 @@ class QuantumTool(BaseTool):
             )
         except Exception as e:
             return ToolResult(success=False, error=f"Bloch sphere error: {e}")
+
+    # ── Synthesis Engine Actions ────────────────────────────────────────────────
+
+    def _synthesis_run(self, preset: str = "gaussian", **kwargs) -> ToolResult:
+        """
+        Run a synthesis physics simulation preset.
+
+        Presets: gaussian, tunneling, harmonic, relativistic
+        Optional kwargs forwarded as CLI args (velocity, points, time).
+        """
+        try:
+            from synthesis.terminal_commands import get_synthesis_commands
+            cmds = get_synthesis_commands()
+            args = [preset]
+            for key in ("velocity", "points", "time"):
+                if key in kwargs:
+                    args += [f"--{key}", str(kwargs[key])]
+            result = cmds.execute("run", args)
+            return ToolResult(
+                success=result.status.name in ("SUCCESS", "OK"),
+                data=result.data,
+                summary=result.message,
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
+
+    def _synthesis_bloch(self, sim_type: str = "rabi", omega: float = None,
+                         gamma: float = None, **kwargs) -> ToolResult:
+        """
+        Launch a synthesis 3D Bloch sphere popup.
+
+        sim_type: rabi | precession | spiral | hadamard
+        omega:    optional frequency override
+        gamma:    optional Lorentz gamma factor
+        """
+        try:
+            from synthesis.bloch_sphere_popup import launch_bloch_sphere
+            extra = {}
+            if omega is not None:
+                extra["omega"] = omega
+            if gamma is not None:
+                extra["lorentz_gamma"] = gamma
+            success = launch_bloch_sphere(sim_type, **extra)
+            return ToolResult(
+                success=success,
+                data={"sim_type": sim_type, "launched": success},
+                summary=f"Synthesis Bloch sphere launched: {sim_type}."
+                        if success else f"Failed to launch synthesis Bloch sphere: {sim_type}.",
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
+
+    def _synthesis_gaussian(self, sigma: float = 1.0, k0: float = 0.0, **kwargs) -> ToolResult:
+        """Run Gaussian wave packet simulation."""
+        try:
+            from synthesis.terminal_commands import get_synthesis_commands
+            cmds = get_synthesis_commands()
+            result = cmds.execute("gaussian", [str(sigma), str(k0)])
+            return ToolResult(
+                success=result.status.name in ("SUCCESS", "OK"),
+                data=result.data,
+                summary=result.message,
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
+
+    def _synthesis_tunneling(self, barrier: float = 1.0, **kwargs) -> ToolResult:
+        """Run quantum tunneling simulation."""
+        try:
+            from synthesis.terminal_commands import get_synthesis_commands
+            cmds = get_synthesis_commands()
+            result = cmds.execute("tunneling", [str(barrier)])
+            return ToolResult(
+                success=result.status.name in ("SUCCESS", "OK"),
+                data=result.data,
+                summary=result.message,
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
+
+    def _synthesis_harmonic(self, omega: float = 1.0, **kwargs) -> ToolResult:
+        """Run harmonic oscillator simulation."""
+        try:
+            from synthesis.terminal_commands import get_synthesis_commands
+            cmds = get_synthesis_commands()
+            result = cmds.execute("harmonic", [str(omega)])
+            return ToolResult(
+                success=result.status.name in ("SUCCESS", "OK"),
+                data=result.data,
+                summary=result.message,
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
+
+    def _synthesis_lorentz(self, velocity: float = 0.5, **kwargs) -> ToolResult:
+        """
+        Apply a Lorentz boost to the synthesis engine.
+
+        Args:
+            velocity: Fraction of speed of light (0.0 < velocity < 1.0)
+        """
+        if not (0.0 < velocity < 1.0):
+            return ToolResult(success=False, error="velocity must be between 0.0 and 1.0 (fraction of c)")
+        try:
+            from synthesis.terminal_commands import get_synthesis_commands
+            cmds = get_synthesis_commands()
+            result = cmds.execute("lorentz", [str(velocity)])
+            return ToolResult(
+                success=result.status.name in ("SUCCESS", "OK"),
+                data=result.data,
+                summary=result.message,
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
