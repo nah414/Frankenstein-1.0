@@ -2,8 +2,8 @@
 FRANKENSTEIN 1.0 - Eye of Sauron: Inference Engine
 Phase 4: Master Orchestrator Agent
 
-Wraps Ollama Python SDK for local Phi-3.5 Mini 3.8B Instruct inference.
-Model: phi3.5:3.8b-mini-instruct-q4_K_M (~2.5GB RAM, loaded via Ollama)
+Wraps Ollama Python SDK for local Llama 3.2 3B Instruct inference.
+Model: llama3.2:3b (~2.0GB RAM, loaded via Ollama)
 
 IMPORTANT: This module must only be imported via get_sauron() in __init__.py.
 Never import EyeOfSauron directly at the top of another module.
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-MODEL_NAME = "phi3.5:3.8b-mini-instruct-q4_K_M"
+MODEL_NAME = "llama3.2:3b"
 
 # 2 threads for inference (leaves 2 cores free for OS + quantum engine on i3 quad-core).
 # Separate from SAFETY.MAX_WORKER_THREADS which governs agent worker pool.
@@ -29,23 +29,23 @@ INFERENCE_THREADS = 2
 
 # Profile B — Chat Primary (default when quantum engine is idle)
 INFERENCE_OPTIONS = {
-    "num_ctx": 4096,          # Down from 8192 — saves KV-cache RAM
+    "num_ctx": 2048,          # Down from 4096 — saves ~200 MB KV-cache RAM
     "num_thread": INFERENCE_THREADS,
     "temperature": 0.5,       # Down from 0.7 — less rambling
     "top_p": 0.9,
     "repeat_penalty": 1.18,   # Prevents repetition loops
-    "repeat_last_n": 192,     # Lookback window for repeat penalty
-    "num_predict": 250,       # Hard output token cap (prevents novels)
+    "repeat_last_n": 64,      # Down from 192 — saves memory, compact prompt doesn't need long lookback
+    "num_predict": 300,       # Hard output token cap (slightly raised for richer responses)
 }
 
 # Profile A — Quantum Active (auto-selected when quantum engine is running)
 INFERENCE_OPTIONS_QUANTUM = {
-    "num_ctx": 2048,
+    "num_ctx": 1024,          # Down from 2048 — quantum ops use short prompts
     "num_thread": 2,
     "temperature": 0.5,
     "top_p": 0.9,
     "repeat_penalty": 1.18,
-    "repeat_last_n": 192,
+    "repeat_last_n": 64,      # Down from 192
     "num_predict": 180,       # Shorter responses during quantum ops
 }
 
@@ -84,7 +84,7 @@ class EyeOfSauron:
     """
     Master orchestrator LLM agent.
 
-    Wraps Ollama inference for Phi-3.5 Mini 3.8B (Q4_K_M).
+    Wraps Ollama inference for Llama 3.2 3B Instruct (Q4_K_M).
     Provides single-turn queries, streaming, and multi-turn chat.
     Memory is bounded to MAX_CONVERSATION_TURNS to prevent RAM growth.
     Supports two inference profiles: normal (Profile B) and quantum-active (Profile A).
@@ -93,7 +93,7 @@ class EyeOfSauron:
     name = "eye_of_sauron"
     version = "1.0.0"
 
-    MAX_CONVERSATION_TURNS = 16  # Each turn = 1 user + 1 assistant message
+    MAX_CONVERSATION_TURNS = 8   # Reduced from 16 — keeps history within num_ctx=2048
 
     def __init__(self):
         self._conversation: list = []
@@ -127,7 +127,7 @@ class EyeOfSauron:
     # ── Internal ───────────────────────────────────────────────────────────────
 
     def _verify_model(self) -> None:
-        """Confirm the Phi-3.5 Mini model is available in Ollama before we proceed."""
+        """Confirm the Llama 3.2 3B model is available in Ollama before we proceed."""
         try:
             available = [m.model for m in ollama.list().models]
             if MODEL_NAME not in available:
@@ -204,24 +204,27 @@ class EyeOfSauron:
         except Exception:
             pass
 
-        # Active quantum engine state
+        # Active quantum engine state — only if already loaded (never force-load here)
         try:
-            from synthesis.engine import get_synthesis_engine
-            engine = get_synthesis_engine()
-            n = engine.get_num_qubits()
-            if n > 0:
-                gate_log = getattr(engine, "_gate_log", [])
-                lines.append(
-                    f"Quantum engine: {n} qubits active, {len(gate_log)} gates applied"
-                )
-                try:
-                    probs = engine.get_probabilities()
-                    top = sorted(probs.items(), key=lambda kv: -kv[1])[:3]
-                    lines.append(
-                        "  Top states: " + ", ".join(f"|{s}⟩={p:.3f}" for s, p in top)
-                    )
-                except Exception:
-                    pass
+            import sys as _sys
+            _se_mod = _sys.modules.get('synthesis.engine')
+            if _se_mod is not None:
+                engine = getattr(_se_mod, '_engine', None)
+                if engine is not None:
+                    n = engine.get_num_qubits()
+                    if n > 0:
+                        gate_log = getattr(engine, "_gate_log", [])
+                        lines.append(
+                            f"Quantum engine: {n} qubits active, {len(gate_log)} gates applied"
+                        )
+                        try:
+                            probs = engine.get_probabilities()
+                            top = sorted(probs.items(), key=lambda kv: -kv[1])[:3]
+                            lines.append(
+                                "  Top states: " + ", ".join(f"|{s}⟩={p:.3f}" for s, p in top)
+                            )
+                        except Exception:
+                            pass
         except Exception:
             pass
 
@@ -290,7 +293,7 @@ class EyeOfSauron:
         """
         messages = [
             {"role": "system", "content": system or self._system_prompt},
-            {"role": "user",   "content": prompt + _EXEC_REMINDER},
+            {"role": "user",   "content": prompt},
         ]
         response = ollama.chat(
             model=MODEL_NAME,
@@ -303,11 +306,10 @@ class EyeOfSauron:
         """
         Single-turn streaming query. Yields tokens as they arrive.
         Does not affect conversation history.
-        Execution reminder is always injected — FRANK is an automation assistant.
         """
         messages = [
             {"role": "system", "content": system or self._system_prompt},
-            {"role": "user",   "content": prompt + _EXEC_REMINDER},
+            {"role": "user",   "content": prompt},
         ]
         for chunk in ollama.chat(
             model=MODEL_NAME,
@@ -325,9 +327,7 @@ class EyeOfSauron:
         Injects execution reminder and live system context into every turn.
         History is automatically trimmed/summarized at MAX_CONVERSATION_TURNS.
         """
-        # Inject reminder into what the LLM sees, but store the clean message in history
-        augmented = user_message + _EXEC_REMINDER
-        self._conversation.append({"role": "user", "content": augmented})
+        self._conversation.append({"role": "user", "content": user_message})
         self._trim_conversation()
 
         # Build context-enriched system prompt
@@ -343,8 +343,6 @@ class EyeOfSauron:
         )
         reply = response.message.content
 
-        # Replace augmented message with clean original in stored history
-        self._conversation[-1] = {"role": "user", "content": user_message}
         self._conversation.append({"role": "assistant", "content": reply})
         return reply
 
@@ -357,8 +355,7 @@ class EyeOfSauron:
         History cleanup runs in a finally block so it executes even when
         the consumer breaks early (e.g. user typed 'stop').
         """
-        augmented = user_message + _EXEC_REMINDER
-        self._conversation.append({"role": "user", "content": augmented})
+        self._conversation.append({"role": "user", "content": user_message})
         self._trim_conversation()
 
         # Build context-enriched system prompt
@@ -380,14 +377,7 @@ class EyeOfSauron:
                     full_reply.append(token)
                     yield token
         finally:
-            # Always restore clean user message and append assistant reply,
-            # even if the consumer stopped iteration early.
-            # Find the augmented user message and replace it.
-            for i in range(len(self._conversation) - 1, -1, -1):
-                if (self._conversation[i].get("role") == "user"
-                        and self._conversation[i].get("content") == augmented):
-                    self._conversation[i] = {"role": "user", "content": user_message}
-                    break
+            # Always append assistant reply, even if consumer stopped iteration early.
             self._conversation.append({"role": "assistant", "content": "".join(full_reply)})
 
     def reset_conversation(self) -> None:
