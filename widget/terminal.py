@@ -1826,7 +1826,7 @@ class FrankensteinTerminal:
         self._write_frank("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
         if not is_loaded():
             self._write_frank("  State    :  OFFLINE\n")
-            self._write_frank("  Model    :  not loaded  (~2.5 GB on first use)\n")
+            self._write_frank("  Model    :  not loaded  (~2.0 GB on first use)\n")
             self._write_frank("  Activate :  frank chat   or   frank ask <text>\n")
             self._write_frank("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
             return
@@ -1875,7 +1875,7 @@ class FrankensteinTerminal:
             self._write_error(f"[FRANK] Reset failed: {e}")
 
     def _frank_unload(self):
-        """Unload FRANK model from RAM (~2.5 GB freed)."""
+        """Unload FRANK model from RAM (~2.0 GB freed)."""
         from agents.sauron import is_loaded
         if not is_loaded():
             self._write_frank("\n[FRANK] Already offline — nothing to unload.\n\n")
@@ -1891,7 +1891,7 @@ class FrankensteinTerminal:
             from agents.sauron import unload_sauron
             unload_sauron()
             self._frank_last_active = None
-            self._write_frank("\n[FRANK] Unloaded. ~2.5 GB RAM freed.\n\n")
+            self._write_frank("\n[FRANK] Unloaded. ~2.0 GB RAM freed.\n\n")
         except Exception as e:
             self._write_error(f"[FRANK] Unload failed: {e}")
 
@@ -2148,7 +2148,7 @@ class FrankensteinTerminal:
             )
             return
         self._write_frank(
-            "\n[FRANK] Loading... (first load: ~2-4 s, ~2.5 GB RAM)\n"
+            "\n[FRANK] Loading... (first load: ~2-4 s, ~2.0 GB RAM)\n"
         )
         def _load():
             try:
@@ -2175,7 +2175,7 @@ class FrankensteinTerminal:
 ╚══════════════════════════════════════════════════════════════════╝
 
 HOW I OPERATE:
-  Model:     Phi-3.5 Mini 3.8B (Ollama local, ~2.5 GB RAM)
+  Model:     Llama 3.2 3B Instruct (Ollama local, ~2.0 GB RAM)
   Manual:    !run <cmd>   You propose → guard checks tier → executes
   Automatic: I detect need → output ::EXEC::cmd → guard fires
   Quantum:   I execute ::QUANTUM:: ops directly (see section below)
@@ -2421,7 +2421,7 @@ SYSTEM DIAGNOSTICS & AUTOMATION:
 
 [FRANK] AI:                                             [🟢 auto]
   frank status    Health check (never loads model)
-  frank unload    Free Phi-3.5 model from RAM (~2.5 GB) [🟡 approve]
+  frank unload    Free Llama 3.2 model from RAM (~2.0 GB) [🟡 approve]
   frank reset     Clear conversation history          [🔴 CONFIRM]
   frank agents    List all discoverable agents
   Note: FRANK is context-aware — sees quantum state, saved items,
@@ -5290,7 +5290,7 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
                     '  frank status          AI health check (never loads model)\n'
                     '  frank agents          List discoverable agents\n'
                     '  frank reset           Clear conversation history\n'
-                    '  frank unload          Free Phi-3.5 model from RAM (~2.5 GB)\n'
+                    '  frank unload          Free Llama 3.2 model from RAM (~2.0 GB)\n'
                     '  frank version/quote   Frankenstein info & quotes\n'
                     '\nIN-CHAT SHORTCUTS (once inside frank chat):\n'
                     '  !run <cmd>   Propose a terminal command for guarded execution\n'

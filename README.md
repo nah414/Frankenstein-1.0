@@ -63,7 +63,7 @@ frank help           # Show complete command reference any time
 - **📊 Real-Time Adaptation** - Learns from your usage and optimizes performance
 - **🔒 Security & Permissions** - Role-based access control with audit logging
 - **⚙️ Automated Workflows** - 6 background tasks for health monitoring and optimization
-- **🤖 FRANK AI Chat** - Phi 3.5 mini 3.8B local LLM with 4-tier permission guard and full terminal oversight
+- **🤖 FRANK AI Chat** - Llama 3.2 3B Instruct local LLM with 4-tier permission guard and full terminal oversight
 
 ---
 
@@ -114,7 +114,7 @@ Frankenstein-1.0/
 ├── widget/               # Terminal interface
 ├── agents/               # AI agents (compute, quantum, crypto)
 │   ├── adaptation/       # Real-time learning system
-│   └── sauron/           # FRANK AI — Qwen 2.5 7B orchestrator (NEW)
+│   └── sauron/           # FRANK AI — Llama 3.2 3B Instruct orchestrator
 ├── router/               # Intelligent workload routing
 ├── integration/          # 29 provider adapters
 ├── permissions/          # Access control & automation
@@ -137,10 +137,20 @@ Frankenstein-1.0/
 
 ## 🌟 Latest Updates
 
+### Phase 4 Optimization: Llama 3.2 3B + System Tuning (COMPLETE ✅)
+*Released: February 2026*
+
+- **🔄 Model Swap** - Replaced Phi-3.5 Mini 3.8B with Llama 3.2 3B Instruct — purpose-built for agentic/edge deployment, lower RAM footprint (~2.0 GB vs ~2.4 GB)
+- **⚡ Frank Chat Timeout Fixed** - System prompt trimmed 5.6x (~460 tokens vs 2,580); CPU prefill time dropped from 90s+ to ~10-15s
+- **💾 RAM Stabilized** - `num_ctx` 4096→2048, lazy synthesis engine load; Frank chat no longer spikes to 88-90% RAM on launch
+- **🛠️ System Tuning** - SysMain/WSearch/DiagTrack/Spooler disabled; `OLLAMA_MAX_LOADED_MODELS=1`, `OLLAMA_KEEP_ALIVE=300` locked in; Defender exclusion added
+
+---
+
 ### Phase 4 Day 7: FRANK AI Chat with Permission Guard (COMPLETE ✅)
 *Released: February 2026*
 
-Frankenstein now has a local AI brain. FRANK (powered by Qwen 2.5 7B via Ollama) can
+Frankenstein now has a local AI brain. FRANK (powered by Llama 3.2 3B Instruct via Ollama) can
 converse naturally AND execute all 74+ terminal commands safely through a hard-coded
 4-tier permission system:
 
@@ -202,7 +212,7 @@ The system now learns from your usage patterns and automatically optimizes:
 | **Phase 1** | ✅ Complete | Terminal, safety system, resource management |
 | **Phase 2** | ✅ Complete | Quantum simulation, Bloch visualization, 26 gates |
 | **Phase 3** | ✅ Complete | 29 providers, intelligent routing, permissions, **real-time adaptation** |
-| **Phase 4** | 🚧 In Progress | FRANK AI chat, 4-tier permission guard, Eye of Sauron orchestrator |
+| **Phase 4** | 🚧 In Progress | FRANK AI chat, 4-tier permission guard, Eye of Sauron (Llama 3.2 3B), system optimization |
 | **Phase 5** | 🔜 Planned | Advanced ML models, federated learning |
 
 ---
