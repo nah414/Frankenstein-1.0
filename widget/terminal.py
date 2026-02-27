@@ -417,7 +417,7 @@ class FrankensteinTerminal:
             border_color=self._colors['electric_purple'],
             corner_radius=10
         )
-        self._monitor_frame.place(relx=1.0, rely=0.0, x=-6, y=65, anchor="ne")
+        self._monitor_frame.place(relx=1.0, rely=0.0, x=-30, y=65, anchor="ne")
         self._monitor_frame.grid_propagate(False)
         self._monitor_frame.pack_propagate(False)
         
@@ -546,16 +546,22 @@ class FrankensteinTerminal:
         
         # Make output area read-only but allow selection/copy
         self._output_text.bind("<Key>", lambda e: "break" if e.keysym not in ["c", "C"] or not (e.state & 0x4) else None)
-        self._output_text.bind("<Button-1>", lambda e: self._output_text.focus_set())
-        
-        # Enable right-click text selection for output (standard behavior)
+        # Left-click: start selection (return "break" so root doesn't steal focus back)
+        self._output_text.bind("<Button-1>",        self._on_output_left_click)
+        self._output_text.bind("<B1-Motion>",       self._on_output_left_drag)
+        self._output_text.bind("<Double-Button-1>", self._on_output_double_click)
+
+        # Right-click: same selection mechanic, releases to show context menu
         self._output_text.bind("<Button-3>", self._on_output_right_click_start)
         self._output_text.bind("<B3-Motion>", self._on_output_right_click_drag)
         self._output_text.bind("<ButtonRelease-3>", self._on_output_right_click_release)
         
         # Right-click context menu for output
         self._setup_context_menu()
-        
+
+        # Developer keyboard shortcuts
+        self._setup_keybindings()
+
         # ==================== INPUT AREA - COMMAND INTERFACE ====================
         input_frame = ctk.CTkFrame(
             self._root, 
@@ -725,6 +731,31 @@ class FrankensteinTerminal:
                 return
             self._input_entry.focus_set()
     
+    # ==================== LEFT-CLICK SELECTION SUPPORT (OUTPUT) ====================
+    def _on_output_left_click(self, event):
+        """Start text selection with left mouse button in the output area."""
+        self._output_text.focus_set()
+        self._output_text.mark_set("insert", f"@{event.x},{event.y}")
+        self._output_text.mark_set("anchor", "insert")
+        self._output_text.tag_remove("sel", "1.0", "end")
+        return "break"
+
+    def _on_output_left_drag(self, event):
+        """Extend the selection as the left button is held and dragged."""
+        current_pos = f"@{event.x},{event.y}"
+        self._output_text.tag_remove("sel", "1.0", "end")
+        self._output_text.tag_add("sel", "anchor", current_pos)
+        self._output_text.mark_set("insert", current_pos)
+        return "break"
+
+    def _on_output_double_click(self, event):
+        """Double-click to select the word under the cursor in output."""
+        self._output_text.focus_set()
+        self._output_text.mark_set("insert", f"@{event.x},{event.y}")
+        self._output_text.tag_remove("sel", "1.0", "end")
+        self._output_text.tag_add("sel", "insert wordstart", "insert wordend")
+        return "break"
+
     # ==================== RIGHT-CLICK SELECTION SUPPORT ====================
     def _on_right_click_start(self, event):
         """Start text selection with right mouse button"""
@@ -756,6 +787,51 @@ class FrankensteinTerminal:
         self._input_entry.insert("insert", "\n")
         return "break"
     
+    # ==================== DEVELOPER KEY BINDINGS ====================
+    def _setup_keybindings(self):
+        """Register developer keyboard shortcuts on the root window."""
+        # ── Terminal control ────────────────────────────────────────────────
+        self._root.bind("<Control-l>", lambda e: (self._cmd_clear([]), "break")[1])
+        self._root.bind("<Control-L>", lambda e: (self._cmd_clear([]), "break")[1])
+        self._root.bind("<Control-k>", lambda e: (self._clear_input(),  "break")[1])
+        self._root.bind("<Control-K>", lambda e: (self._clear_input(),  "break")[1])
+        self._root.bind("<F1>",        lambda e: (self._execute_command("help"), "break")[1])
+
+        # ── Frank AI toggle ─────────────────────────────────────────────────
+        self._root.bind("<Control-f>", lambda e: (self._keybind_frank_toggle(), "break")[1])
+        self._root.bind("<Control-F>", lambda e: (self._keybind_frank_toggle(), "break")[1])
+
+        # ── Command history navigation ──────────────────────────────────────
+        self._root.bind("<Control-p>", self._on_up_arrow)
+        self._root.bind("<Control-P>", self._on_up_arrow)
+        self._root.bind("<Control-n>", self._on_down_arrow)
+        self._root.bind("<Control-N>", self._on_down_arrow)
+
+        # ── Output copy ─────────────────────────────────────────────────────
+        self._root.bind("<Control-Shift-C>", lambda e: (self._copy_selection(), "break")[1])
+
+        # ── Output scrolling ────────────────────────────────────────────────
+        self._root.bind("<Prior>",        lambda e: self._output_text.yview_scroll(-5, "units"))
+        self._root.bind("<Next>",         lambda e: self._output_text.yview_scroll( 5, "units"))
+        self._root.bind("<Control-Home>", lambda e: self._output_text.yview_moveto(0.0))
+        self._root.bind("<Control-End>",  lambda e: self._output_text.yview_moveto(1.0))
+
+    def _keybind_frank_toggle(self):
+        """Ctrl+F: enter Frank chat if not active, exit if active."""
+        if self._in_frank_mode:
+            if self._frank_thinking:
+                self._frank_stop_streaming()
+            self._in_frank_mode = False
+            self._update_prompt()
+            self._write_frank("\n[FRANK] Chat mode closed.\n\n")
+            if self._status_label:
+                self._status_label.configure(
+                    text="  ● ALIVE  ",
+                    text_color=self._colors['electric_green']
+                )
+        else:
+            self._frank_enter_chat()
+
     # ==================== OUTPUT RIGHT-CLICK SELECTION ====================
     def _on_output_right_click_start(self, event):
         """Start text selection in output with right mouse button"""
@@ -1083,10 +1159,12 @@ class FrankensteinTerminal:
         """Write success message to output"""
         self._write_output(f"✅ {text}\n")
     
-    def _execute_command(self, command_line: str):
+    def _execute_command(self, command_line: str, _from_frank_guard: bool = False):
         """Parse and execute a command"""
-        # Check if in FRANK chat mode — route input to FRANK handler
-        if self._in_frank_mode:
+        # Check if in FRANK chat mode — route user keyboard input to FRANK handler.
+        # BUT: when _from_frank_guard=True, Frank's own ::EXEC:: dispatch or an
+        # approved pending command needs to reach the real command handlers.
+        if self._in_frank_mode and not _from_frank_guard:
             self._write_frank(f"[FRANK]> {command_line}\n")
             self._handle_frank_input(command_line)
             return
@@ -2060,7 +2138,7 @@ class FrankensteinTerminal:
         self._frank_exec_log.append({
             "ts": ts, "tier": 3, "cmd": cmd_line, "status": "EXECUTED"
         })
-        self._execute_command(cmd_line)
+        self._execute_command(cmd_line, _from_frank_guard=True)
 
     def _frank_enter_chat(self):
         """Enter interactive FRANK chat mode. Lazy-loads model on first use."""
@@ -2075,7 +2153,13 @@ class FrankensteinTerminal:
         def _load():
             try:
                 from agents.sauron import get_sauron
-                get_sauron()  # triggers lazy model load
+                sauron = get_sauron()  # triggers lazy model load + verify
+                # Warm-up: force model into RAM with a throwaway query
+                # so the first real message doesn't hit a cold-start delay.
+                self._root.after(0, lambda: self._write_frank(
+                    "[FRANK] Warming up model...\n"
+                ))
+                sauron.query("Reply OK.", system="Reply with the single word OK.")
                 self._root.after(0, self._frank_chat_ready)
             except Exception as e:
                 self._root.after(
@@ -2432,7 +2516,7 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
                     "ts": ts, "tier": 2, "cmd": cmd, "status": "EXECUTED"
                 })
                 self._write_frank(f"[FRANK] ✓ Approved. Running: {cmd}\n")
-                self._execute_command(cmd)
+                self._execute_command(cmd, _from_frank_guard=True)
             elif self._frank_pending_tier == 1 and lower == 'confirm':
                 cmd = self._frank_pending_cmd
                 self._frank_pending_cmd  = None
@@ -2441,7 +2525,7 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
                     "ts": ts, "tier": 1, "cmd": cmd, "status": "EXECUTED"
                 })
                 self._write_frank(f"[FRANK] ✓ Confirmed. Running: {cmd}\n")
-                self._execute_command(cmd)
+                self._execute_command(cmd, _from_frank_guard=True)
             elif lower in ('n', 'no', 'cancel'):
                 cmd = self._frank_pending_cmd
                 self._frank_exec_log.append({
@@ -2818,19 +2902,53 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
         )
         self._frank_thread.start()
 
+    _FRANK_STREAM_TIMEOUT = 90  # seconds — max wait between tokens
+
     def _frank_stream_worker(self, message: str, stream_func):
-        """Background thread: pull tokens and schedule main-thread GUI writes."""
+        """Background thread: pull tokens with timeout and schedule GUI writes."""
+        import queue as _queue
         stop_event = self._frank_stop_event
+        token_q: _queue.Queue = _queue.Queue()
+
+        # Sub-thread: blocks on the generator and feeds tokens into the queue
+        def _pull():
+            try:
+                for tok in stream_func(message):
+                    token_q.put(("token", tok))
+                token_q.put(("done", None))
+            except Exception as exc:
+                token_q.put(("error", exc))
+
+        puller = threading.Thread(target=_pull, daemon=True)
+        puller.start()
+
         try:
-            for token in stream_func(message):
+            while True:
                 if stop_event and stop_event.is_set():
                     break
-                # Capture token in lambda default to avoid loop-closure bug
-                self._root.after(0, lambda t=token: self._on_frank_token(t))
-        except Exception as e:
-            self._root.after(
-                0, lambda: self._write_frank(f"\n[FRANK] Stream error: {e}\n")
-            )
+                try:
+                    kind, value = token_q.get(timeout=self._FRANK_STREAM_TIMEOUT)
+                except _queue.Empty:
+                    # No token arrived within the timeout window
+                    self._root.after(0, lambda: self._write_frank(
+                        "\n[FRANK] Timed out — no response from model "
+                        f"(waited {self._FRANK_STREAM_TIMEOUT}s).\n"
+                    ))
+                    break
+                if kind == "token":
+                    self._root.after(
+                        0, lambda t=value: self._on_frank_token(t)
+                    )
+                elif kind == "done":
+                    break
+                elif kind == "error":
+                    err = value
+                    self._root.after(
+                        0, lambda: self._write_frank(
+                            f"\n[FRANK] Stream error: {err}\n"
+                        )
+                    )
+                    break
         finally:
             self._root.after(0, self._on_frank_stream_done)
 
@@ -2849,36 +2967,53 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
         # ── Check for ::QUANTUM:: marker ────────────────────────────────────
         if _MARKER_QUANTUM in self._frank_exec_buffer:
             pre, _, rest = self._frank_exec_buffer.partition(_MARKER_QUANTUM)
-            if rest:
-                line = rest.split('\n')[0].strip()
-                if line:
-                    if pre:
-                        self._write_frank(pre)
-                    remainder = rest[len(rest.split('\n')[0]):]
-                    self._frank_exec_buffer = remainder
-                    self._root.after(0, lambda l=line: self._frank_quantum_dispatch(l))
-                    return
+            # Find the first non-empty line after the marker
+            # (handles both "::QUANTUM::action" and "::QUANTUM::\naction")
+            line, remainder = self._extract_marker_command(rest)
+            if line:
+                if pre:
+                    self._write_frank(pre)
+                self._frank_exec_buffer = remainder
+                self._root.after(0, lambda l=line: self._frank_quantum_dispatch(l))
+                return
             # Marker present but action not complete yet — keep buffering
             return
 
         # ── Check for ::EXEC:: marker ────────────────────────────────────────
         if _MARKER_EXEC in self._frank_exec_buffer:
             pre, _, rest = self._frank_exec_buffer.partition(_MARKER_EXEC)
-            if rest:
-                cmd = rest.split('\n')[0].strip()
-                if cmd:
-                    if pre:
-                        self._write_frank(pre)
-                    remainder = rest[len(rest.split('\n')[0]):]
-                    self._frank_exec_buffer = remainder
-                    self._root.after(0, lambda c=cmd: self._frank_guard_exec(c))
-                    return
+            cmd, remainder = self._extract_marker_command(rest)
+            if cmd:
+                if pre:
+                    self._write_frank(pre)
+                self._frank_exec_buffer = remainder
+                self._root.after(0, lambda c=cmd: self._frank_guard_exec(c))
+                return
             # Marker present but command not complete yet — keep buffering
             return
 
-        # No marker — display immediately and clear buffer
-        self._write_frank(token)
+        # No marker — write full buffer (includes any post-dispatch remainder) and clear
+        self._write_frank(self._frank_exec_buffer)
         self._frank_exec_buffer = ""
+
+    @staticmethod
+    def _extract_marker_command(rest: str):
+        """
+        Given the text after a ::MARKER::, return (command, remainder).
+        Handles both formats:
+          '::EXEC::git status\nMore text'   → ('git status', '\nMore text')
+          '::EXEC::\ngit status\nMore text' → ('git status', '\nMore text')
+        Returns ('', '') if no non-empty line has arrived yet.
+        """
+        for i, raw_line in enumerate(rest.split('\n')):
+            stripped = raw_line.strip()
+            if stripped:
+                # Found the command — remainder is everything after this line
+                consumed = '\n'.join(rest.split('\n')[:i + 1])
+                leftover = rest[len(consumed):]
+                return stripped, leftover
+        # All lines so far are empty — keep buffering
+        return '', ''
 
     def _on_frank_stream_done(self):
         """Main thread: called when the stream thread finishes or is interrupted."""
@@ -2932,13 +3067,15 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
                     key, val = part.split('=', 1)
                     key = key.strip()
                     val = val.strip()
-                    # Type coercion
-                    if val.isdigit():
+                    # Type coercion — handles negatives, floats, and scientific notation
+                    try:
                         val = int(val)
-                    elif val.replace('.', '', 1).isdigit():
-                        val = float(val)
-                    elif val.lower() in ('true', 'false'):
-                        val = val.lower() == 'true'
+                    except ValueError:
+                        try:
+                            val = float(val)
+                        except ValueError:
+                            if val.lower() in ('true', 'false'):
+                                val = val.lower() == 'true'
                     kwargs[key] = val
 
             # Lazy-load the QuantumTool singleton
@@ -3777,7 +3914,7 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
         elif area == "pycache":
             # Clear __pycache__ directories from the Frankenstein project
             import os
-            project_dir = Path(r"C:\Users\adamn\Frankenstein-1.0")
+            project_dir = Path(__file__).resolve().parent.parent
             cleared_dirs = 0
             cleared_bytes = 0
             for root, dirs, files in os.walk(project_dir):
@@ -6159,6 +6296,27 @@ Storage: ~/.frankenstein/synthesis_data/circuits/
 QASM exports: ~/.frankenstein/synthesis_data/circuits/qasm/
 ''',
                 'saves': 'saves - Show all saved quantum artifacts (states, circuits, computation logs)',
+                'keybindings': (
+                    "KEYBOARD SHORTCUTS — Developer Reference\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "  Ctrl+L          Clear terminal output\n"
+                    "  Ctrl+K          Clear input line\n"
+                    "  Ctrl+F          Toggle Frank AI chat mode\n"
+                    "  Ctrl+P          Previous command (history)\n"
+                    "  Ctrl+N          Next command (history)\n"
+                    "  Ctrl+Shift+C    Copy selected output text\n"
+                    "  Page Up         Scroll output up 5 lines\n"
+                    "  Page Down       Scroll output down 5 lines\n"
+                    "  Ctrl+Home       Jump output to top\n"
+                    "  Ctrl+End        Jump output to bottom\n"
+                    "  F1              Show this help screen\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "OUTPUT TEXT SELECTION:\n"
+                    "  Left-click + drag   Select text\n"
+                    "  Double-click        Select word\n"
+                    "  Right-click         Context menu (Copy / Select All)\n"
+                    "  Ctrl+C              Copy selected text (when focused)\n"
+                ),
             }
             if cmd in help_text:
                 self._write_output(f"\n{help_text[cmd]}\n\n")
@@ -6444,10 +6602,23 @@ CIRCUIT LIBRARY:
 ARTIFACT OVERVIEW:
   saves                   Show all saved states, circuits, and computation logs
 
+KEYBOARD SHORTCUTS:
+  Ctrl+L          Clear terminal
+  Ctrl+K          Clear input line
+  Ctrl+F          Toggle Frank chat
+  Ctrl+Shift+C    Copy selected output
+  Page Up/Down    Scroll output
+  Ctrl+Home/End   Jump to top/bottom
+  Ctrl+P/N        Prev/next history
+  F1              Show this help
+
+  Type 'help keybindings' for the full shortcut reference.
+
 TIPS:
   - Use Tab for path completion
   - Use Up/Down arrows for command history
-  - Right-click for copy/paste menu
+  - Left-click + drag to select output text
+  - Right-click output for Copy/Select All menu
   - Any command not listed runs as system command
 
 Type 'help COMMAND' for detailed help on a specific command.

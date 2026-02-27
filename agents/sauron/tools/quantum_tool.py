@@ -1001,10 +1001,11 @@ class QuantumTool(BaseTool):
         Apply a Lorentz boost to the synthesis engine.
 
         Args:
-            velocity: Fraction of speed of light (0.0 < velocity < 1.0)
+            velocity: Fraction of speed of light (strictly 0.0 < velocity < 1.0;
+                      v=0 produces no boost, v=1 is physically undefined)
         """
         if not (0.0 < velocity < 1.0):
-            return ToolResult(success=False, error="velocity must be between 0.0 and 1.0 (fraction of c)")
+            return ToolResult(success=False, error="velocity must be strictly between 0.0 and 1.0 (v=0 is no-op; v=1 is undefined)")
         try:
             from synthesis.terminal_commands import get_synthesis_commands
             cmds = get_synthesis_commands()

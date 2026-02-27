@@ -353,6 +353,9 @@ class EyeOfSauron:
         Multi-turn streaming chat with context awareness.
         Yields tokens; saves full reply to history.
         Injects execution reminder and live system context into every turn.
+
+        History cleanup runs in a finally block so it executes even when
+        the consumer breaks early (e.g. user typed 'stop').
         """
         augmented = user_message + _EXEC_REMINDER
         self._conversation.append({"role": "user", "content": augmented})
@@ -365,20 +368,27 @@ class EyeOfSauron:
         messages = [{"role": "system", "content": full_system}] + self._conversation
 
         full_reply = []
-        for chunk in ollama.chat(
-            model=MODEL_NAME,
-            messages=messages,
-            stream=True,
-            options=self._get_options(),
-        ):
-            token = chunk.message.content
-            if token:
-                full_reply.append(token)
-                yield token
-
-        # Replace augmented message with clean original in stored history
-        self._conversation[-1] = {"role": "user", "content": user_message}
-        self._conversation.append({"role": "assistant", "content": "".join(full_reply)})
+        try:
+            for chunk in ollama.chat(
+                model=MODEL_NAME,
+                messages=messages,
+                stream=True,
+                options=self._get_options(),
+            ):
+                token = chunk.message.content
+                if token:
+                    full_reply.append(token)
+                    yield token
+        finally:
+            # Always restore clean user message and append assistant reply,
+            # even if the consumer stopped iteration early.
+            # Find the augmented user message and replace it.
+            for i in range(len(self._conversation) - 1, -1, -1):
+                if (self._conversation[i].get("role") == "user"
+                        and self._conversation[i].get("content") == augmented):
+                    self._conversation[i] = {"role": "user", "content": user_message}
+                    break
+            self._conversation.append({"role": "assistant", "content": "".join(full_reply)})
 
     def reset_conversation(self) -> None:
         """Clear conversation history and free associated RAM."""
