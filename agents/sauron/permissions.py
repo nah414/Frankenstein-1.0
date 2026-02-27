@@ -112,8 +112,11 @@ RING_2_QUANTUM_OPS = frozenset({
     "measure", "measure_x", "measure_y", "measure_z",
     "show_bloch", "launch_bloch", "bloch",
     "save_state", "quantum_save",
+    "save_circuit", "delete_circuit",
     "cloud_submit", "ibm_run", "aws_run", "azure_run",
     "evolve",
+    "synthesis_run", "synthesis_bloch", "synthesis_gaussian",
+    "synthesis_tunneling", "synthesis_harmonic", "synthesis_lorentz",
 })
 
 # Web: whitelisted URLs are Ring 2 (need approval before fetching)
@@ -145,6 +148,7 @@ RING_3_QUANTUM_READS = frozenset({
     "get_num_qubits", "get_gate_count", "get_entanglement_info",
     "get_marginal_probabilities", "get_all_qubit_bloch_coords",
     "state",  # display statevector
+    "run_preset", "list_circuits", "synthesis_status", "true_engine_status",
 })
 
 RING_3_MEMORY_OPS = frozenset({

@@ -582,9 +582,15 @@ TOOL_SCHEMAS = [
         "function": {
             "name": "quantum",
             "description": (
-                "Quantum circuit operations via FRANKENSTEIN's synthesis engine. "
-                "Ring 3 (free): get_state, get_probabilities, apply gate ops (h, x, y, z, cx, etc.). "
-                "Ring 2 (approval): measure, save_state, cloud_submit."
+                "Full quantum computing automation via FRANKENSTEIN synthesis engines. "
+                "Ring 3 (free): init_qubits, apply_gate, run_circuit, run_preset (bell/ghz/qft), "
+                "get_state_info, list_circuits, synthesis_status, true_engine_status. "
+                "Ring 2 (approval): measure (auto-launches Bloch sphere), show_bloch, save_state, "
+                "save_circuit, delete_circuit, load_circuit_and_run, qiskit_run, qutip_evolve, "
+                "synthesis_run, synthesis_bloch, synthesis_gaussian, synthesis_tunneling, "
+                "synthesis_harmonic, synthesis_lorentz. "
+                "Supports up to 18 qubits (>16 auto-routes to 20 GB TrueSynthesisEngine). "
+                "Typical workflow: init_qubits -> apply_gate / run_preset -> measure."
             ),
             "parameters": {
                 "type": "object",
@@ -592,31 +598,107 @@ TOOL_SCHEMAS = [
                     "action": {
                         "type": "string",
                         "description": (
-                            "Quantum action. Gates (Ring 3): 'h', 'x', 'y', 'z', 's', 't', "
-                            "'rx', 'ry', 'rz', 'cx', 'cz', 'swap', 'ccx', 'reset'. "
-                            "Reads (Ring 3): 'get_state', 'get_probabilities', 'get_bloch_coords'. "
-                            "Writes (Ring 2): 'measure', 'save_state', 'cloud_submit'."
+                            "Quantum action to perform. "
+                            "Ring 3 (auto-safe): init_qubits, apply_gate, run_circuit, "
+                            "run_preset, get_state_info, list_circuits, synthesis_status, "
+                            "true_engine_status. "
+                            "Ring 2 (approval required): measure, show_bloch, save_state, "
+                            "save_circuit, delete_circuit, load_circuit_and_run, qiskit_run, "
+                            "qutip_evolve, synthesis_run, synthesis_bloch, synthesis_gaussian, "
+                            "synthesis_tunneling, synthesis_harmonic, synthesis_lorentz."
                         ),
                     },
-                    "qubit": {
+                    "n_qubits": {
                         "type": "integer",
-                        "description": "Target qubit index (0-based).",
+                        "description": (
+                            "Number of qubits for init_qubits (1-18) or run_preset ghz/qft. "
+                            "Values >16 automatically use the 20 GB TrueSynthesisEngine."
+                        ),
+                    },
+                    "target": {
+                        "type": "integer",
+                        "description": "Target qubit index (0-based) for apply_gate.",
+                    },
+                    "gate": {
+                        "type": "string",
+                        "description": (
+                            "Gate name for apply_gate: h, x, y, z, s, t, sdg, tdg, sx, sxdg, "
+                            "rx, ry, rz, p, cx, cnot, cy, cz, ch, swap, cp, ccx, toffoli, "
+                            "cswap, mcx."
+                        ),
                     },
                     "control": {
                         "type": "integer",
-                        "description": "Control qubit index for two-qubit gates (cx, cz, etc.).",
+                        "description": "Single control qubit index for two-qubit gates (cx, cz, cp, etc.).",
                     },
-                    "angle": {
-                        "type": "number",
-                        "description": "Rotation angle in radians for rx, ry, rz gates.",
+                    "controls": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "List of control qubit indices for multi-controlled gates (mcx, ccx).",
                     },
-                    "num_qubits": {
-                        "type": "integer",
-                        "description": "Number of qubits for a new circuit (used with reset or init).",
+                    "params": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                        "description": "Gate parameters, e.g. [1.5708] for rx/ry/rz/p/cp rotation angle.",
+                    },
+                    "circuit": {
+                        "type": "array",
+                        "description": (
+                            "List of gate dicts for run_circuit. Each dict: "
+                            "{gate, targets: [ints], controls: [ints], params: [floats]}. "
+                            "Use gate='reset' with n_qubits to initialise. "
+                            "Use gate='measure' with shots to measure inline."
+                        ),
+                    },
+                    "preset": {
+                        "type": "string",
+                        "description": (
+                            "For run_preset: 'bell', 'ghz', or 'qft'. "
+                            "For synthesis_run: 'gaussian', 'tunneling', 'harmonic', or 'relativistic'."
+                        ),
+                    },
+                    "sim_type": {
+                        "type": "string",
+                        "description": (
+                            "Synthesis Bloch sphere simulation type for synthesis_bloch: "
+                            "'rabi', 'precession', 'spiral', or 'hadamard'."
+                        ),
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Circuit or state name for save_circuit, delete_circuit, load_circuit_and_run, save_state.",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Optional human-readable description when saving a circuit.",
                     },
                     "shots": {
                         "type": "integer",
-                        "description": "measure: number of measurement shots (default 1024).",
+                        "description": "Number of measurement shots for measure or load_circuit_and_run (default 1024).",
+                    },
+                    "qasm": {
+                        "type": "string",
+                        "description": "OpenQASM 2.0 source string for qiskit_run.",
+                    },
+                    "omega": {
+                        "type": "number",
+                        "description": "Frequency parameter for synthesis_bloch or synthesis_harmonic.",
+                    },
+                    "sigma": {
+                        "type": "number",
+                        "description": "Sigma (width) parameter for synthesis_gaussian.",
+                    },
+                    "k0": {
+                        "type": "number",
+                        "description": "Initial wave vector k0 for synthesis_gaussian.",
+                    },
+                    "barrier": {
+                        "type": "number",
+                        "description": "Barrier height for synthesis_tunneling.",
+                    },
+                    "velocity": {
+                        "type": "number",
+                        "description": "Velocity as fraction of c (0.0-1.0) for synthesis_lorentz.",
                     },
                 },
                 "required": ["action"],

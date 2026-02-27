@@ -232,10 +232,12 @@ class FrankensteinTerminal:
         self._frank_monitor_label = None   # CTkLabel in monitor panel for FRANK status
         self._frank_idle_after_id = None   # tkinter after() ID for idle watchdog
         # Permission guard state (FRANK terminal execution — build guide)
-        self._frank_pending_cmd  = None   # str: command awaiting user approval
-        self._frank_pending_tier = 0      # int: 1=DESTROY needs CONFIRM, 2=MODIFY needs y/n
-        self._frank_exec_log     = []     # list[dict]: session audit trail
-        self._frank_exec_buffer  = ""     # str: token accumulator for ::EXEC:: detection
+        self._frank_pending_cmd     = None   # str: command awaiting user approval
+        self._frank_pending_quantum = None   # tuple(action, kwargs): quantum op awaiting approval
+        self._frank_pending_tier    = 0      # int: 1=DESTROY needs CONFIRM, 2=MODIFY needs y/n
+        self._frank_exec_log        = []     # list[dict]: session audit trail
+        self._frank_exec_buffer     = ""     # str: token accumulator for ::EXEC:: / ::QUANTUM:: detection
+        self._quantum_tool          = None   # QuantumTool singleton for FRANK chat dispatch
     
     def start(self) -> bool:
         """Start the terminal in a separate thread"""
@@ -1100,6 +1102,13 @@ class FrankensteinTerminal:
             if not stay_in_mode:
                 self._in_quantum_mode = False
                 self._update_prompt()
+                # Restore FRANK to normal inference profile (Profile B)
+                try:
+                    from agents.sauron import is_loaded, get_sauron
+                    if is_loaded():
+                        get_sauron().set_quantum_active(False)
+                except Exception:
+                    pass
             return
         
         # Show the command with prompt
@@ -1739,7 +1748,7 @@ class FrankensteinTerminal:
         self._write_frank("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
         if not is_loaded():
             self._write_frank("  State    :  OFFLINE\n")
-            self._write_frank("  Model    :  not loaded  (~4.5 GB on first use)\n")
+            self._write_frank("  Model    :  not loaded  (~2.5 GB on first use)\n")
             self._write_frank("  Activate :  frank chat   or   frank ask <text>\n")
             self._write_frank("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
             return
@@ -1788,7 +1797,7 @@ class FrankensteinTerminal:
             self._write_error(f"[FRANK] Reset failed: {e}")
 
     def _frank_unload(self):
-        """Unload FRANK model from RAM (~4.5 GB freed)."""
+        """Unload FRANK model from RAM (~2.5 GB freed)."""
         from agents.sauron import is_loaded
         if not is_loaded():
             self._write_frank("\n[FRANK] Already offline — nothing to unload.\n\n")
@@ -1804,7 +1813,7 @@ class FrankensteinTerminal:
             from agents.sauron import unload_sauron
             unload_sauron()
             self._frank_last_active = None
-            self._write_frank("\n[FRANK] Unloaded. ~4.5 GB RAM freed.\n\n")
+            self._write_frank("\n[FRANK] Unloaded. ~2.5 GB RAM freed.\n\n")
         except Exception as e:
             self._write_error(f"[FRANK] Unload failed: {e}")
 
@@ -2061,7 +2070,7 @@ class FrankensteinTerminal:
             )
             return
         self._write_frank(
-            "\n[FRANK] Loading... (first load: ~2-4 s, ~4.5 GB RAM)\n"
+            "\n[FRANK] Loading... (first load: ~2-4 s, ~2.5 GB RAM)\n"
         )
         def _load():
             try:
@@ -2082,11 +2091,22 @@ class FrankensteinTerminal:
 ╚══════════════════════════════════════════════════════════════════╝
 
 HOW I OPERATE:
+  Model:     Phi-3.5 Mini 3.8B (Ollama local, ~2.5 GB RAM)
   Manual:    !run <cmd>   You propose → guard checks tier → executes
   Automatic: I detect need → output ::EXEC::cmd → guard fires
-  Approve:   y / yes      Approve MODIFY (TIER 2) commands
+  Quantum:   I execute ::QUANTUM:: ops directly (see section below)
+  Approve:   y / yes      Approve MODIFY or Ring 2 quantum ops
              CONFIRM      Approve DESTRUCTIVE (TIER 1) commands
-  Reject:    n / cancel   Block any pending command
+  Reject:    n / cancel   Block any pending command or quantum op
+
+CONTEXT AWARENESS:
+  On every message I receive a live system context block with:
+  • Active quantum state (qubits, gates, top probabilities)
+  • Saved states and circuits (names, newest first)
+  • Session stats (uptime, task count, success/fail)
+  • Storage usage and CPU/RAM percentages
+  Ask me "what was I working on?" or "what states do I have?" and
+  I will answer from context — no extra commands needed.
 
 PERMISSION TIERS:
   🟢 TIER 3 — Read-only    Auto-executes immediately (no prompt)
@@ -2172,6 +2192,35 @@ QUANTUM COMPUTING:                                          [🟢 auto]
   bell / ghz [n]  Quick Bell / GHZ state presets
   qft [n]         Quantum Fourier Transform
 
+FRANK QUANTUM CHAT EXECUTION (inside frank chat mode):
+  FRANK now executes quantum operations directly from conversation.
+  Just ask: "create a Bell state", "run QFT on 3 qubits", "measure"
+  No manual commands needed — FRANK issues ::QUANTUM:: actions itself.
+
+  ─── Ring 3: Auto-execute (no approval) ───────────────  [🟢 auto]
+  init_qubits               FRANK initializes N-qubit register
+  apply_gate (all gates)    H, X, Y, Z, CX, RX, RY, RZ, SWAP, etc.
+  run_preset bell           Bell state (H + CNOT, 2 qubits)
+  run_preset ghz [n]        GHZ state (n qubits)
+  run_preset qft [n]        Quantum Fourier Transform (n qubits)
+  get_state_info            FRANK reads current statevector
+  list_circuits             FRANK lists saved circuits
+
+  ─── Ring 2: Requires y/n approval ───────────────────  [🟡 approve]
+  measure [shots]           Measure all qubits + auto-launch Bloch sphere
+  show_bloch                Launch 3D Bloch sphere (no measurement)
+  save_state <name>         Save current quantum state to disk
+  save_circuit <name>       Save current circuit to library
+  delete_circuit <name>     Delete a saved circuit
+  synthesis_run <preset>    Run Gaussian/Tunneling/Harmonic/Lorentz
+  synthesis_bloch           Launch synthesis Bloch animation
+  qiskit_run <qasm>         Run OpenQASM circuit via Qiskit
+  qutip_evolve ...          Run QuTiP Lindblad evolution
+
+  When FRANK outputs a Ring 2 quantum action:
+    y / yes   → executes the operation
+    n / no    → cancels without executing
+
 SYNTHESIS ENGINE:                                           [🟢 auto]
   synthesis run <preset>    Run physics simulation
   synthesis gaussian        Gaussian wave packet evolution
@@ -2217,15 +2266,26 @@ REAL-TIME ADAPTATION ENGINE:                                [🟢 auto]
   adapt-history             Chronological adaptation decisions log
   adapt-dashboard           Full visual dashboard (all metrics)
 
-MEMORY & ARTIFACTS:                                       [🟡 approve]
+MEMORY & ARTIFACTS:
+  ─── VIEW ─────────────────────────────────────────────  [🟢 auto]
   memory status             Detailed RAM + disk + Frankenstein usage
-  memory view <area>        View sessions/logs/states/circuits
-  memory clear cache        Clear gate cache and temp files
+  memory view sessions      Current session info + last 10 task records
+  memory view logs          Log files across all dirs (size + date)
+  memory view states        Saved quantum states (numbered, newest first)
+  memory view circuits      List saved circuits
+  memory view config        Configuration files
+  saves                     Show all saved quantum artifacts
+
+  ─── CLEAR ───────────────────────────────────────────  [🟡 approve]
+  memory clear cache        Clear gate + synthesis cache (reports bytes)
   memory clear logs [N]     Delete old logs, keep last N (default 10)
-  memory clear states       Delete all saved quantum states [🔴 CONFIRM]
+  memory clear pycache      Clear __pycache__ dirs in project
   memory export             Export full memory report to JSON
-  saves                     Show all saved quantum artifacts  [🟢 auto]
-  circuit delete <name>     Delete saved circuit             [🔴 CONFIRM]
+
+  ─── DESTRUCTIVE ──────────────────────────────────────  [🔴 CONFIRM]
+  memory clear states               Delete ALL saved quantum states
+  memory clear states <name>        Delete ONE state by name
+  circuit delete <name>             Delete saved circuit
 
 PERMISSIONS & SECURITY:
   ─── READ / AUDIT ────────────────────────────────────  [🟢 auto]
@@ -2277,9 +2337,11 @@ SYSTEM DIAGNOSTICS & AUTOMATION:
 
 [FRANK] AI:                                             [🟢 auto]
   frank status    Health check (never loads model)
-  frank unload    Free model from RAM (~4.5 GB)      [🟡 approve]
+  frank unload    Free Phi-3.5 model from RAM (~2.5 GB) [🟡 approve]
   frank reset     Clear conversation history          [🔴 CONFIRM]
   frank agents    List all discoverable agents
+  Note: FRANK is context-aware — sees quantum state, saved items,
+        CPU/RAM, and session stats automatically on every message.
 
 IN-CHAT SHORTCUTS:
   !run <cmd>    Propose command for guarded execution
@@ -2336,6 +2398,26 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
         import time as _time
         stripped = text.strip()
         lower    = stripped.lower()
+
+        # ── PRIORITY 0: pending quantum approval ─────────────────────────
+        # If FRANK proposed a Ring 2 quantum operation via ::QUANTUM::,
+        # consume this input as the approval before anything else.
+        if self._frank_pending_quantum is not None:
+            if lower in ('y', 'yes'):
+                action, kwargs = self._frank_pending_quantum
+                self._frank_pending_quantum = None
+                self._frank_pending_tier = 0
+                self._frank_quantum_exec_approved(action, kwargs)
+            elif lower in ('n', 'no', 'cancel'):
+                self._frank_pending_quantum = None
+                self._frank_pending_tier = 0
+                self._write_frank("[FRANK] Quantum operation cancelled.\n\n")
+            else:
+                self._write_frank(
+                    "[FRANK] Quantum op pending — waiting for your decision:\n"
+                    "  Type  y  to run  |  n  to cancel\n\n"
+                )
+            return
 
         # ── PRIORITY 1: pending approval queue ───────────────────────────
         # If FRANK proposed a command and is waiting for user approval,
@@ -2755,30 +2837,43 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
     def _on_frank_token(self, token: str):
         """
         Main thread: handle a single streamed token.
-        Accumulates into _frank_exec_buffer watching for ::EXEC:: markers.
-        When a complete ::EXEC::<cmd> sequence is detected the command is
-        extracted, the pre-marker text is displayed normally, and the command
-        is routed to _frank_guard_exec(). All other tokens display immediately.
+        Accumulates into _frank_exec_buffer watching for ::EXEC:: and ::QUANTUM:: markers.
+        ::QUANTUM::action|param=value  → dispatched to _frank_quantum_dispatch()
+        ::EXEC::command                → dispatched to _frank_guard_exec()
+        All other tokens display immediately.
         """
-        _MARKER = '::EXEC::'
+        _MARKER_QUANTUM = '::QUANTUM::'
+        _MARKER_EXEC    = '::EXEC::'
         self._frank_exec_buffer += token
 
-        if _MARKER in self._frank_exec_buffer:
-            pre, _, rest = self._frank_exec_buffer.partition(_MARKER)
-            # Wait until we have a full command (newline-terminated or non-empty)
+        # ── Check for ::QUANTUM:: marker ────────────────────────────────────
+        if _MARKER_QUANTUM in self._frank_exec_buffer:
+            pre, _, rest = self._frank_exec_buffer.partition(_MARKER_QUANTUM)
+            if rest:
+                line = rest.split('\n')[0].strip()
+                if line:
+                    if pre:
+                        self._write_frank(pre)
+                    remainder = rest[len(rest.split('\n')[0]):]
+                    self._frank_exec_buffer = remainder
+                    self._root.after(0, lambda l=line: self._frank_quantum_dispatch(l))
+                    return
+            # Marker present but action not complete yet — keep buffering
+            return
+
+        # ── Check for ::EXEC:: marker ────────────────────────────────────────
+        if _MARKER_EXEC in self._frank_exec_buffer:
+            pre, _, rest = self._frank_exec_buffer.partition(_MARKER_EXEC)
             if rest:
                 cmd = rest.split('\n')[0].strip()
                 if cmd:
-                    # Display text that came before the marker
                     if pre:
                         self._write_frank(pre)
-                    # Keep anything after the command in the buffer
                     remainder = rest[len(rest.split('\n')[0]):]
                     self._frank_exec_buffer = remainder
-                    # Route command through permission guard (main thread safe)
                     self._root.after(0, lambda c=cmd: self._frank_guard_exec(c))
                     return
-            # Marker seen but command not complete yet — keep buffering
+            # Marker present but command not complete yet — keep buffering
             return
 
         # No marker — display immediately and clear buffer
@@ -2805,6 +2900,169 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
                     text_color=self._colors['electric_green']
                 )
         self._frank_start_idle_watch()
+
+    # ── ::QUANTUM:: dispatch ─────────────────────────────────────────────────
+
+    # Ring 3 — execute immediately, no approval needed
+    _QUANTUM_RING3 = frozenset({
+        "init_qubits", "apply_gate", "run_circuit", "run_preset",
+        "get_state_info", "list_circuits", "synthesis_status", "true_engine_status",
+    })
+
+    # Ring 2 — requires y/n approval (bypasses blocking input() in QuantumTool)
+    _QUANTUM_RING2 = frozenset({
+        "measure", "save_state", "save_circuit", "delete_circuit",
+        "load_circuit_and_run", "qiskit_run", "qutip_evolve", "show_bloch",
+        "synthesis_run", "synthesis_bloch", "synthesis_gaussian",
+        "synthesis_tunneling", "synthesis_harmonic", "synthesis_lorentz",
+    })
+
+    def _frank_quantum_dispatch(self, action_line: str):
+        """
+        Parse a ::QUANTUM::action|param=value|... string and dispatch to QuantumTool.
+        Ring 3 actions execute immediately. Ring 2 actions enter y/n approval flow.
+        Runs on main thread.
+        """
+        try:
+            parts = action_line.split('|')
+            action = parts[0].strip()
+            kwargs = {}
+            for part in parts[1:]:
+                if '=' in part:
+                    key, val = part.split('=', 1)
+                    key = key.strip()
+                    val = val.strip()
+                    # Type coercion
+                    if val.isdigit():
+                        val = int(val)
+                    elif val.replace('.', '', 1).isdigit():
+                        val = float(val)
+                    elif val.lower() in ('true', 'false'):
+                        val = val.lower() == 'true'
+                    kwargs[key] = val
+
+            # Lazy-load the QuantumTool singleton
+            if self._quantum_tool is None:
+                from agents.sauron.tools.quantum_tool import QuantumTool
+                self._quantum_tool = QuantumTool()
+
+            if action in self._QUANTUM_RING3:
+                # Safe — execute immediately via QuantumTool.execute()
+                self._write_frank(
+                    f"\n[FRANK] ⚛  Quantum: {action}"
+                    f"({', '.join(f'{k}={v}' for k, v in kwargs.items())})\n"
+                )
+                result = self._quantum_tool.execute(action=action, **kwargs)
+                self._frank_display_quantum_result(action, result)
+
+            elif action in self._QUANTUM_RING2:
+                # Sensitive — show y/n approval prompt (non-blocking, avoids input() deadlock)
+                desc_map = {
+                    "measure":              f"Run measurement ({kwargs.get('shots', 1024)} shots) + launch Bloch sphere",
+                    "show_bloch":           "Launch Bloch sphere visualisation in browser",
+                    "save_state":           f"Save quantum state as '{kwargs.get('name', '?')}'",
+                    "save_circuit":         f"Save circuit as '{kwargs.get('name', '?')}'",
+                    "delete_circuit":       f"Delete circuit '{kwargs.get('name', '?')}'",
+                    "load_circuit_and_run": f"Load + run circuit '{kwargs.get('name', '?')}'",
+                    "qiskit_run":           f"Run QASM via Qiskit ({kwargs.get('shots', 1024)} shots)",
+                    "qutip_evolve":         "Run QuTiP time evolution",
+                    "synthesis_run":        f"Run synthesis: {kwargs.get('preset', 'gaussian')}",
+                    "synthesis_bloch":      f"Launch synthesis Bloch: {kwargs.get('sim_type', 'rabi')}",
+                    "synthesis_gaussian":   f"Gaussian wave packet (sigma={kwargs.get('sigma', 1.0)})",
+                    "synthesis_tunneling":  f"Quantum tunneling (barrier={kwargs.get('barrier', 1.0)})",
+                    "synthesis_harmonic":   f"Harmonic oscillator (omega={kwargs.get('omega', 1.0)})",
+                    "synthesis_lorentz":    f"Lorentz boost (v={kwargs.get('velocity', 0.5)}c)",
+                }
+                desc = desc_map.get(action, f"Execute quantum.{action}")
+                self._frank_pending_quantum = (action, kwargs)
+                self._frank_pending_tier = 2
+                self._write_frank(
+                    f"\n[FRANK] 🟡 Quantum operation requested:\n"
+                    f"  ⚛  {desc}\n"
+                    f"  Approve?  y  to run  |  n  to cancel\n\n"
+                )
+            else:
+                self._write_frank(
+                    f"\n[FRANK] ❌ Unknown quantum action: '{action}'\n"
+                    f"  Valid Ring 3: {', '.join(sorted(self._QUANTUM_RING3))}\n"
+                    f"  Valid Ring 2: {', '.join(sorted(self._QUANTUM_RING2))}\n\n"
+                )
+
+        except Exception as e:
+            self._write_frank(f"\n[FRANK] ❌ Quantum dispatch error: {e}\n\n")
+
+    def _frank_quantum_exec_approved(self, action: str, kwargs: dict):
+        """
+        Execute a Ring 2 quantum action that has already been approved via y/n prompt.
+        Calls the QuantumTool private method directly to bypass the blocking
+        request_permission() / input() call inside QuantumTool.execute().
+        """
+        try:
+            if self._quantum_tool is None:
+                from agents.sauron.tools.quantum_tool import QuantumTool
+                self._quantum_tool = QuantumTool()
+
+            # Map each Ring 2 action to its private implementation method
+            private_dispatch = {
+                "measure":              self._quantum_tool._measure,
+                "show_bloch":           self._quantum_tool._show_bloch,
+                "save_state":           self._quantum_tool._save_state,
+                "save_circuit":         self._quantum_tool._save_circuit,
+                "delete_circuit":       self._quantum_tool._delete_circuit,
+                "load_circuit_and_run": self._quantum_tool._load_circuit_and_run,
+                "qiskit_run":           self._quantum_tool._qiskit_run,
+                "qutip_evolve":         self._quantum_tool._qutip_evolve,
+                "synthesis_run":        self._quantum_tool._synthesis_run,
+                "synthesis_bloch":      self._quantum_tool._synthesis_bloch,
+                "synthesis_gaussian":   self._quantum_tool._synthesis_gaussian,
+                "synthesis_tunneling":  self._quantum_tool._synthesis_tunneling,
+                "synthesis_harmonic":   self._quantum_tool._synthesis_harmonic,
+                "synthesis_lorentz":    self._quantum_tool._synthesis_lorentz,
+            }
+            if action not in private_dispatch:
+                self._write_frank(f"[FRANK] ❌ No private dispatch for: {action}\n\n")
+                return
+
+            self._write_frank(
+                f"[FRANK] ✓ Approved. Running quantum.{action}"
+                f"({', '.join(f'{k}={v}' for k, v in kwargs.items())})\n"
+            )
+            result = private_dispatch[action](**kwargs)
+            self._frank_display_quantum_result(action, result)
+
+        except Exception as e:
+            self._write_frank(f"[FRANK] ❌ Quantum execution error: {e}\n\n")
+
+    def _frank_display_quantum_result(self, action: str, result) -> None:
+        """Display a ToolResult from a quantum operation in frank-chat output."""
+        if result.success:
+            self._write_frank(f"[FRANK] ✅ {result.summary or 'Done'}\n")
+            data = result.data or {}
+            if 'counts' in data:
+                total = sum(data['counts'].values())
+                top = sorted(data['counts'].items(), key=lambda kv: -kv[1])[:6]
+                self._write_frank("  Measurement results:\n")
+                for state, count in top:
+                    prob = count / total * 100
+                    self._write_frank(f"    |{state}⟩  {count:>5}  ({prob:.1f}%)\n")
+            elif 'top_states' in data:
+                self._write_frank("  State probabilities:\n")
+                for s in data['top_states'][:6]:
+                    self._write_frank(f"    |{s['state']}⟩  {s['probability']:.4f}\n")
+            elif 'bloch_launched' in data or action in ('show_bloch', 'synthesis_bloch'):
+                self._write_frank("  🔮 Bloch sphere launched in browser.\n")
+            elif 'n_qubits' in data:
+                self._write_frank(
+                    f"  Initialized {data['n_qubits']} qubits  |  "
+                    f"Engine: {data.get('engine', 'SynthesisEngine')}\n"
+                )
+            elif data:
+                # Generic: show up to 4 key=value pairs
+                for k, v in list(data.items())[:4]:
+                    self._write_frank(f"  {k}: {v}\n")
+        else:
+            self._write_frank(f"[FRANK] ❌ {result.error}\n")
+        self._write_frank("\n")
 
     def _frank_stop_streaming(self):
         """Signal the background stream thread to stop immediately."""
@@ -3262,6 +3520,40 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
         self._write_output(f"  {'TOTAL':<25} {self._format_size(total_bytes):>10}\n")
         self._write_output(f"  {'Budget Used':<25} {total_bytes / (30 * 1024**3) * 100:.2f}%\n")
         self._write_output("\n")
+
+        # NAMED ITEMS — show state and circuit names
+        states_dir = synth / "states"
+        circuits_dir = synth / "circuits"
+        state_names = []
+        circuit_names = []
+        if states_dir.exists():
+            state_names = [
+                f.stem for f in sorted(
+                    states_dir.glob("*.npz"),
+                    key=lambda f: f.stat().st_mtime,
+                    reverse=True,
+                )
+            ]
+        if circuits_dir.exists():
+            circuit_names = [
+                f.stem for f in sorted(
+                    circuits_dir.glob("*.json"),
+                    key=lambda f: f.stat().st_mtime,
+                    reverse=True,
+                )
+            ]
+        if state_names or circuit_names:
+            self._write_output("  NAMED ITEMS:\n", color="cyan")
+            if state_names:
+                preview = ", ".join(state_names[:8])
+                extra = f" (+{len(state_names) - 8} more)" if len(state_names) > 8 else ""
+                self._write_output(f"    Quantum States ({len(state_names)}): {preview}{extra}\n")
+            if circuit_names:
+                preview = ", ".join(circuit_names[:8])
+                extra = f" (+{len(circuit_names) - 8} more)" if len(circuit_names) > 8 else ""
+                self._write_output(f"    Circuits       ({len(circuit_names)}): {preview}{extra}\n")
+            self._write_output("\n")
+
         self._write_output("  Commands: memory status | memory view | memory clear | memory export\n")
         self._write_output("\n")
 
@@ -3302,43 +3594,86 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
         base = Path.home() / ".frankenstein"
 
         if area == "sessions":
-            # Show session history
+            # Show session history — with file paths, sizes, and last 10 tasks
             session_file = base / "session.json"
             if session_file.exists():
                 data = json.loads(session_file.read_text())
+                stat = session_file.stat()
                 self._write_output("\n  CURRENT SESSION:\n", color="cyan")
+                self._write_output(f"    File: {session_file}  ({self._format_size(stat.st_size)})\n")
                 for k, v in data.items():
                     self._write_output(f"    {k}: {v}\n")
 
             history_file = base / "history" / "tasks.json"
             if history_file.exists():
                 tasks = json.loads(history_file.read_text())
-                self._write_output(f"\n  TASK HISTORY: {len(tasks)} records\n", color="cyan")
-                for t in tasks[-5:]:  # Show last 5
+                stat = history_file.stat()
+                self._write_output(
+                    f"\n  TASK HISTORY: {len(tasks)} records  [{self._format_size(stat.st_size)}]\n",
+                    color="cyan",
+                )
+                self._write_output(f"    File: {history_file}\n")
+                for t in tasks[-10:]:  # Show last 10
                     status = "✅" if t.get("success") else "❌"
-                    self._write_output(f"    {status} {t.get('task_type', '?')}: {t.get('input_summary', '')[:50]}\n")
+                    self._write_output(
+                        f"    {status} {t.get('task_type', '?')}: {t.get('input_summary', '')[:50]}\n"
+                    )
             self._write_output("\n")
 
         elif area == "logs":
-            # Show computation logs
-            try:
-                from synthesis.computation_log import ComputationLogger
-                logs = ComputationLogger.list_session_logs()
-                self._write_output(f"\n  COMPUTATION LOGS: {len(logs)} sessions\n", color="cyan")
-                for log in logs[:10]:  # Show last 10
-                    self._write_output(f"    {log['filename']}: {log['events']} events, {log['size_kb']} KB\n")
-            except ImportError:
-                self._write_output("\n  Computation logger not available.\n")
+            # Show log files from all log directories — filenames, sizes, dates
+            from datetime import datetime
+            log_dirs = [
+                base / "logs",
+                base / "synthesis_data" / "logs",
+            ]
+            found_any = False
+            for log_dir in log_dirs:
+                if not log_dir.exists():
+                    continue
+                files = sorted(
+                    [f for f in log_dir.iterdir() if f.is_file()],
+                    key=lambda f: f.stat().st_mtime,
+                    reverse=True,
+                )
+                if not files:
+                    continue
+                found_any = True
+                self._write_output(
+                    f"\n  {log_dir.name.upper()} ({log_dir})  — {len(files)} files\n",
+                    color="cyan",
+                )
+                for f in files[:15]:
+                    stat = f.stat()
+                    mtime = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
+                    self._write_output(
+                        f"    {f.name:<40} {self._format_size(stat.st_size):>8}   {mtime}\n"
+                    )
+                if len(files) > 15:
+                    self._write_output(f"    ... (+{len(files) - 15} older files)\n")
+            if not found_any:
+                self._write_output("\n  No log files found.\n")
             self._write_output("\n")
 
         elif area == "states":
-            # Show saved quantum states
+            # Show saved quantum states — sorted by mtime, numbered, with date
+            from datetime import datetime
             states_dir = base / "synthesis_data" / "states"
             if states_dir.exists():
-                files = list(states_dir.glob("*.npz"))
+                files = sorted(
+                    states_dir.glob("*.npz"),
+                    key=lambda f: f.stat().st_mtime,
+                    reverse=True,
+                )
                 self._write_output(f"\n  SAVED QUANTUM STATES: {len(files)}\n", color="cyan")
-                for f in files:
-                    self._write_output(f"    {f.stem}: {self._format_size(f.stat().st_size)}\n")
+                for i, f in enumerate(files, 1):
+                    stat = f.stat()
+                    mtime = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
+                    self._write_output(
+                        f"    {i:>2}. {f.stem:<30} {self._format_size(stat.st_size):>8}   {mtime}\n"
+                    )
+                if files:
+                    self._write_output("  Hint: memory clear states <name>  to delete one\n")
             else:
                 self._write_output("\n  No saved quantum states.\n")
             self._write_output("\n")
@@ -3364,7 +3699,8 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
     def _memory_clear(self, args: List[str]):
         """Clear storage areas with confirmation."""
         if not args:
-            self._write_output("\n  Usage: memory clear [cache|logs|states|all]\n")
+            self._write_output("\n  Usage: memory clear [cache|logs|states|pycache|all]\n")
+            self._write_output("         memory clear states <name>  — delete one state by name\n")
             self._write_output("  ⚠️  Destructive operations require confirmation.\n\n")
             return
 
@@ -3373,19 +3709,24 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
         base = Path.home() / ".frankenstein"
 
         if area == "cache":
-            # Clear gate cache and general cache
+            # Clear gate cache and general cache — report bytes freed
             cache_dirs = [
                 base / "cache",
                 base / "synthesis_data" / "cache",
             ]
             cleared = 0
+            cleared_bytes = 0
             for d in cache_dirs:
                 if d.exists():
                     for f in d.glob("*"):
                         if f.is_file():
+                            cleared_bytes += f.stat().st_size
                             f.unlink()
                             cleared += 1
-            self._write_output(f"\n  ✅ Cache cleared: {cleared} files removed.\n\n")
+            self._write_output(
+                f"\n  ✅ Cache cleared: {cleared} files removed"
+                f" ({self._format_size(cleared_bytes)} freed).\n\n"
+            )
 
         elif area == "logs":
             keep = 10
@@ -3401,6 +3742,20 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
 
         elif area == "states":
             states_dir = base / "synthesis_data" / "states"
+            # Specific state deletion by name
+            if len(args) > 1 and args[1] not in ("--confirm",):
+                name = args[1]
+                target = states_dir / f"{name}.npz"
+                if not target.exists():
+                    self._write_error(f"\n  State '{name}' not found.\n\n")
+                    return
+                size = target.stat().st_size
+                target.unlink()
+                self._write_output(
+                    f"\n  ✅ Deleted state '{name}' ({self._format_size(size)} freed).\n\n"
+                )
+                return
+
             files = list(states_dir.glob("*.npz")) if states_dir.exists() else []
             if not files:
                 self._write_output("\n  No saved states to clear.\n\n")
@@ -3408,11 +3763,36 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
 
             self._write_output(f"\n  ⚠️  This will delete {len(files)} saved quantum states.\n")
             if len(args) > 1 and args[1] == "--confirm":
+                total_bytes = sum(f.stat().st_size for f in files)
                 for f in files:
                     f.unlink()
-                self._write_output(f"  ✅ Deleted {len(files)} state files.\n\n")
+                self._write_output(
+                    f"  ✅ Deleted {len(files)} state files"
+                    f" ({self._format_size(total_bytes)} freed).\n\n"
+                )
             else:
-                self._write_output("  Add --confirm to proceed: memory clear states --confirm\n\n")
+                self._write_output("  Add --confirm to proceed: memory clear states --confirm\n")
+                self._write_output("  To delete one:           memory clear states <name>\n\n")
+
+        elif area == "pycache":
+            # Clear __pycache__ directories from the Frankenstein project
+            import os
+            project_dir = Path(r"C:\Users\adamn\Frankenstein-1.0")
+            cleared_dirs = 0
+            cleared_bytes = 0
+            for root, dirs, files in os.walk(project_dir):
+                for d in dirs:
+                    if d == "__pycache__":
+                        cache_path = Path(root) / d
+                        for f in cache_path.iterdir():
+                            if f.is_file():
+                                cleared_bytes += f.stat().st_size
+                                f.unlink()
+                        cleared_dirs += 1
+            self._write_output(
+                f"\n  ✅ __pycache__ cleared: {cleared_dirs} dirs"
+                f" ({self._format_size(cleared_bytes)} freed).\n\n"
+            )
 
         elif area == "all":
             self._write_output("\n  ⚠️  This will clear: cache, old logs, and saved states.\n")
@@ -3426,7 +3806,7 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
 
         else:
             self._write_error(f"Unknown area: {area}\n")
-            self._write_output("  Options: cache, logs [N], states, all\n")
+            self._write_output("  Options: cache, logs [N], states, pycache, all\n")
 
     def _memory_export(self):
         """Export memory usage report to JSON file."""
@@ -3831,6 +4211,13 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
             if self._quantum_mode.enter_mode():
                 self._in_quantum_mode = True
                 # Note: Prompt will be updated via quantum_mode.get_prompt()
+                # Switch FRANK to quantum-active inference profile (Profile A)
+                try:
+                    from agents.sauron import is_loaded, get_sauron
+                    if is_loaded():
+                        get_sauron().set_quantum_active(True)
+                except Exception:
+                    pass
             else:
                 self._write_error("Failed to enter quantum mode")
                 
@@ -4766,7 +5153,7 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
                     '  frank status          AI health check (never loads model)\n'
                     '  frank agents          List discoverable agents\n'
                     '  frank reset           Clear conversation history\n'
-                    '  frank unload          Free model from RAM (~4.5 GB)\n'
+                    '  frank unload          Free Phi-3.5 model from RAM (~2.5 GB)\n'
                     '  frank version/quote   Frankenstein info & quotes\n'
                     '\nIN-CHAT SHORTCUTS (once inside frank chat):\n'
                     '  !run <cmd>   Propose a terminal command for guarded execution\n'
@@ -4774,14 +5161,19 @@ PERMANENTLY FORBIDDEN (⛔ always blocked, no override):
                     '  !commands    Dense tier reference for all 69+ commands\n'
                     '  !history     Show FRANK execution audit log for this session\n'
                     '  !status      Quick FRANK AI health check\n'
-                    '  y / yes      Approve a pending TIER 2 (modify) command\n'
+                    '  y / yes      Approve a pending TIER 2 (modify) OR Ring 2 quantum op\n'
                     '  CONFIRM      Approve a pending TIER 1 (destructive) command\n'
-                    '  n / cancel   Reject any pending command proposal\n'
+                    '  n / cancel   Reject any pending command or quantum operation\n'
                     '  exit / quit  Leave FRANK chat mode\n'
                     '\nAUTOMATIC EXECUTION:\n'
                     '  FRANK detects when a command is needed and proposes it via\n'
-                    '  ::EXEC:: token in its response. The guard system intercepts\n'
-                    '  it before running — same tier rules apply as !run.'
+                    '  ::EXEC:: token in its response. For quantum ops, FRANK uses\n'
+                    '  ::QUANTUM:: tokens — Ring 3 ops run instantly, Ring 2 need y/n.\n'
+                    '\nCONTEXT AWARENESS:\n'
+                    '  FRANK receives a live system context block on every message:\n'
+                    '  active quantum state, saved states/circuits, session stats,\n'
+                    '  storage usage, CPU/RAM. Ask "what states do I have?" and FRANK\n'
+                    '  will answer from context without extra commands.'
                 ),
                 # Git
                 'git': '''git <cmd> - ENHANCED Git Bash replacement with progress bars & colors
