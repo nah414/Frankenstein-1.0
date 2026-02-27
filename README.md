@@ -63,7 +63,7 @@ frank help           # Show complete command reference any time
 - **📊 Real-Time Adaptation** - Learns from your usage and optimizes performance
 - **🔒 Security & Permissions** - Role-based access control with audit logging
 - **⚙️ Automated Workflows** - 6 background tasks for health monitoring and optimization
-- **🤖 FRANK AI Chat** - Qwen 2.5 7B local LLM with 4-tier permission guard and full terminal oversight
+- **🤖 FRANK AI Chat** - Phi 3.5 mini 3.8B local LLM with 4-tier permission guard and full terminal oversight
 
 ---
 
